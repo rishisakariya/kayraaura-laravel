@@ -4,7 +4,7 @@
     "buildCommand": "composer install --no-dev --optimize-autoloader"
   },
   "deploy": {
-    "startCommand": "php -S 0.0.0.0:$PORT -t public public/index.php",
-    "healthcheckPath": "/test"
+    "startCommand": "php artisan serve --host=0.0.0.0 --port=$PORT",
+    "healthcheckPath": "/"
   }
 }
