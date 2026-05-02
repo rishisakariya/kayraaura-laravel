@@ -1,6 +1,7 @@
 {
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "NIXPACKS",
+    "buildCommand": "rm -rf node_modules package-lock.json && npm install && npm run build"
   },
   "deploy": {
     "startCommand": "php -S 0.0.0.0:$PORT -t public",
