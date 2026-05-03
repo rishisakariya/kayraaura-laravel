@@ -16,9 +16,8 @@ Kayra Aura is a jewellery e-commerce platform built with Laravel API-only archit
 ├── app/
 │   ├── Http/
 │   │   ├── Controllers/
-│   │   │   ├── API/
-│   │   │   │   ├── Admin/
-│   │   │   │   └── Frontend/
+│   │   │   ├── Admin/
+│   │   │   ├── Frontend/
 │   │   │   └── Auth/
 │   │   ├── Middleware/
 │   │   ├── Requests/
@@ -30,7 +29,7 @@ Kayra Aura is a jewellery e-commerce platform built with Laravel API-only archit
 │   └── seeders/
 └── routes/
     ├── api.php
-    └── web.php
+    └── admin.php
 ```
 
 ## API Endpoints
@@ -39,58 +38,58 @@ Kayra Aura is a jewellery e-commerce platform built with Laravel API-only archit
 
 #### Authentication
 ```
-POST   /api/admin/login
-POST   /api/admin/logout
-GET    /api/admin/profile
-PUT    /api/admin/profile
-POST   /api/admin/refresh-token
+POST   /cpanel/login
+POST   /cpanel/logout
+GET    /cpanel/profile
+PUT    /cpanel/profile
+POST   /cpanel/refresh-token
 ```
 
 #### Categories Management
 ```
-GET    /api/admin/categories
-POST   /api/admin/categories
-GET    /api/admin/categories/{id}
-PUT    /api/admin/categories/{id}
-DELETE /api/admin/categories/{id}
+GET    /cpanel/categories
+POST   /cpanel/categories
+GET    /cpanel/categories/{id}
+PUT    /cpanel/categories/{id}
+DELETE /cpanel/categories/{id}
 ```
 
 #### Products Management
 ```
-GET    /api/admin/products
-POST   /api/admin/products
-GET    /api/admin/products/{id}
-PUT    /api/admin/products/{id}
-DELETE /api/admin/products/{id}
-POST   /api/admin/products/{id}/images
-DELETE /api/admin/products/{id}/images/{image_id}
+GET    /cpanel/products
+POST   /cpanel/products
+GET    /cpanel/products/{id}
+PUT    /cpanel/products/{id}
+DELETE /cpanel/products/{id}
+POST   /cpanel/products/{id}/images
+DELETE /cpanel/products/{id}/images/{image_id}
 ```
 
 #### Users Management
 ```
-GET    /api/admin/users
-GET    /api/admin/users/{id}
-PUT    /api/admin/users/{id}
-DELETE /api/admin/users/{id}
-POST   /api/admin/users/{id}/ban
-POST   /api/admin/users/{id}/unban
+GET    /cpanel/users
+GET    /cpanel/users/{id}
+PUT    /cpanel/users/{id}
+DELETE /cpanel/users/{id}
+POST   /cpanel/users/{id}/ban
+POST   /cpanel/users/{id}/unban
 ```
 
 #### Orders Management
 ```
-GET    /api/admin/orders
-GET    /api/admin/orders/{id}
-PUT    /api/admin/orders/{id}/status
-GET    /api/admin/orders/{id}/items
-POST   /api/admin/orders/{id}/tracking
+GET    /cpanel/orders
+GET    /cpanel/orders/{id}
+PUT    /cpanel/orders/{id}/status
+GET    /cpanel/orders/{id}/items
+POST   /cpanel/orders/{id}/tracking
 ```
 
 #### Dashboard Analytics
 ```
-GET    /api/admin/dashboard/stats
-GET    /api/admin/dashboard/sales
-GET    /api/admin/dashboard/products
-GET    /api/admin/dashboard/orders
+GET    /cpanel/dashboard/stats
+GET    /cpanel/dashboard/sales
+GET    /cpanel/dashboard/products
+GET    /cpanel/dashboard/orders
 ```
 
 ### Frontend API Endpoints
