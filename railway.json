@@ -4,7 +4,7 @@
     "buildCommand": "composer install --no-dev --optimize-autoloader"
   },
   "deploy": {
-    "startCommand": "php artisan migrate --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=$PORT",
-    "healthcheckPath": "/"
+    "startCommand": "php artisan serve --host=0.0.0.0 --port=$PORT",
+    "preDeployCommand": "php artisan migrate --force"
   }
 }

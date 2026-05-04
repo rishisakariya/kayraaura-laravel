@@ -57,12 +57,10 @@ DELETE /cpanel/categories/{id}
 #### Products Management
 ```
 GET    /cpanel/products
-POST   /cpanel/products
+POST   /cpanel/products with images upload
 GET    /cpanel/products/{id}
-PUT    /cpanel/products/{id}
+PUT    /cpanel/products/{id} not craeted put method pass direct edit_value
 DELETE /cpanel/products/{id}
-POST   /cpanel/products/{id}/images
-DELETE /cpanel/products/{id}/images/{image_id}
 ```
 
 #### Users Management

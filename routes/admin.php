@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\ProductController;
 
 // Admin Authentication Routes
 Route::prefix('cpanel')->group(function () {
@@ -16,5 +17,8 @@ Route::prefix('cpanel')->group(function () {
         
         // Categories Management
         Route::apiResource('categories', CategoryController::class);
+        
+        // Products Management
+        Route::apiResource('products', ProductController::class);
     });
 });
