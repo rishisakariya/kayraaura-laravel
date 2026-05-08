@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\FrontendAuthController;
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\ProductController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -26,6 +27,12 @@ Route::prefix('auth')->group(function () {
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{slug}', [CategoryController::class, 'show']);
 
-// Frontend Product Routes (will be added later)
+// Frontend Product Routes (Public)
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{slug}', [ProductController::class, 'show']);
+Route::get('/products/featured', [ProductController::class, 'featured']);
+Route::get('/products/category/{category_id}', [ProductController::class, 'byCategory']);
+Route::get('/products/search', [ProductController::class, 'search']);
+
 // Frontend Cart Routes (will be added later)
 // Frontend Order Routes (will be added later)
