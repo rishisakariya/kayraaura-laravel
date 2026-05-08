@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\ProductStoreRequest;
+use App\Http\Requests\Admin\ProductStoreRequest;
 use App\Http\Resources\ProductResource;
 use App\Http\Resources\ProductImageResource;
 use App\Models\Product;

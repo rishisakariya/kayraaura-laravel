@@ -1,7 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Frontend\FrontendAuthController;
+use App\Http\Controllers\API\FrontendAuthController;
+use App\Http\Controllers\API\CategoryController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -21,7 +22,10 @@ Route::prefix('auth')->group(function () {
     Route::post('verify-email', [FrontendAuthController::class, 'verifyEmail']);
 });
 
+// Frontend Category Routes (Public)
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/{slug}', [CategoryController::class, 'show']);
+
 // Frontend Product Routes (will be added later)
-// Frontend Category Routes (will be added later)
 // Frontend Cart Routes (will be added later)
 // Frontend Order Routes (will be added later)
