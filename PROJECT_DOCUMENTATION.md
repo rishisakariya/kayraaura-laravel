@@ -73,7 +73,7 @@ POST   /cpanel/users/{id}/ban
 POST   /cpanel/users/{id}/unban
 ```
 
-#### Orders Management
+#### Orders Management  next phase
 ```
 GET    /cpanel/orders
 GET    /cpanel/orders/{id}
@@ -82,7 +82,7 @@ GET    /cpanel/orders/{id}/items
 POST   /cpanel/orders/{id}/tracking
 ```
 
-#### Dashboard Analytics
+#### Dashboard Analytics last step
 ```
 GET    /cpanel/dashboard/stats
 GET    /cpanel/dashboard/sales
