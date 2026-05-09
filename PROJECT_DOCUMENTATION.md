@@ -143,14 +143,6 @@ POST   /api/wishlist/add
 DELETE /api/wishlist/remove/{product_id}
 ```
 
-#### Reviews & Ratings
-```
-GET    /api/products/{id}/reviews
-POST   /api/products/{id}/reviews
-PUT    /api/reviews/{id}
-DELETE /api/reviews/{id}
-```
-
 ## Database Schema
 
 ### Users Table
