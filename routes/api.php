@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\FrontendAuthController;
 use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\ProductController;
+use App\Http\Controllers\API\CartController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -34,5 +35,12 @@ Route::get('/products/featured', [ProductController::class, 'featured']);
 Route::get('/products/category/{category_id}', [ProductController::class, 'byCategory']);
 Route::get('/products/search', [ProductController::class, 'search']);
 
-// Frontend Cart Routes (will be added later)
+// Frontend Cart Routes (Protected)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/cart', [CartController::class, 'index']);
+    Route::post('/cart/add', [CartController::class, 'store']);
+    Route::delete('/cart/remove/{item_id}', [CartController::class, 'destroy']);
+    Route::delete('/cart/clear', [CartController::class, 'clear']);
+});
+
 // Frontend Order Routes (will be added later)
