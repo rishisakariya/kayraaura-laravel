@@ -1,0 +1,520 @@
+{
+  "info": {
+    "_postman_id": "7bf24316-2724-4e11-82dd-164b9adb88f5",
+    "name": "admin",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "46340237",
+    "_collection_link": "https://go.postman.co/collection/46340237-7bf24316-2724-4e11-82dd-164b9adb88f5?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cpanel/categories?search=&is_active=&per_page=15",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cpanel",
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by name or description"
+                },
+                {
+                  "key": "is_active",
+                  "value": "",
+                  "description": "Filter by active status (0/1)"
+                },
+                {
+                  "key": "per_page",
+                  "value": "15",
+                  "description": "Items per page"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "5|nYNNQbhQ8Oon096FD3pf18h3klYzAQ1rSg6z5jbA5eea56ed",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"edit_value\": 10, //edit_value is use for edit category passed category id \n    \"name\": \"Rings\",\n    \"description\": \"Beautiful finger rings collection\",\n    \"parent_id\": null,  //parent_id is for the subcategory, pass the main category to create a sub category\n    \"sort_order\": 1,\n    \"is_active\": true,\n    \"slug\":\"abc cccccccc\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cpanel/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cpanel",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cpanel/categories/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cpanel",
+                "categories",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cpanel/categories/2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cpanel",
+                "categories",
+                "2"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "AUTH",
+      "item": [
+        {
+          "name": "admin login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"admin@kayraaura.com\",\"password\":\"admin123\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cpanel/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cpanel",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Products Management",
+      "item": [
+        {
+          "name": "Get All Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cpanel/products?per_page=15&page=1&search=&category_id=&is_active=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cpanel",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15",
+                  "description": "Number of products per page"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by name or description"
+                },
+                {
+                  "key": "category_id",
+                  "value": "",
+                  "description": "Filter by category ID"
+                },
+                {
+                  "key": "is_active",
+                  "value": "",
+                  "description": "Filter by active status (true/false)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cpanel/products/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cpanel",
+                "products",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "edit_value",
+                  "value": "0",
+                  "type": "text",
+                  "description": "Set to 0 for create operation"
+                },
+                {
+                  "key": "name",
+                  "value": "Diamond Ring",
+                  "type": "text",
+                  "description": "Product name"
+                },
+                {
+                  "key": "slug",
+                  "value": "diamond-ring",
+                  "type": "text",
+                  "description": "Product slug (optional, will auto-generate)"
+                },
+                {
+                  "key": "description",
+                  "value": "Beautiful diamond ring crafted with precision and care. Perfect for special occasions.",
+                  "type": "text",
+                  "description": "Product description"
+                },
+                {
+                  "key": "short_description",
+                  "value": "Elegant diamond ring with brilliant cut",
+                  "type": "text",
+                  "description": "Short description"
+                },
+                {
+                  "key": "price",
+                  "value": "2999.99",
+                  "type": "text",
+                  "description": "Regular price"
+                },
+                {
+                  "key": "sale_price",
+                  "value": "2499.99",
+                  "type": "text",
+                  "description": "Sale price (optional, must be less than regular price)"
+                },
+                {
+                  "key": "cost_price",
+                  "value": "1500.00",
+                  "type": "text",
+                  "description": "Cost price (optional)"
+                },
+                {
+                  "key": "category_id",
+                  "value": "1",
+                  "type": "text",
+                  "description": "Category ID (optional)"
+                },
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "type": "text",
+                  "description": "Product active status (true/false)"
+                },
+                {
+                  "key": "stock_quantity",
+                  "value": "10",
+                  "type": "text",
+                  "description": "Stock quantity"
+                },
+                {
+                  "key": "track_stock",
+                  "value": "true",
+                  "type": "text",
+                  "description": "Track stock (true/false)"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "description": "Product images (max 5 files, 2MB each)",
+                  "value": null
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/cpanel/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cpanel",
+                "products"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "edit_value",
+                  "value": "1",
+                  "type": "text",
+                  "description": "Set to product ID for update operation"
+                },
+                {
+                  "key": "name",
+                  "value": "Diamond Ring - Updated",
+                  "type": "text",
+                  "description": "Updated product name"
+                },
+                {
+                  "key": "slug",
+                  "value": "diamond-ring-updated",
+                  "type": "text",
+                  "description": "Updated product slug"
+                },
+                {
+                  "key": "description",
+                  "value": "Updated: Beautiful diamond ring crafted with precision and care. Perfect for special occasions.",
+                  "type": "text",
+                  "description": "Updated product description"
+                },
+                {
+                  "key": "short_description",
+                  "value": "Updated: Elegant diamond ring with brilliant cut",
+                  "type": "text",
+                  "description": "Updated short description"
+                },
+                {
+                  "key": "price",
+                  "value": "3299.99",
+                  "type": "text",
+                  "description": "Updated regular price"
+                },
+                {
+                  "key": "sale_price",
+                  "value": "2799.99",
+                  "type": "text",
+                  "description": "Updated sale price"
+                },
+                {
+                  "key": "cost_price",
+                  "value": "1600.00",
+                  "type": "text",
+                  "description": "Updated cost price"
+                },
+                {
+                  "key": "category_id",
+                  "value": "2",
+                  "type": "text",
+                  "description": "Updated category ID"
+                },
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "type": "text",
+                  "description": "Updated active status"
+                },
+                {
+                  "key": "stock_quantity",
+                  "value": "15",
+                  "type": "text",
+                  "description": "Updated stock quantity"
+                },
+                {
+                  "key": "track_stock",
+                  "value": "true",
+                  "type": "text",
+                  "description": "Updated track stock setting"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "description": "New product images (optional)",
+                  "value": null
+                },
+                {
+                  "key": "existing_images",
+                  "value": "[{\"id\":1,\"alt_text\":\"Updated alt text\",\"sort_order\":1,\"is_primary\":true}]",
+                  "type": "text",
+                  "description": "JSON array of existing images with updates"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/cpanel/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cpanel",
+                "products"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cpanel/products/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cpanel",
+                "products",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
