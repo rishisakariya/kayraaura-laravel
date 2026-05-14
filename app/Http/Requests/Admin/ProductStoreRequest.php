@@ -33,15 +33,25 @@ class ProductStoreRequest extends FormRequest
             ],
             'description' => 'nullable|string|max:5000',
             'short_description' => 'nullable|string|max:1000',
-            'price' => 'required|numeric|min:0|max:99999999.99',
-            'sale_price' => 'nullable|numeric|min:0|max:99999999.99|lt:price',
-            'cost_price' => 'nullable|numeric|min:0|max:99999999.99',
+            'price' => 'nullable|numeric|min:0|max:99999999.99',
+
             'category_id' => 'nullable|integer|exists:categories,id',
             'is_active' => 'nullable|boolean',
             'stock_quantity' => 'nullable|integer|min:0',
             'track_stock' => 'nullable|boolean',
+            'sizes' => [
+                'nullable',
+                'array',
+                'required_if:edit_value,0',
+                'min:1',
+            ],
+            'sizes.*.size_text' => 'required_with:sizes|string|max:50',
+            'sizes.*.quantity' => 'required_with:sizes|integer|min:0',
+            'sizes.*.price' => 'required_with:sizes|numeric|min:0|max:99999999.99',
             'images' => 'nullable|array|max:5',
+
             'images.*' => 'required|image|mimes:jpeg,jpg,png,webp|max:2048',
+
             'existing_images' => 'nullable|array',
             'existing_images.*.id' => 'required|integer|exists:product_images,id',
             'existing_images.*.alt_text' => 'nullable|string|max:255',
@@ -58,8 +68,7 @@ class ProductStoreRequest extends FormRequest
         return [
             'name.required' => 'Product name is required',
             'slug.unique' => 'Slug must be unique',
-            'price.required' => 'Price is required',
-            'sale_price.lt' => 'Sale price must be less than regular price',
+
             'category_id.exists' => 'Selected category does not exist',
             'images.max' => 'Maximum 5 images allowed',
             'images.*.image' => 'All files must be images',

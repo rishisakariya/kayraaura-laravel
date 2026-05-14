@@ -27,7 +27,11 @@ class ProductResource extends JsonResource
             'track_stock' => $this->track_stock,
             'category' => new CategoryResource($this->whenLoaded('category')),
             'images' => ProductImageResource::collection($this->whenLoaded('images')),
-            'primary_image' => new ProductImageResource($this->whenLoaded('primaryImage')->first()),
+            'primary_image' => new ProductImageResource(
+                $this->whenLoaded('primaryImage')
+            ),
+            'sizes' => \App\Http\Resources\ProductSizeResource::collection($this->whenLoaded('sizes')),
+
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];

@@ -47,6 +47,11 @@ class Product extends Model
         return $this->hasMany(ProductImage::class)->where('is_primary', true);
     }
 
+    public function sizes(): HasMany
+    {
+        return $this->hasMany(ProductSize::class)->orderBy('id');
+    }
+
     protected static function boot()
     {
         parent::boot();
@@ -64,3 +69,4 @@ class Product extends Model
         });
     }
 }
+

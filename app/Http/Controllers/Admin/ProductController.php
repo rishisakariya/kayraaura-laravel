@@ -8,7 +8,9 @@ use App\Http\Resources\ProductResource;
 use App\Http\Resources\ProductImageResource;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Http\Controllers\Admin\ProductSizePersistor;
 use Illuminate\Http\JsonResponse;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -24,7 +26,7 @@ class ProductController extends Controller
         $products = Product::with(['category', 'images'])
             ->when($request->input('search'), function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
-                      ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%");
             })
             ->when($request->input('category_id'), function ($query, $categoryId) {
                 $query->where('category_id', $categoryId);
@@ -52,7 +54,7 @@ class ProductController extends Controller
      */
     public function store(ProductStoreRequest $request): JsonResponse
     {
-        if ((int)$request->input('edit_value') === 0) {
+        if ((int) $request->input('edit_value') === 0) {
             // Create new product
             DB::beginTransaction();
             $product = new Product;
@@ -69,12 +71,18 @@ class ProductController extends Controller
             $product->track_stock = $request->input('track_stock', true);
             $product->save();
 
+            // Persist sizes
+            if ($request->has('sizes')) {
+                app(ProductSizePersistor::class)->replaceForProduct($product->id, $request->input('sizes', []));
+            }
+
             // Handle new images
             if ($request->hasFile('images')) {
                 $this->handleProductImages($request->file('images'), $product->id);
             }
 
             DB::commit();
+
 
             return response()->json([
                 'success' => true,
@@ -107,10 +115,16 @@ class ProductController extends Controller
         $product->track_stock = $request->input('track_stock', $product->track_stock);
         $product->save();
 
+        // Persist sizes
+        if ($request->has('sizes')) {
+            app(ProductSizePersistor::class)->replaceForProduct($product->id, $request->input('sizes', []));
+        }
+
         // Handle new images
         if ($request->hasFile('images')) {
             $this->handleProductImages($request->file('images'), $product->id);
         }
+
 
         // Handle existing images updates
         if ($request->has('existing_images')) {
@@ -153,7 +167,7 @@ class ProductController extends Controller
     public function destroy(string $id): JsonResponse
     {
         $product = Product::find($id);
-        
+
         if (!$product) {
             return response()->json([
                 'success' => false,
@@ -162,15 +176,15 @@ class ProductController extends Controller
         }
 
         DB::beginTransaction();
-        
+
         // Delete product images from storage
         foreach ($product->images as $image) {
             Storage::disk('public')->delete($image->image_path);
         }
-        
+
         // Delete product (images will be deleted via cascade)
         $product->delete();
-        
+
         DB::commit();
 
         return response()->json([
@@ -186,7 +200,7 @@ class ProductController extends Controller
     {
         foreach ($images as $index => $image) {
             $path = $image->store('products/' . $productId, 'public');
-            
+
             $productImage = new ProductImage;
             $productImage->product_id = $productId;
             $productImage->image_path = $path;
