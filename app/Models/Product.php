@@ -14,22 +14,14 @@ class Product extends Model
         'slug',
         'description',
         'short_description',
-        'price',
-        'sale_price',
-        'cost_price',
         'category_id',
         'is_active',
-        'stock_quantity',
         'track_stock',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'track_stock' => 'boolean',
-        'price' => 'decimal:2',
-        'sale_price' => 'decimal:2',
-        'cost_price' => 'decimal:2',
-        'stock_quantity' => 'integer',
     ];
 
     public function category(): BelongsTo

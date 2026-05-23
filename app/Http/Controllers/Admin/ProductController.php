@@ -62,12 +62,9 @@ class ProductController extends Controller
             $product->slug = $request->input('slug') ?: null;
             $product->description = $request->input('description');
             $product->short_description = $request->input('short_description');
-            $product->price = $request->input('price');
-            $product->sale_price = $request->input('sale_price');
-            $product->cost_price = $request->input('cost_price');
+            
             $product->category_id = $request->input('category_id');
             $product->is_active = $request->input('is_active', true);
-            $product->stock_quantity = $request->input('stock_quantity', 0);
             $product->track_stock = $request->input('track_stock', true);
             $product->save();
 
@@ -106,12 +103,9 @@ class ProductController extends Controller
         $product->slug = $request->input('slug') ?: null;
         $product->description = $request->input('description');
         $product->short_description = $request->input('short_description');
-        $product->price = $request->input('price');
-        $product->sale_price = $request->input('sale_price');
-        $product->cost_price = $request->input('cost_price');
+        
         $product->category_id = $request->input('category_id');
         $product->is_active = $request->input('is_active', $product->is_active);
-        $product->stock_quantity = $request->input('stock_quantity', $product->stock_quantity);
         $product->track_stock = $request->input('track_stock', $product->track_stock);
         $product->save();
 

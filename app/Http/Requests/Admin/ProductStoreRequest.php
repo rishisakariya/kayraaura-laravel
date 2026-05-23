@@ -33,11 +33,9 @@ class ProductStoreRequest extends FormRequest
             ],
             'description' => 'nullable|string|max:5000',
             'short_description' => 'nullable|string|max:1000',
-            'price' => 'nullable|numeric|min:0|max:99999999.99',
 
             'category_id' => 'nullable|integer|exists:categories,id',
             'is_active' => 'nullable|boolean',
-            'stock_quantity' => 'nullable|integer|min:0',
             'track_stock' => 'nullable|boolean',
             'sizes' => [
                 'nullable',
