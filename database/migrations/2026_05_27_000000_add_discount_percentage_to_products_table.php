@@ -5,28 +5,18 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('products', function (Blueprint $table) {
-            foreach (['price', 'sale_price', 'cost_price', 'stock_quantity'] as $column) {
-                if (Schema::hasColumn('products', $column)) {
-                    $table->dropColumn($column);
-                }
-            }
-
+            $table->decimal('discount_percentage', 5, 2)->nullable()->after('short_description');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('products', function (Blueprint $table) {
-            //
+            $table->dropColumn('discount_percentage');
         });
     }
 };
+

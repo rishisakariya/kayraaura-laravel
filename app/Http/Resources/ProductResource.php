@@ -21,6 +21,7 @@ class ProductResource extends JsonResource
             'category_id' => $this->category_id,
             'is_active' => $this->is_active,
             'track_stock' => $this->track_stock,
+            'discount_percentage' => $this->discount_percentage,
             'category' => new CategoryResource($this->whenLoaded('category')),
             'images' => ProductImageResource::collection($this->whenLoaded('images')),
             'primary_image' => ProductImageResource::collection($this->primaryImage),

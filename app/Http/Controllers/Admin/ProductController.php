@@ -62,8 +62,9 @@ class ProductController extends Controller
             $product->slug = $request->input('slug') ?: null;
             $product->description = $request->input('description');
             $product->short_description = $request->input('short_description');
-            
+
             $product->category_id = $request->input('category_id');
+            $product->discount_percentage = $request->input('discount_percentage');
             $product->is_active = $request->input('is_active', true);
             $product->track_stock = $request->input('track_stock', true);
             $product->save();
@@ -75,7 +76,7 @@ class ProductController extends Controller
 
             // Handle new images
             if ($request->hasFile('images')) {
-                $this->handleProductImages($request->file('images'), $product->id);
+                $this->handleProgit ductImages($request->file('images'), $product->id);
             }
 
             DB::commit();
@@ -103,8 +104,9 @@ class ProductController extends Controller
         $product->slug = $request->input('slug') ?: null;
         $product->description = $request->input('description');
         $product->short_description = $request->input('short_description');
-        
+
         $product->category_id = $request->input('category_id');
+        $product->discount_percentage = $request->input('discount_percentage');
         $product->is_active = $request->input('is_active', $product->is_active);
         $product->track_stock = $request->input('track_stock', $product->track_stock);
         $product->save();

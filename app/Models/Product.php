@@ -14,6 +14,7 @@ class Product extends Model
         'slug',
         'description',
         'short_description',
+        'discount_percentage',
         'category_id',
         'is_active',
         'track_stock',
@@ -22,6 +23,7 @@ class Product extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'track_stock' => 'boolean',
+        'discount_percentage' => 'decimal:2',
     ];
 
     public function category(): BelongsTo

@@ -34,6 +34,8 @@ class ProductStoreRequest extends FormRequest
             'description' => 'nullable|string|max:5000',
             'short_description' => 'nullable|string|max:1000',
 
+            'discount_percentage' => 'nullable|numeric|min:0|max:100',
+
             'category_id' => 'nullable|integer|exists:categories,id',
             'is_active' => 'nullable|boolean',
             'track_stock' => 'nullable|boolean',
