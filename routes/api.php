@@ -6,6 +6,7 @@ use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\OrderController;
+use App\Http\Controllers\API\MediaController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -13,6 +14,10 @@ Route::get('/test', function () {
         'message' => 'Frontend API working 🚀'
     ]);
 });
+
+// Global Media Routes
+Route::post('/media/upload', [MediaController::class, 'upload']);
+Route::delete('/media/delete', [MediaController::class, 'destroy']);
 
 // Frontend Authentication Routes
 Route::prefix('auth')->group(function () {

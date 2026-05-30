@@ -7,6 +7,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class CartResource extends JsonResource
 {
+
     /**
      * Transform the resource into an array.
      *
@@ -18,6 +19,10 @@ class CartResource extends JsonResource
             'id' => $this->id,
             'user_id' => $this->user_id,
             'product_id' => $this->product_id,
+
+            'product_size_id' => $this->product_size_id,
+            'size_text' => $this->size_text,
+            'size_price' => $this->size_price,
             'quantity' => $this->quantity,
             'subtotal' => $this->subtotal,
             'product' => [

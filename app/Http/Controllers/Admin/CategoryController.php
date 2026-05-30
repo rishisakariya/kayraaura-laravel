@@ -9,6 +9,7 @@ use App\Models\Category;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class CategoryController extends Controller
@@ -55,7 +56,9 @@ class CategoryController extends Controller
             $category->name = $request->input('name');
             $category->slug = $request->input('slug') ?: null;
             $category->description = $request->input('description');
-            $category->image = $request->input('image');
+            $category->image = $request->filled('image')
+                ? $this->normalizePublicDiskPath($request->input('image'))
+                : null;
             $category->parent_id = $request->input('parent_id');
             $category->sort_order = $request->input('sort_order', 0);
             $category->is_active = $request->input('is_active', true);
@@ -83,7 +86,19 @@ class CategoryController extends Controller
         $category->name = $request->input('name');
         $category->slug = $request->input('slug') ?: null;
         $category->description = $request->input('description');
-        $category->image = $request->input('image');
+
+        if ($request->has('image')) {
+            $newImage = $request->filled('image')
+                ? $this->normalizePublicDiskPath($request->input('image'))
+                : null;
+
+            if ($category->image && $category->image !== $newImage) {
+                $this->deleteCategoryImageFile($category->image);
+            }
+
+            $category->image = $newImage;
+        }
+
         $category->parent_id = $request->input('parent_id');
         $category->sort_order = $request->input('sort_order', $category->sort_order);
         $category->is_active = $request->input('is_active', $category->is_active);
@@ -151,6 +166,10 @@ class CategoryController extends Controller
         // }
 
         DB::beginTransaction();
+        if ($category->image) {
+            $this->deleteCategoryImageFile($category->image);
+        }
+
         $category->delete();
         DB::commit();
 
@@ -158,5 +177,26 @@ class CategoryController extends Controller
             'success' => true,
             'message' => 'Category deleted successfully'
         ]);
+    }
+
+    private function deleteCategoryImageFile(string $imagePath): void
+    {
+        $filePath = $this->normalizePublicDiskPath($imagePath);
+
+        if (Storage::disk('public')->exists($filePath)) {
+            Storage::disk('public')->delete($filePath);
+        }
+    }
+
+    private function normalizePublicDiskPath(string $imagePath): string
+    {
+        $path = parse_url($imagePath, PHP_URL_PATH) ?: $imagePath;
+        $path = ltrim($path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            return substr($path, strlen('storage/'));
+        }
+
+        return $path;
     }
 }

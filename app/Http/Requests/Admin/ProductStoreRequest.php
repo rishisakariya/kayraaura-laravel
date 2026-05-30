@@ -34,7 +34,17 @@ class ProductStoreRequest extends FormRequest
             'description' => 'nullable|string|max:5000',
             'short_description' => 'nullable|string|max:1000',
 
+            'brand' => 'nullable|string|max:255',
+            'base_material' => 'nullable|string|max:255',
+            'plating' => 'nullable|string|max:255',
+            'gemstone' => 'nullable|string|max:255',
+            'design' => 'nullable|string|max:255',
+            'occasion' => 'nullable|string|max:255',
+            'ideal_for' => ['nullable', 'string', 'in:men,woman,both'],
+            'package_contents' => 'nullable|string|max:1000',
+
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
+
 
             'category_id' => 'nullable|integer|exists:categories,id',
             'is_active' => 'nullable|boolean',
@@ -48,15 +58,8 @@ class ProductStoreRequest extends FormRequest
             'sizes.*.size_text' => 'required_with:sizes|string|max:50',
             'sizes.*.quantity' => 'required_with:sizes|integer|min:0',
             'sizes.*.price' => 'required_with:sizes|numeric|min:0|max:99999999.99',
-            'images' => 'nullable|array|max:5',
-
-            'images.*' => 'required|image|mimes:jpeg,jpg,png,webp|max:2048',
-
-            'existing_images' => 'nullable|array',
-            'existing_images.*.id' => 'required|integer|exists:product_images,id',
-            'existing_images.*.alt_text' => 'nullable|string|max:255',
-            'existing_images.*.sort_order' => 'nullable|integer|min:0',
-            'existing_images.*.is_primary' => 'nullable|boolean',
+            'image' => 'nullable|array|max:5',
+            'image.*' => ['required', 'string', 'max:2048', 'not_regex:/\.\./'],
         ];
     }
 
@@ -70,11 +73,11 @@ class ProductStoreRequest extends FormRequest
             'slug.unique' => 'Slug must be unique',
 
             'category_id.exists' => 'Selected category does not exist',
-            'images.max' => 'Maximum 5 images allowed',
-            'images.*.image' => 'All files must be images',
-            'images.*.mimes' => 'Images must be jpeg, jpg, png, or webp format',
-            'images.*.max' => 'Image size must not exceed 2MB',
             'edit_value.required' => 'Edit value is required',
+            'image.max' => 'Maximum 5 product images allowed',
+            'image.*.not_regex' => 'Product image must be a valid media URL or path',
+
+            'ideal_for.in' => 'ideal_for must be one of: men, woman, both',
         ];
     }
 }

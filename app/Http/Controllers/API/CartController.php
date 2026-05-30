@@ -5,7 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CartStoreRequest;
 use App\Models\Cart;
-use App\Models\Product;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,13 +21,13 @@ class CartController extends Controller
     public function index(): JsonResponse
     {
         $user = Auth::user();
-        
+
         $cartItems = Cart::forUser($user->id)
-            ->with(['product', 'product.category', 'product.images'])
+            ->with(['product', 'product.category', 'product.images', 'productSize'])
             ->get();
 
         $total = $cartItems->sum(function ($item) {
-            return $item->quantity * ($item->product->sale_price ?? $item->product->price);
+            return $item->quantity * (float) ($item->size_price ?? 0);
         });
 
         return response()->json([
@@ -50,13 +50,27 @@ class CartController extends Controller
     public function store(CartStoreRequest $request): JsonResponse
     {
         $user = Auth::user();
-        $productId = $request->input('product_id');
+
+        $productSizeId = $request->input('product_size_id');
         $quantity = $request->input('quantity', 1);
 
-        // Check if product exists and is active
-        $product = Product::where('id', $productId)
-            ->where('is_active', true)
-            ->first();
+
+        $productSize = \App\Models\ProductSize::with([
+            'product' => function ($q) {
+                $q->where('is_active', true);
+            }
+        ])->find($productSizeId);
+
+        if (!$productSize || !$productSize->product) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Product not found or inactive'
+            ], 404);
+        }
+
+        $product = $productSize->product;
+
+        $quantity = $request->input('quantity', 1);
 
         if (!$product) {
             return response()->json([
@@ -65,8 +79,8 @@ class CartController extends Controller
             ], 404);
         }
 
-        // Check stock availability
-        if ($product->track_stock && $product->stock_quantity < $quantity) {
+        // Check stock availability (from size)
+        if ($product->track_stock && $productSize->quantity < $quantity) {
             return response()->json([
                 'status' => false,
                 'message' => 'Insufficient stock available'
@@ -77,15 +91,14 @@ class CartController extends Controller
         try {
             // Check if item already exists in cart
             $cartItem = Cart::forUser($user->id)
-                ->where('product_id', $productId)
+                ->where('product_size_id', $productSize->id)
                 ->first();
 
             if ($cartItem) {
-                // Update existing item
                 $newQuantity = $cartItem->quantity + $quantity;
-                
+
                 // Check stock again for updated quantity
-                if ($product->track_stock && $product->stock_quantity < $newQuantity) {
+                if ($product->track_stock && $productSize->quantity < $newQuantity) {
                     return response()->json([
                         'status' => false,
                         'message' => 'Insufficient stock available for requested quantity'
@@ -93,24 +106,28 @@ class CartController extends Controller
                 }
 
                 $cartItem->quantity = $newQuantity;
+                $cartItem->size_price = $productSize->price;
+                $cartItem->size_text = $productSize->size_text;
                 $cartItem->save();
-                
+
                 $message = 'Cart item updated successfully';
             } else {
-                // Add new item to cart
                 $cartItem = Cart::create([
                     'user_id' => $user->id,
-                    'product_id' => $productId,
-                    'quantity' => $quantity
+                    'product_id' => $product->id,
+                    'product_size_id' => $productSize->id,
+                    'size_text' => $productSize->size_text,
+                    'size_price' => $productSize->price,
+                    'quantity' => $quantity,
                 ]);
-                
+
                 $message = 'Item added to cart successfully';
             }
 
             DB::commit();
 
             // Load relationships for response
-            $cartItem->load(['product', 'product.category', 'product.images']);
+            $cartItem->load(['product', 'product.category', 'product.images', 'productSize']);
 
             return response()->json([
                 'status' => true,
@@ -120,7 +137,7 @@ class CartController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to add item to cart',
@@ -138,7 +155,7 @@ class CartController extends Controller
     public function destroy(int $item_id): JsonResponse
     {
         $user = Auth::user();
-        
+
         $cartItem = Cart::forUser($user->id)
             ->where('id', $item_id)
             ->first();
@@ -166,7 +183,7 @@ class CartController extends Controller
     public function clear(): JsonResponse
     {
         $user = Auth::user();
-        
+
         Cart::forUser($user->id)->delete();
 
         return response()->json([

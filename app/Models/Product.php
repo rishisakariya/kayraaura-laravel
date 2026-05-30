@@ -18,6 +18,15 @@ class Product extends Model
         'category_id',
         'is_active',
         'track_stock',
+
+        'brand',
+        'base_material',
+        'plating',
+        'gemstone',
+        'design',
+        'occasion',
+        'ideal_for',
+        'package_contents',
     ];
 
     protected $casts = [

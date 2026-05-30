@@ -9,6 +9,10 @@ use Illuminate\Support\Str;
 
 class Category extends Model
 {
+    protected $appends = [
+        'image_url',
+    ];
+
     protected $fillable = [
         'name',
         'slug',
@@ -37,6 +41,17 @@ class Category extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (!$this->image) {
+            return null;
+        }
+
+        return filter_var($this->image, FILTER_VALIDATE_URL)
+            ? $this->image
+            : asset('storage/' . $this->image);
     }
 
     protected static function boot()

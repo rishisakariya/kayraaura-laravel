@@ -25,7 +25,7 @@ class CartStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_id' => 'required|integer|exists:products,id',
+            'product_size_id' => 'required|integer|exists:product_sizes,id',
             'quantity' => 'required|integer|min:1|max:99',
         ];
     }
@@ -38,8 +38,9 @@ class CartStoreRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'product_id.required' => 'Product ID is required',
-            'product_id.exists' => 'Selected product does not exist',
+            'product_size_id.required' => 'Product size ID is required',
+            'product_size_id.exists' => 'Selected product size does not exist',
+
             'quantity.required' => 'Quantity is required',
             'quantity.min' => 'Quantity must be at least 1',
             'quantity.max' => 'Quantity cannot exceed 99 items',

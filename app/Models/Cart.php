@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+use App\Models\ProductSize;
+
+
 class Cart extends Model
 {
     use HasFactory;
@@ -13,6 +16,9 @@ class Cart extends Model
     protected $fillable = [
         'user_id',
         'product_id',
+        'product_size_id',
+        'size_text',
+        'size_price',
         'quantity',
     ];
 
@@ -26,6 +32,12 @@ class Cart extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function productSize(): BelongsTo
+    {
+        return $this->belongsTo(ProductSize::class, 'product_size_id');
+    }
+
+
     public function scopeForUser($query, $userId)
     {
         return $query->where('user_id', $userId);
@@ -33,6 +45,6 @@ class Cart extends Model
 
     public function getSubtotalAttribute(): float
     {
-        return $this->quantity * ($this->product->sale_price ?? $this->product->price);
+        return $this->quantity * (float) ($this->size_price ?? 0);
     }
 }

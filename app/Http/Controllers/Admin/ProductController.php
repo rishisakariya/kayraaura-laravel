@@ -63,7 +63,9 @@ class ProductController extends Controller
             $product->description = $request->input('description');
             $product->short_description = $request->input('short_description');
 
+            $this->fillSpecificationFields($product, $request);
             $product->category_id = $request->input('category_id');
+
             $product->discount_percentage = $request->input('discount_percentage');
             $product->is_active = $request->input('is_active', true);
             $product->track_stock = $request->input('track_stock', true);
@@ -74,9 +76,8 @@ class ProductController extends Controller
                 app(ProductSizePersistor::class)->replaceForProduct($product->id, $request->input('sizes', []));
             }
 
-            // Handle new images
-            if ($request->hasFile('images')) {
-                $this->handleProgit ductImages($request->file('images'), $product->id);
+            if ($request->has('image')) {
+                $this->syncProductImages($product, $request->input('image', []));
             }
 
             DB::commit();
@@ -105,6 +106,7 @@ class ProductController extends Controller
         $product->description = $request->input('description');
         $product->short_description = $request->input('short_description');
 
+        $this->fillSpecificationFields($product, $request);
         $product->category_id = $request->input('category_id');
         $product->discount_percentage = $request->input('discount_percentage');
         $product->is_active = $request->input('is_active', $product->is_active);
@@ -116,16 +118,10 @@ class ProductController extends Controller
             app(ProductSizePersistor::class)->replaceForProduct($product->id, $request->input('sizes', []));
         }
 
-        // Handle new images
-        if ($request->hasFile('images')) {
-            $this->handleProductImages($request->file('images'), $product->id);
+        if ($request->has('image')) {
+            $this->syncProductImages($product, $request->input('image', []));
         }
 
-
-        // Handle existing images updates
-        if ($request->has('existing_images')) {
-            $this->updateExistingImages($request->input('existing_images'));
-        }
 
         DB::commit();
 
@@ -173,9 +169,8 @@ class ProductController extends Controller
 
         DB::beginTransaction();
 
-        // Delete product images from storage
         foreach ($product->images as $image) {
-            Storage::disk('public')->delete($image->image_path);
+            $this->deleteProductImageFile($image->image_path);
         }
 
         // Delete product (images will be deleted via cascade)
@@ -189,37 +184,70 @@ class ProductController extends Controller
         ]);
     }
 
-    /**
-     * Handle product image uploads
-     */
-    private function handleProductImages($images, $productId): void
+    private function fillSpecificationFields(Product $product, ProductStoreRequest $request): void
     {
-        foreach ($images as $index => $image) {
-            $path = $image->store('products/' . $productId, 'public');
-
-            $productImage = new ProductImage;
-            $productImage->product_id = $productId;
-            $productImage->image_path = $path;
-            $productImage->alt_text = $image->getClientOriginalName();
-            $productImage->sort_order = $index;
-            $productImage->is_primary = $index === 0; // First image is primary
-            $productImage->save();
+        foreach ([
+            'brand',
+            'base_material',
+            'plating',
+            'gemstone',
+            'design',
+            'occasion',
+            'ideal_for',
+            'package_contents',
+        ] as $field) {
+            $product->{$field} = $request->input($field);
         }
     }
 
-    /**
-     * Update existing product images
-     */
-    private function updateExistingImages($existingImages): void
+    private function syncProductImages(Product $product, array $images): void
     {
-        foreach ($existingImages as $imageData) {
-            $image = ProductImage::find($imageData['id']);
-            if ($image) {
-                $image->alt_text = $imageData['alt_text'] ?? $image->alt_text;
-                $image->sort_order = $imageData['sort_order'] ?? $image->sort_order;
-                $image->is_primary = $imageData['is_primary'] ?? $image->is_primary;
-                $image->save();
+        $incomingImages = array_values(array_unique(array_map(function ($image) {
+            return $this->normalizePublicDiskPath($image);
+        }, $images)));
+
+        $existingImages = ProductImage::where('product_id', $product->id)->get();
+
+        foreach ($existingImages as $existingImage) {
+            if (!in_array($existingImage->image_path, $incomingImages, true)) {
+                $this->deleteProductImageFile($existingImage->image_path);
+                $existingImage->delete();
             }
         }
+
+        foreach ($incomingImages as $index => $image) {
+            ProductImage::updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'image_path' => $image,
+                ],
+                [
+                    'alt_text' => null,
+                    'sort_order' => $index,
+                    'is_primary' => $index === 0,
+                ]
+            );
+        }
+    }
+
+    private function deleteProductImageFile(string $imagePath): void
+    {
+        $filePath = $this->normalizePublicDiskPath($imagePath);
+
+        if (Storage::disk('public')->exists($filePath)) {
+            Storage::disk('public')->delete($filePath);
+        }
+    }
+
+    private function normalizePublicDiskPath(string $imagePath): string
+    {
+        $path = parse_url($imagePath, PHP_URL_PATH) ?: $imagePath;
+        $path = ltrim($path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            return substr($path, strlen('storage/'));
+        }
+
+        return $path;
     }
 }
