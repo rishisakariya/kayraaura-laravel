@@ -36,7 +36,9 @@ class CartResource extends JsonResource
                         'name' => $this->product->category->name,
                         'slug' => $this->product->category->slug,
                     ] : null,
-                    'images' => ProductImageResource::collection($this->product->whenLoaded('images')),
+                    'images' => $this->product->relationLoaded('images')
+                        ? ProductImageResource::collection($this->product->images)
+                        : [],
                 ];
             }),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
