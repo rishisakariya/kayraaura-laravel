@@ -7,18 +7,17 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::table('carts', function (Blueprint $table) {
-            // In some MySQL setups the unique index cannot be dropped because it's needed by FK constraints.
-            // Wrap in try/catch so migration can continue.
-            if (Schema::hasColumn('carts', 'product_id')) {
-                try {
-                    $table->dropUnique(['user_id', 'product_id']);
-                } catch (\Throwable $e) {
-                    // no-op
-                }
-            }
+        if (Schema::hasColumn('carts', 'product_id')) {
+            Schema::table('carts', function (Blueprint $table) {
+                $table->dropForeign(['product_id']);
+            });
 
-            // Add size-based columns
+            Schema::table('carts', function (Blueprint $table) {
+                $table->dropUnique(['user_id', 'product_id']);
+            });
+        }
+
+        Schema::table('carts', function (Blueprint $table) {
             if (!Schema::hasColumn('carts', 'product_size_id')) {
                 $table->foreignId('product_size_id')->nullable()->after('product_id');
             }
@@ -30,34 +29,46 @@ return new class extends Migration {
             if (!Schema::hasColumn('carts', 'size_price')) {
                 $table->decimal('size_price', 12, 2)->nullable()->after('size_text');
             }
+        });
 
-            // New uniqueness per size
+        Schema::table('carts', function (Blueprint $table) {
+            $table->foreign('product_id')->references('id')->on('products')->cascadeOnDelete();
+            $table->foreign('product_size_id')->references('id')->on('product_sizes')->cascadeOnDelete();
             $table->unique(['user_id', 'product_size_id']);
         });
     }
 
     public function down(): void
     {
-        Schema::table('carts', function (Blueprint $table) {
-            // Drop new unique
-            try {
-                $table->dropUnique(['user_id', 'product_size_id']);
-            } catch (\Throwable $e) {
-                // no-op
-            }
+        if (Schema::hasColumn('carts', 'product_size_id')) {
+            Schema::table('carts', function (Blueprint $table) {
+                $table->dropForeign(['product_size_id']);
+            });
 
-            // Drop new columns
+            Schema::table('carts', function (Blueprint $table) {
+                $table->dropUnique(['user_id', 'product_size_id']);
+            });
+        }
+
+        if (Schema::hasColumn('carts', 'product_id')) {
+            Schema::table('carts', function (Blueprint $table) {
+                $table->dropForeign(['product_id']);
+            });
+        }
+
+        Schema::table('carts', function (Blueprint $table) {
             foreach (['product_size_id', 'size_text', 'size_price'] as $column) {
                 if (Schema::hasColumn('carts', $column)) {
                     $table->dropColumn($column);
                 }
             }
-
-            // Restore old unique
-            if (Schema::hasColumn('carts', 'product_id')) {
-                $table->unique(['user_id', 'product_id']);
-            }
         });
+
+        if (Schema::hasColumn('carts', 'product_id')) {
+            Schema::table('carts', function (Blueprint $table) {
+                $table->foreign('product_id')->references('id')->on('products')->cascadeOnDelete();
+                $table->unique(['user_id', 'product_id']);
+            });
+        }
     }
 };
-
