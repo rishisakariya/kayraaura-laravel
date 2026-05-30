@@ -7,6 +7,9 @@ use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\MediaController;
+use App\Http\Controllers\API\AddressController;
+use App\Http\Controllers\API\CheckoutController;
+use App\Http\Controllers\API\RazorpayController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -50,10 +53,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cart/clear', [CartController::class, 'clear']);
 });
 
+// Frontend Address and Checkout Routes (Protected)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses', [AddressController::class, 'store']);
+    Route::get('/addresses/{id}', [AddressController::class, 'show']);
+    Route::put('/addresses/{id}', [AddressController::class, 'update']);
+    Route::delete('/addresses/{id}', [AddressController::class, 'destroy']);
+    Route::post('/addresses/{id}/default', [AddressController::class, 'makeDefault']);
+    Route::post('/checkout/summary', [CheckoutController::class, 'summary']);
+});
+
 // Frontend Order Routes (Protected)
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::post('/orders/create', [OrderController::class, 'store']);
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+    Route::post('/razorpay/payment/verify', [RazorpayController::class, 'verifyPayment']);
 });
+
+Route::post('/razorpay/webhook', [RazorpayController::class, 'webhook']);

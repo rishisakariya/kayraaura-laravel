@@ -6,29 +6,32 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderStoreRequest;
 use App\Http\Requests\OrderCancelRequest;
 use App\Http\Resources\OrderResource;
-use App\Http\Resources\OrderItemResource;
 use App\Models\Order;
-use App\Models\OrderItem;
-use App\Models\Product;
-use Illuminate\Http\Request;
+use App\Models\ProductSize;
+use App\Services\CheckoutService;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
 class OrderController extends Controller
 {
+    public function __construct(private readonly CheckoutService $checkoutService)
+    {
+    }
+
     /**
      * Display a listing of the user's orders.
      */
     public function index(): JsonResponse
     {
         $orders = Order::where('user_id', Auth::id())
-            ->with('orderItems.product')
+            ->with(['orderItems.product', 'orderItems.productSize'])
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
         return response()->json([
-            'success' => true,
+            'status' => true,
             'data' => OrderResource::collection($orders),
             'pagination' => [
                 'current_page' => $orders->currentPage(),
@@ -45,110 +48,48 @@ class OrderController extends Controller
     public function store(OrderStoreRequest $request): JsonResponse
     {
         try {
-            DB::beginTransaction();
+            $payload = $request->validated();
+            $razorpayCheckout = null;
 
-            $user = Auth::user();
-            $items = $request->input('items');
-            
-            // Calculate order totals
-            $subtotal = 0;
-            $orderItems = [];
+            $order = DB::transaction(function () use ($payload, &$razorpayCheckout) {
+                $user = Auth::user();
+                $checkout = $this->checkoutService->buildCheckout($user, $payload, true);
+                $order = $this->checkoutService->createOrder($user, $payload, $checkout);
 
-            foreach ($items as $item) {
-                $product = Product::findOrFail($item['product_id']);
-                
-                // Check if product is active and has enough stock
-                if (!$product->is_active) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => [
-                            'code' => 'PRODUCT_INACTIVE',
-                            'message' => "Product '{$product->name}' is not available",
-                        ],
-                    ], 400);
+                if ($payload['payment_method'] === 'cod') {
+                    $this->checkoutService->deductStockForOrder($order);
+                    $this->checkoutService->clearCartIfNeeded($order);
+
+                    return $order;
                 }
 
-                if ($product->track_stock && $product->stock_quantity < $item['quantity']) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => [
-                            'code' => 'INSUFFICIENT_STOCK',
-                            'message' => "Insufficient stock for product '{$product->name}'",
-                        ],
-                    ], 400);
-                }
+                $razorpayCheckout = $this->checkoutService->createRazorpayOrder($order);
 
-                $itemTotal = $product->price * $item['quantity'];
-                $subtotal += $itemTotal;
+                return $order;
+            });
 
-                $orderItems[] = [
-                    'product_id' => $product->id,
-                    'quantity' => $item['quantity'],
-                    'price' => $product->price,
-                    'total' => $itemTotal,
-                ];
-            }
-
-            // Calculate totals (simplified tax and shipping calculation)
-            $taxAmount = $subtotal * 0.18; // 18% tax
-            $shippingAmount = $subtotal > 1000 ? 0 : 50; // Free shipping over 1000
-            $totalAmount = $subtotal + $taxAmount + $shippingAmount;
-
-            // Create order
-            $order = Order::create([
-                'user_id' => $user->id,
-                'order_number' => Order::generateOrderNumber(),
-                'status' => 'pending',
-                'subtotal' => $subtotal,
-                'tax_amount' => $taxAmount,
-                'shipping_amount' => $shippingAmount,
-                'total_amount' => $totalAmount,
-                'payment_method' => $request->input('payment_method'),
-                'payment_status' => 'pending',
-                'shipping_address' => $request->input('shipping_address'),
-                'billing_address' => $request->input('billing_address') ?: $request->input('shipping_address'),
-                'notes' => $request->input('notes'),
-            ]);
-
-            // Create order items
-            foreach ($orderItems as $item) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'price' => $item['price'],
-                    'total' => $item['total'],
-                ]);
-
-                // Update product stock
-                $product = Product::find($item['product_id']);
-                if ($product->track_stock) {
-                    $product->stock_quantity -= $item['quantity'];
-                    $product->save();
-                }
-            }
-
-            // Clear user's cart
-            $user->cart()->delete();
-
-            DB::commit();
+            $order->load(['orderItems.product', 'orderItems.productSize']);
 
             return response()->json([
-                'success' => true,
-                'data' => new OrderResource($order->load('orderItems.product')),
+                'status' => true,
+                'data' => [
+                    'order' => new OrderResource($order),
+                    'razorpay' => $razorpayCheckout,
+                ],
                 'message' => 'Order created successfully',
             ], 201);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-
+        } catch (DomainException $e) {
             return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'ORDER_CREATION_FAILED',
-                    'message' => 'Failed to create order. Please try again.',
-                    'details' => config('app.debug') ? $e->getMessage() : null,
-                ],
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to create order. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -159,11 +100,11 @@ class OrderController extends Controller
     public function show(string $id): JsonResponse
     {
         $order = Order::where('user_id', Auth::id())
-            ->with('orderItems.product')
+            ->with(['orderItems.product', 'orderItems.productSize'])
             ->findOrFail($id);
 
         return response()->json([
-            'success' => true,
+            'status' => true,
             'data' => new OrderResource($order),
         ]);
     }
@@ -177,23 +118,22 @@ class OrderController extends Controller
 
         if (!$order->canBeCancelled()) {
             return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'ORDER_CANNOT_BE_CANCELLED',
-                    'message' => 'This order cannot be cancelled in its current status',
-                ],
+                'status' => false,
+                'message' => 'This order cannot be cancelled in its current status',
             ], 400);
         }
 
         try {
             DB::beginTransaction();
 
-            // Restore product stock
-            foreach ($order->orderItems as $item) {
-                $product = $item->product;
-                if ($product->track_stock) {
-                    $product->stock_quantity += $item->quantity;
-                    $product->save();
+            if ($order->payment_method === 'cod' || $order->payment_status === 'paid') {
+                foreach ($order->orderItems as $item) {
+                    $product = $item->product;
+                    $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
+
+                    if ($product && $productSize && $product->track_stock) {
+                        $productSize->increment('quantity', $item->quantity);
+                    }
                 }
             }
 
@@ -209,8 +149,8 @@ class OrderController extends Controller
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'data' => new OrderResource($order->load('orderItems.product')),
+                'status' => true,
+                'data' => new OrderResource($order->load(['orderItems.product', 'orderItems.productSize'])),
                 'message' => 'Order cancelled successfully',
             ]);
 
@@ -218,12 +158,9 @@ class OrderController extends Controller
             DB::rollBack();
 
             return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'ORDER_CANCELLATION_FAILED',
-                    'message' => 'Failed to cancel order. Please try again.',
-                    'details' => config('app.debug') ? $e->getMessage() : null,
-                ],
+                'status' => false,
+                'message' => 'Failed to cancel order. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }

@@ -10,7 +10,9 @@ class Order extends Model
 {
     protected $fillable = [
         'user_id',
+        'address_id',
         'order_number',
+        'checkout_type',
         'status',
         'subtotal',
         'tax_amount',
@@ -18,6 +20,11 @@ class Order extends Model
         'total_amount',
         'payment_method',
         'payment_status',
+        'razorpay_order_id',
+        'razorpay_payment_id',
+        'razorpay_signature',
+        'paid_at',
+        'payment_failed_at',
         'shipping_address',
         'billing_address',
         'notes',
@@ -30,6 +37,8 @@ class Order extends Model
         'tax_amount' => 'decimal:2',
         'shipping_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'paid_at' => 'datetime',
+        'payment_failed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -40,6 +49,16 @@ class Order extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function address(): BelongsTo
+    {
+        return $this->belongsTo(UserAddress::class, 'address_id');
+    }
+
+    public function razorpayPaymentLogs(): HasMany
+    {
+        return $this->hasMany(RazorpayPaymentLog::class);
     }
 
     public static function generateOrderNumber(): string

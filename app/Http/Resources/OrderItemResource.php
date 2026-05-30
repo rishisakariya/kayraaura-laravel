@@ -17,15 +17,22 @@ class OrderItemResource extends JsonResource
         return [
             'id' => $this->id,
             'product_id' => $this->product_id,
+            'product_size_id' => $this->product_size_id,
+            'product_name' => $this->product_name,
+            'product_slug' => $this->product_slug,
+            'size_text' => $this->size_text,
+            'size_price' => (float) $this->size_price,
             'quantity' => $this->quantity,
             'price' => (float) $this->price,
             'total' => (float) $this->total,
-            'product' => [
-                'id' => $this->product->id,
-                'name' => $this->product->name,
-                'slug' => $this->product->slug,
-                'sku' => $this->product->sku,
-            ],
+            'product' => $this->whenLoaded('product', function () {
+                return [
+                    'id' => $this->product->id,
+                    'name' => $this->product->name,
+                    'slug' => $this->product->slug,
+                ];
+            }),
+            'product_size' => new ProductSizeResource($this->whenLoaded('productSize')),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];

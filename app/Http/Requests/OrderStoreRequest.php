@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class OrderStoreRequest extends FormRequest
 {
@@ -23,28 +24,11 @@ class OrderStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
-            'shipping_address' => 'required|array',
-            'shipping_address.name' => 'required|string|max:255',
-            'shipping_address.email' => 'required|email|max:255',
-            'shipping_address.phone' => 'required|string|max:20',
-            'shipping_address.address' => 'required|string|max:500',
-            'shipping_address.city' => 'required|string|max:100',
-            'shipping_address.state' => 'required|string|max:100',
-            'shipping_address.postal_code' => 'required|string|max:20',
-            'shipping_address.country' => 'required|string|max:100',
-            'billing_address' => 'nullable|array',
-            'billing_address.name' => 'required_with:billing_address|string|max:255',
-            'billing_address.email' => 'required_with:billing_address|email|max:255',
-            'billing_address.phone' => 'required_with:billing_address|string|max:20',
-            'billing_address.address' => 'required_with:billing_address|string|max:500',
-            'billing_address.city' => 'required_with:billing_address|string|max:100',
-            'billing_address.state' => 'required_with:billing_address|string|max:100',
-            'billing_address.postal_code' => 'required_with:billing_address|string|max:20',
-            'billing_address.country' => 'required_with:billing_address|string|max:100',
-            'payment_method' => 'required|string|max:50',
+            'checkout_type' => ['required', Rule::in(['cart', 'buy_now'])],
+            'address_id' => 'required|integer|exists:user_addresses,id',
+            'payment_method' => ['required', Rule::in(['cod', 'online'])],
+            'product_size_id' => 'required_if:checkout_type,buy_now|integer|exists:product_sizes,id',
+            'quantity' => 'required_if:checkout_type,buy_now|integer|min:1|max:99',
             'notes' => 'nullable|string|max:1000',
         ];
     }
@@ -52,11 +36,11 @@ class OrderStoreRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'items.required' => 'At least one item is required to create an order',
-            'items.*.product_id.exists' => 'Selected product does not exist',
-            'items.*.quantity.min' => 'Quantity must be at least 1',
-            'shipping_address.required' => 'Shipping address is required',
+            'checkout_type.required' => 'Checkout type is required',
+            'address_id.required' => 'Address is required',
             'payment_method.required' => 'Payment method is required',
+            'product_size_id.required_if' => 'Product size ID is required for buy now checkout',
+            'quantity.required_if' => 'Quantity is required for buy now checkout',
         ];
     }
 }
