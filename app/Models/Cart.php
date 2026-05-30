@@ -22,6 +22,11 @@ class Cart extends Model
         'quantity',
     ];
 
+    protected $casts = [
+        'quantity' => 'integer',
+        'size_price' => 'decimal:2',
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

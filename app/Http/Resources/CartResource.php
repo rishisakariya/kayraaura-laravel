@@ -22,31 +22,23 @@ class CartResource extends JsonResource
 
             'product_size_id' => $this->product_size_id,
             'size_text' => $this->size_text,
-            'size_price' => $this->size_price,
-            'quantity' => $this->quantity,
-            'subtotal' => $this->subtotal,
-            'product' => [
-                'id' => $this->product->id,
-                'name' => $this->product->name,
-                'slug' => $this->product->slug,
-                'sku' => $this->product->sku,
-                'price' => $this->product->price,
-                'sale_price' => $this->product->sale_price,
-                'weight' => $this->product->weight,
-                'category' => [
-                    'id' => $this->product->category->id,
-                    'name' => $this->product->category->name,
-                    'slug' => $this->product->category->slug,
-                ] ?? null,
-                'images' => $this->product->images->map(function ($image) {
-                    return [
-                        'id' => $image->id,
-                        'image_path' => $image->image_path,
-                        'alt_text' => $image->alt_text,
-                        'is_primary' => $image->is_primary,
-                    ];
-                }),
-            ],
+            'size_price' => (float) $this->size_price,
+            'quantity' => (int) $this->quantity,
+            'subtotal' => round($this->subtotal, 2),
+            'product_size' => new ProductSizeResource($this->whenLoaded('productSize')),
+            'product' => $this->whenLoaded('product', function () {
+                return [
+                    'id' => $this->product->id,
+                    'name' => $this->product->name,
+                    'slug' => $this->product->slug,
+                    'category' => $this->product->relationLoaded('category') && $this->product->category ? [
+                        'id' => $this->product->category->id,
+                        'name' => $this->product->category->name,
+                        'slug' => $this->product->category->slug,
+                    ] : null,
+                    'images' => ProductImageResource::collection($this->product->whenLoaded('images')),
+                ];
+            }),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];

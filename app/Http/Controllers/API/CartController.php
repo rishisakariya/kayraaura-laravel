@@ -4,10 +4,12 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CartStoreRequest;
+use App\Http\Resources\CartResource;
 use App\Models\Cart;
+use App\Models\ProductSize;
 
+use DomainException;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -33,8 +35,8 @@ class CartController extends Controller
         return response()->json([
             'status' => true,
             'data' => [
-                'items' => $cartItems,
-                'total' => $total,
+                'items' => CartResource::collection($cartItems),
+                'total' => round($total, 2),
                 'item_count' => $cartItems->sum('quantity')
             ],
             'message' => 'Cart retrieved successfully'
@@ -54,8 +56,7 @@ class CartController extends Controller
         $productSizeId = $request->input('product_size_id');
         $quantity = $request->input('quantity', 1);
 
-
-        $productSize = \App\Models\ProductSize::with([
+        $productSize = ProductSize::with([
             'product' => function ($q) {
                 $q->where('is_active', true);
             }
@@ -70,74 +71,61 @@ class CartController extends Controller
 
         $product = $productSize->product;
 
-        $quantity = $request->input('quantity', 1);
-
-        if (!$product) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Product not found or inactive'
-            ], 404);
-        }
-
-        // Check stock availability (from size)
-        if ($product->track_stock && $productSize->quantity < $quantity) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Insufficient stock available'
-            ], 400);
-        }
-
-        DB::beginTransaction();
         try {
-            // Check if item already exists in cart
-            $cartItem = Cart::forUser($user->id)
-                ->where('product_size_id', $productSize->id)
-                ->first();
+            $wasExistingItem = false;
 
-            if ($cartItem) {
-                $newQuantity = $cartItem->quantity + $quantity;
+            $cartItem = DB::transaction(function () use ($user, $product, $productSize, $quantity, &$wasExistingItem) {
+                $cartItem = Cart::forUser($user->id)
+                    ->where('product_size_id', $productSize->id)
+                    ->lockForUpdate()
+                    ->first();
 
-                // Check stock again for updated quantity
-                if ($product->track_stock && $productSize->quantity < $newQuantity) {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'Insufficient stock available for requested quantity'
-                    ], 400);
+                $wasExistingItem = (bool) $cartItem;
+                $requestedQuantity = ($cartItem?->quantity ?? 0) + $quantity;
+
+                if ($product->track_stock && $productSize->quantity < $requestedQuantity) {
+                    throw new DomainException('Insufficient stock available for requested quantity');
                 }
 
-                $cartItem->quantity = $newQuantity;
-                $cartItem->size_price = $productSize->price;
-                $cartItem->size_text = $productSize->size_text;
-                $cartItem->save();
+                if (!$cartItem) {
+                    return Cart::create([
+                        'user_id' => $user->id,
+                        'product_id' => $product->id,
+                        'product_size_id' => $productSize->id,
+                        'size_text' => $productSize->size_text,
+                        'size_price' => $productSize->price,
+                        'quantity' => $requestedQuantity,
+                    ]);
+                }
 
-                $message = 'Cart item updated successfully';
-            } else {
-                $cartItem = Cart::create([
+                $cartItem->update([
                     'user_id' => $user->id,
                     'product_id' => $product->id,
                     'product_size_id' => $productSize->id,
                     'size_text' => $productSize->size_text,
                     'size_price' => $productSize->price,
-                    'quantity' => $quantity,
+                    'quantity' => $requestedQuantity,
                 ]);
 
-                $message = 'Item added to cart successfully';
-            }
-
-            DB::commit();
+                return $cartItem;
+            });
 
             // Load relationships for response
             $cartItem->load(['product', 'product.category', 'product.images', 'productSize']);
 
             return response()->json([
                 'status' => true,
-                'data' => $cartItem,
-                'message' => $message
+                'data' => new CartResource($cartItem),
+                'message' => $wasExistingItem ? 'Cart item updated successfully' : 'Item added to cart successfully'
             ]);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (DomainException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage()
+            ], 400);
 
+        } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to add item to cart',

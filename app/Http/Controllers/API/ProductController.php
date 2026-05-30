@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
@@ -18,13 +19,19 @@ class ProductController extends Controller
     public function index(): JsonResponse
     {
         $products = Product::where('is_active', true)
-            ->with(['category', 'images'])
+            ->with(['category', 'images', 'primaryImage', 'sizes'])
             ->orderBy('created_at', 'desc')
             ->paginate(12);
 
         return response()->json([
             'status' => true,
-            'data' => $products,
+            'data' => ProductResource::collection($products),
+            'meta' => [
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
+                'total' => $products->total(),
+            ],
             'message' => 'Products retrieved successfully'
         ]);
     }
@@ -37,7 +44,7 @@ class ProductController extends Controller
      */
     public function show(string $slug): JsonResponse
     {
-        $product = Product::with(['category', 'images'])
+        $product = Product::with(['category', 'images', 'primaryImage', 'sizes'])
             ->where('slug', $slug)
             ->where('is_active', true)
             ->first();
@@ -51,7 +58,7 @@ class ProductController extends Controller
 
         return response()->json([
             'status' => true,
-            'data' => $product,
+            'data' => new ProductResource($product),
             'message' => 'Product retrieved successfully'
         ]);
     }
@@ -64,18 +71,17 @@ class ProductController extends Controller
     public function featured(): JsonResponse
     {
         $featuredProducts = Product::where('is_active', true)
-            ->where(function ($query) {
-                $query->whereNotNull('sale_price')
-                      ->where('sale_price', '<', 'price');
+            ->whereHas('sizes', function ($query) {
+                $query->where('quantity', '>', 0);
             })
-            ->with(['category', 'images'])
+            ->with(['category', 'images', 'primaryImage', 'sizes'])
             ->orderBy('created_at', 'desc')
             ->limit(8)
             ->get();
 
         return response()->json([
             'status' => true,
-            'data' => $featuredProducts,
+            'data' => ProductResource::collection($featuredProducts),
             'message' => 'Featured products retrieved successfully'
         ]);
     }
@@ -101,7 +107,7 @@ class ProductController extends Controller
 
         $products = Product::where('is_active', true)
             ->where('category_id', $categoryId)
-            ->with(['category', 'images'])
+            ->with(['category', 'images', 'primaryImage', 'sizes'])
             ->orderBy('created_at', 'desc')
             ->paginate(12);
 
@@ -109,7 +115,13 @@ class ProductController extends Controller
             'status' => true,
             'data' => [
                 'category' => $category,
-                'products' => $products
+                'products' => ProductResource::collection($products),
+                'meta' => [
+                    'current_page' => $products->currentPage(),
+                    'last_page' => $products->lastPage(),
+                    'per_page' => $products->perPage(),
+                    'total' => $products->total(),
+                ],
             ],
             'message' => 'Products by category retrieved successfully'
         ]);
@@ -140,13 +152,19 @@ class ProductController extends Controller
             ->when($categoryId, function ($categoryQuery) use ($categoryId) {
                 return $categoryQuery->where('category_id', $categoryId);
             })
-            ->with(['category', 'images'])
+            ->with(['category', 'images', 'primaryImage', 'sizes'])
             ->orderBy('created_at', 'desc')
             ->paginate(12);
 
         return response()->json([
             'status' => true,
-            'data' => $products,
+            'data' => ProductResource::collection($products),
+            'meta' => [
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
+                'total' => $products->total(),
+            ],
             'message' => 'Search results retrieved successfully'
         ]);
     }
