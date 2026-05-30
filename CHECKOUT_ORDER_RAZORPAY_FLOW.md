@@ -10,7 +10,7 @@ Current code already has:
 - Cart APIs that store cart items by `product_size_id`, `size_text`, `size_price`, and `quantity`.
 - Order APIs that create orders, but the current order create flow still uses `product_id` and product-level stock.
 
-The new order flow should be size-wise, cart-based, and payment-aware.
+The new order flow should be size-wise, payment-aware, and support both cart checkout and buy-now checkout.
 
 ## Existing API Situation
 
@@ -80,18 +80,106 @@ Current order create flow:
 Required new flow:
 
 - Store customer address first.
-- Create order from cart or validated size-wise items.
+- Create order from either cart items or buy-now item.
 - Validate all `product_size_id` quantities before order placement.
 - Save selected payment method: `cod` or `online`.
 - For COD, create order immediately.
 - For online payment, create order in pending payment state, call Razorpay, store Razorpay request payload, then complete order only after verified success callback/webhook.
+
+## Checkout Sources
+
+The same order API should support two checkout sources.
+
+### Source 1: Cart Checkout
+
+```text
+Cart
+->
+Checkout
+->
+Order Create
+->
+Razorpay
+```
+
+Use this when the user places an order from saved cart items.
+
+Request must include:
+
+```json
+{
+  "checkout_type": "cart",
+  "address_id": 1,
+  "payment_method": "online"
+}
+```
+
+Backend behavior:
+
+```php
+if ($request->checkout_type === 'cart') {
+    // Load items from authenticated user's cart.
+}
+```
+
+### Source 2: Buy Now
+
+```text
+Product Detail
+->
+Buy Now
+->
+Checkout
+->
+Order Create
+->
+Razorpay
+```
+
+Use this when the user clicks Buy Now from product detail page without adding item to cart.
+
+Request must include:
+
+```json
+{
+  "checkout_type": "buy_now",
+  "address_id": 1,
+  "payment_method": "online",
+  "product_size_id": 15,
+  "quantity": 2
+}
+```
+
+Backend behavior:
+
+```php
+if ($request->checkout_type === 'buy_now') {
+    // Build temporary checkout item directly from product_size_id + quantity.
+}
+```
+
+For both flows, the rest remains identical:
+
+```text
+Validate address
+->
+Resolve checkout items
+->
+Validate stock
+->
+Create local order
+->
+Create Razorpay order for online payment
+->
+Return checkout data
+```
 
 ## Recommended Implementation Order
 
 1. Create customer address API.
 2. Update order database structure for size-wise order items and payment metadata.
 3. Create Razorpay payment log table for request and response payloads.
-4. Rework order create API to validate cart items and selected address.
+4. Rework order create API to validate checkout source, checkout items, and selected address.
 5. Add Razorpay create-payment-order API behavior for online payments.
 6. Add Razorpay webhook callback API.
 7. Update order status and stock only after correct payment result.
@@ -174,10 +262,25 @@ POST /api/checkout/summary
 
 ### Request
 
+Cart checkout:
+
 ```json
 {
+  "checkout_type": "cart",
   "address_id": 1,
   "payment_method": "online"
+}
+```
+
+Buy-now checkout:
+
+```json
+{
+  "checkout_type": "buy_now",
+  "address_id": 1,
+  "payment_method": "online",
+  "product_size_id": 15,
+  "quantity": 2
 }
 ```
 
@@ -202,11 +305,13 @@ POST /api/checkout/summary
 ### Validation
 
 - User must be authenticated.
-- Cart must not be empty.
+- `checkout_type` must be `cart` or `buy_now`.
 - Address must belong to authenticated user.
-- Every cart item must have a valid active product.
-- Every cart item must have a valid product size.
-- If product tracks stock, `product_sizes.quantity` must be greater than or equal to cart quantity.
+- For `cart`, cart must not be empty.
+- For `cart`, every cart item must have a valid active product and product size.
+- For `buy_now`, `product_size_id` and `quantity` are required.
+- For `buy_now`, backend should build one temporary checkout item from `product_size_id` and `quantity`.
+- If product tracks stock, `product_sizes.quantity` must be greater than or equal to checkout quantity.
 - Price should be calculated from `product_sizes.price`, not frontend payload.
 
 ## Proposed Order Create API
@@ -219,70 +324,100 @@ POST /api/orders/create
 
 ### Request
 
+Cart checkout:
+
 ```json
 {
+  "checkout_type": "cart",
   "address_id": 1,
   "payment_method": "cod",
   "notes": "Please deliver after 5 PM"
 }
 ```
 
+Buy-now checkout:
+
+```json
+{
+  "checkout_type": "buy_now",
+  "address_id": 1,
+  "payment_method": "cod",
+  "product_size_id": 15,
+  "quantity": 2,
+  "notes": "Please deliver after 5 PM"
+}
+```
+
+Allowed `checkout_type` values:
+
+- `cart`
+- `buy_now`
+
 Allowed `payment_method` values:
 
 - `cod`
 - `online`
 
-Frontend should not send product price, size price, subtotal, tax, shipping, or total amount. Backend must calculate all amounts.
+Frontend should not send product price, size price, subtotal, tax, shipping, or total amount. Backend must calculate all amounts for both checkout sources.
 
 ## COD Order Flow
 
-1. User adds products to cart using `product_size_id`.
+1. User starts checkout from cart or clicks Buy Now from product detail.
 2. User saves/selects address.
 3. User selects `cod`.
 4. User clicks place order.
-5. Backend starts DB transaction.
-6. Backend locks selected `product_sizes` rows.
-7. Backend validates product active status and size quantity.
-8. Backend calculates subtotal, tax, shipping, and total.
-9. Backend creates order:
+5. Backend validates `checkout_type`.
+6. If `checkout_type = cart`, backend loads authenticated user's cart items.
+7. If `checkout_type = buy_now`, backend builds one temporary checkout item from `product_size_id` and `quantity`.
+8. Backend starts DB transaction.
+9. Backend locks selected `product_sizes` rows.
+10. Backend validates product active status and size quantity.
+11. Backend calculates subtotal, tax, shipping, and total.
+12. Backend creates order:
    - `status = pending` or `processing`
    - `payment_method = cod`
    - `payment_status = pending`
-10. Backend creates order items with size snapshot.
-11. Backend deducts `product_sizes.quantity`.
-12. Backend clears user cart.
-13. Backend commits transaction.
-14. API returns created order.
+13. Backend creates order items with size snapshot.
+14. Backend deducts `product_sizes.quantity`.
+15. Backend clears user cart only when `checkout_type = cart`.
+16. Backend commits transaction.
+17. API returns created order.
 
 ## Online Payment Order Flow
 
-1. User adds products to cart using `product_size_id`.
+1. User starts checkout from cart or clicks Buy Now from product detail.
 2. User saves/selects address.
 3. User selects `online`.
 4. User clicks place order.
-5. Backend starts DB transaction.
-6. Backend locks selected `product_sizes` rows.
-7. Backend validates product active status and size quantity.
-8. Backend calculates subtotal, tax, shipping, and total.
-9. Backend creates local order:
+5. Backend validates `checkout_type`.
+6. If `checkout_type = cart`, backend loads authenticated user's cart items.
+7. If `checkout_type = buy_now`, backend builds one temporary checkout item from `product_size_id` and `quantity`.
+8. Backend starts DB transaction.
+9. Backend locks selected `product_sizes` rows.
+10. Backend validates product active status and size quantity.
+11. Backend calculates subtotal, tax, shipping, and total.
+12. Backend creates local order:
    - `status = pending`
    - `payment_method = online`
    - `payment_status = pending`
-10. Backend creates order items with size snapshot.
-11. Backend creates Razorpay order using final backend-calculated amount.
-12. Backend stores Razorpay request payload and response payload.
-13. Backend stores Razorpay order id against local order.
-14. Backend commits transaction.
-15. API returns local order details and Razorpay checkout data.
-16. Frontend opens Razorpay checkout.
-17. Razorpay sends success/failure response to frontend and webhook to backend.
-18. Backend verifies Razorpay signature.
-19. On verified success:
+13. Backend creates order items with size snapshot.
+14. Backend creates Razorpay order using final backend-calculated amount.
+15. Backend stores Razorpay request payload and response payload.
+16. Backend stores Razorpay order id against local order.
+17. Backend commits transaction.
+18. API returns local order details and Razorpay checkout data.
+19. Frontend opens Razorpay checkout.
+20. Razorpay sends success/failure response to frontend and webhook to backend.
+21. Backend verifies Razorpay signature.
+22. On verified success, backend must process everything in one DB transaction:
+   - Lock order and selected `product_sizes` rows.
+   - Re-check size-wise stock.
+   - Deduct `product_sizes.quantity`.
    - Update payment status to `paid`.
    - Update order status to `processing`.
-   - Deduct `product_sizes.quantity`.
-   - Clear user cart.
-20. On failure:
+   - Clear user cart only when `checkout_type = cart`.
+   - Commit transaction.
+23. On failure:
    - Update payment status to `failed`.
    - Keep order status as `pending` or `cancelled`.
    - Do not deduct stock.
@@ -300,9 +435,29 @@ Reason:
 Recommended approach:
 
 - During online order creation, create order and Razorpay order.
-- During webhook success, lock order and product size rows again.
-- Re-check size quantity.
-- Deduct stock and mark paid in one DB transaction.
+- During payment success, use this exact transaction sequence:
+
+```text
+Payment Success
+->
+DB Transaction
+->
+Lock product_sizes
+->
+Re-check stock
+->
+Deduct stock
+->
+Update order/payment status
+->
+Clear cart only when checkout_type = cart
+->
+Commit
+```
+
+- During webhook success or frontend payment verification, lock order and product size rows again.
+- Re-check size quantity before marking the order as processing.
+- Deduct stock, update order/payment status, and clear cart in one DB transaction.
 
 If the product size stock is no longer available when webhook success arrives:
 
@@ -331,12 +486,37 @@ Suggested new fields:
 
 ```text
 address_id
+checkout_type
 razorpay_order_id
 razorpay_payment_id
 razorpay_signature
 paid_at
 payment_failed_at
 ```
+
+Suggested `checkout_type` values:
+
+```text
+cart
+buy_now
+```
+
+Notes:
+
+- Store `checkout_type` on the order for reporting and debugging.
+- `cart` means the order was created from authenticated user's cart.
+- `buy_now` means the order was created directly from product detail using `product_size_id` and `quantity`.
+
+Required indexes:
+
+```text
+UNIQUE(order_number)
+```
+
+Notes:
+
+- `order_number` must stay unique because customers, admin, payment logs, and support flows can use it as a public order reference.
+- Current migration already defines `order_number` as unique; keep this requirement in future order migrations/refactors.
 
 Suggested status values:
 
@@ -471,7 +651,7 @@ Recommended success event:
 
 ## Final API Sequence For Frontend
 
-### Checkout Page Load
+### Source 1: Cart Checkout Page Load
 
 ```http
 GET /api/cart
@@ -482,6 +662,27 @@ Frontend shows:
 
 - Cart items.
 - Size-wise price and quantity.
+- Saved addresses.
+- Payment options: COD and Pay Online.
+
+### Source 2: Buy Now Checkout Page Load
+
+From product detail page, frontend already has selected:
+
+- `product_size_id`
+- `quantity`
+
+Frontend should load saved addresses:
+
+```http
+GET /api/addresses
+```
+
+Checkout page shows:
+
+- Selected product and size.
+- Selected quantity.
+- Backend-calculated amount after summary API.
 - Saved addresses.
 - Payment options: COD and Pay Online.
 
@@ -499,9 +700,31 @@ Frontend saves address and receives address id.
 POST /api/checkout/summary
 ```
 
+Cart checkout request:
+
+```json
+{
+  "checkout_type": "cart",
+  "address_id": 1,
+  "payment_method": "online"
+}
+```
+
+Buy-now checkout request:
+
+```json
+{
+  "checkout_type": "buy_now",
+  "address_id": 1,
+  "payment_method": "online",
+  "product_size_id": 15,
+  "quantity": 2
+}
+```
+
 Frontend receives backend-calculated total amount.
 
-### Place COD Order
+### Place COD Order From Cart
 
 ```http
 POST /api/orders/create
@@ -511,6 +734,7 @@ Request:
 
 ```json
 {
+  "checkout_type": "cart",
   "address_id": 1,
   "payment_method": "cod"
 }
@@ -518,7 +742,7 @@ Request:
 
 Backend creates order, deducts stock, clears cart, and returns success.
 
-### Place Online Order
+### Place COD Order From Buy Now
 
 ```http
 POST /api/orders/create
@@ -528,12 +752,55 @@ Request:
 
 ```json
 {
+  "checkout_type": "buy_now",
+  "address_id": 1,
+  "payment_method": "cod",
+  "product_size_id": 15,
+  "quantity": 2
+}
+```
+
+Backend creates order, deducts stock, does not touch cart, and returns success.
+
+### Place Online Order From Cart
+
+```http
+POST /api/orders/create
+```
+
+Request:
+
+```json
+{
+  "checkout_type": "cart",
   "address_id": 1,
   "payment_method": "online"
 }
 ```
 
 Backend creates local pending order, creates Razorpay order, logs payloads, and returns Razorpay checkout data.
+
+Frontend opens Razorpay checkout with returned data.
+
+### Place Online Order From Buy Now
+
+```http
+POST /api/orders/create
+```
+
+Request:
+
+```json
+{
+  "checkout_type": "buy_now",
+  "address_id": 1,
+  "payment_method": "online",
+  "product_size_id": 15,
+  "quantity": 2
+}
+```
+
+Backend creates one temporary checkout item, creates local pending order, creates Razorpay order, logs payloads, and returns Razorpay checkout data.
 
 Frontend opens Razorpay checkout with returned data.
 
@@ -565,10 +832,13 @@ Webhook should still be the final source of truth.
 Before any order is created:
 
 - User authenticated.
-- Cart has at least one item.
+- `checkout_type` is `cart` or `buy_now`.
 - Address belongs to user.
 - Payment method is `cod` or `online`.
-- Every cart item has `product_size_id`.
+- If `checkout_type = cart`, cart has at least one item.
+- If `checkout_type = cart`, every cart item has `product_size_id`.
+- If `checkout_type = buy_now`, `product_size_id` and `quantity` are required.
+- If `checkout_type = buy_now`, backend builds temporary checkout item from selected product size.
 - Every selected product is active.
 - Every selected product size exists.
 - Size belongs to product.
@@ -658,8 +928,9 @@ Current `OrderController@store` should be changed later from:
 
 To:
 
-- Request `address_id` and `payment_method`
-- Use authenticated user's cart
+- Request `checkout_type`, `address_id`, and `payment_method`
+- For `checkout_type = cart`, use authenticated user's cart
+- For `checkout_type = buy_now`, use request `product_size_id` and `quantity` as a temporary checkout item
 - Use `product_size_id`
 - Use `product_sizes.price`
 - Use `product_sizes.quantity`

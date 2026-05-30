@@ -22,6 +22,7 @@ class ProductResource extends JsonResource
             'is_active' => $this->is_active,
             'track_stock' => $this->track_stock,
             'discount_percentage' => $this->discount_percentage,
+            'cover_price' => $this->coverPrice(),
             'brand' => $this->brand,
             'base_material' => $this->base_material,
             'plating' => $this->plating,
@@ -37,5 +38,19 @@ class ProductResource extends JsonResource
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];
+    }
+
+    private function coverPrice(): ?float
+    {
+        if (!$this->relationLoaded('sizes')) {
+            return null;
+        }
+
+        $lowestPrice = $this->sizes
+            ->pluck('price')
+            ->filter(fn ($price) => $price !== null)
+            ->min();
+
+        return $lowestPrice !== null ? (float) $lowestPrice : null;
     }
 }
