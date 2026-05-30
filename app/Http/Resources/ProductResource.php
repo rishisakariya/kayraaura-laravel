@@ -32,7 +32,7 @@ class ProductResource extends JsonResource
             'package_contents' => $this->package_contents,
             'category' => new CategoryResource($this->whenLoaded('category')),
             'image' => ProductImageResource::collection($this->whenLoaded('images')),
-            'primary_image' => ProductImageResource::collection($this->whenLoaded('primaryImage')),
+            // 'primary_image' => ProductImageResource::collection($this->whenLoaded('primaryImage')),
             'sizes' => ProductSizeResource::collection($this->whenLoaded('sizes')),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),

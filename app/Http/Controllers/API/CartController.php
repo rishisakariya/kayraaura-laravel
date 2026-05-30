@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CartStoreRequest;
+use App\Http\Requests\CartUpdateQuantityRequest;
 use App\Http\Resources\CartResource;
 use App\Models\Cart;
 use App\Models\ProductSize;
@@ -44,7 +45,7 @@ class CartController extends Controller
     }
 
     /**
-     * Add item to cart or update existing item quantity.
+     * Add item to cart.
      *
      * @param CartStoreRequest $request
      * @return JsonResponse
@@ -72,42 +73,28 @@ class CartController extends Controller
         $product = $productSize->product;
 
         try {
-            $wasExistingItem = false;
-
-            $cartItem = DB::transaction(function () use ($user, $product, $productSize, $quantity, &$wasExistingItem) {
+            $cartItem = DB::transaction(function () use ($user, $product, $productSize, $quantity) {
                 $cartItem = Cart::forUser($user->id)
                     ->where('product_size_id', $productSize->id)
                     ->lockForUpdate()
                     ->first();
 
-                $wasExistingItem = (bool) $cartItem;
-                $requestedQuantity = ($cartItem?->quantity ?? 0) + $quantity;
+                if ($cartItem) {
+                    throw new DomainException('Product is already in cart');
+                }
 
-                if ($product->track_stock && $productSize->quantity < $requestedQuantity) {
+                if ($product->track_stock && $productSize->quantity < $quantity) {
                     throw new DomainException('Insufficient stock available for requested quantity');
                 }
 
-                if (!$cartItem) {
-                    return Cart::create([
-                        'user_id' => $user->id,
-                        'product_id' => $product->id,
-                        'product_size_id' => $productSize->id,
-                        'size_text' => $productSize->size_text,
-                        'size_price' => $productSize->price,
-                        'quantity' => $requestedQuantity,
-                    ]);
-                }
-
-                $cartItem->update([
+                return Cart::create([
                     'user_id' => $user->id,
                     'product_id' => $product->id,
                     'product_size_id' => $productSize->id,
                     'size_text' => $productSize->size_text,
                     'size_price' => $productSize->price,
-                    'quantity' => $requestedQuantity,
+                    'quantity' => $quantity,
                 ]);
-
-                return $cartItem;
             });
 
             // Load relationships for response
@@ -116,14 +103,14 @@ class CartController extends Controller
             return response()->json([
                 'status' => true,
                 'data' => new CartResource($cartItem),
-                'message' => $wasExistingItem ? 'Cart item updated successfully' : 'Item added to cart successfully'
+                'message' => 'Item added to cart successfully'
             ]);
 
         } catch (DomainException $e) {
             return response()->json([
                 'status' => false,
                 'message' => $e->getMessage()
-            ], 400);
+            ], $e->getMessage() === 'Product is already in cart' ? 409 : 400);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -132,6 +119,69 @@ class CartController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Set cart item quantity by product size.
+     */
+    public function updateQuantity(CartUpdateQuantityRequest $request): JsonResponse
+    {
+        $user = Auth::user();
+        $productSizeId = $request->input('product_size_id');
+        $quantity = (int) $request->input('quantity');
+
+        $cartItem = Cart::forUser($user->id)
+            ->where('product_size_id', $productSizeId)
+            ->with(['product', 'product.category', 'product.images', 'productSize'])
+            ->first();
+
+        if (!$cartItem) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Cart item not found'
+            ], 404);
+        }
+
+        if ($quantity === 0) {
+            $cartItem->delete();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Item removed from cart successfully'
+            ]);
+        }
+
+        $productSize = $cartItem->productSize;
+        $product = $cartItem->product;
+
+        if (!$productSize || !$product || !$product->is_active) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Product not found or inactive'
+            ], 404);
+        }
+
+        if ($product->track_stock && $productSize->quantity < $quantity) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Insufficient stock available for requested quantity'
+            ], 400);
+        }
+
+        $cartItem->update([
+            'product_id' => $product->id,
+            'size_text' => $productSize->size_text,
+            'size_price' => $productSize->price,
+            'quantity' => $quantity,
+        ]);
+
+        $cartItem->load(['product', 'product.category', 'product.images', 'productSize']);
+
+        return response()->json([
+            'status' => true,
+            'data' => new CartResource($cartItem),
+            'message' => 'Cart item quantity updated successfully'
+        ]);
     }
 
     /**
