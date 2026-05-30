@@ -203,30 +203,42 @@ class ProductController extends Controller
     private function syncProductImages(Product $product, array $images): void
     {
         $incomingImages = array_values(array_unique(array_map(function ($image) {
-            return $this->normalizePublicDiskPath($image);
+            return $this->normalizePublicStorageUrl($image);
         }, $images)));
 
         $existingImages = ProductImage::where('product_id', $product->id)->get();
+        $existingImagesByUrl = $existingImages->keyBy(function (ProductImage $image) {
+            return $this->normalizePublicStorageUrl($image->image_path);
+        });
 
         foreach ($existingImages as $existingImage) {
-            if (!in_array($existingImage->image_path, $incomingImages, true)) {
+            $existingImageUrl = $this->normalizePublicStorageUrl($existingImage->image_path);
+
+            if (!in_array($existingImageUrl, $incomingImages, true)) {
                 $this->deleteProductImageFile($existingImage->image_path);
                 $existingImage->delete();
             }
         }
 
         foreach ($incomingImages as $index => $image) {
-            ProductImage::updateOrCreate(
-                [
-                    'product_id' => $product->id,
-                    'image_path' => $image,
-                ],
-                [
-                    'alt_text' => null,
-                    'sort_order' => $index,
-                    'is_primary' => $index === 0,
-                ]
-            );
+            $existingImage = $existingImagesByUrl->get($image);
+
+            if ($existingImage) {
+                $existingImage->image_path = $image;
+                $existingImage->alt_text = null;
+                $existingImage->sort_order = $index;
+                $existingImage->is_primary = $index === 0;
+                $existingImage->save();
+                continue;
+            }
+
+            ProductImage::create([
+                'product_id' => $product->id,
+                'image_path' => $image,
+                'alt_text' => null,
+                'sort_order' => $index,
+                'is_primary' => $index === 0,
+            ]);
         }
     }
 
@@ -249,5 +261,14 @@ class ProductController extends Controller
         }
 
         return $path;
+    }
+
+    private function normalizePublicStorageUrl(string $imagePath): string
+    {
+        if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+            return $imagePath;
+        }
+
+        return asset('storage/' . $this->normalizePublicDiskPath($imagePath));
     }
 }

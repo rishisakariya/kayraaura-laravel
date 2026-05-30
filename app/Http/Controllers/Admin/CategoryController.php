@@ -57,7 +57,7 @@ class CategoryController extends Controller
             $category->slug = $request->input('slug') ?: null;
             $category->description = $request->input('description');
             $category->image = $request->filled('image')
-                ? $this->normalizePublicDiskPath($request->input('image'))
+                ? $this->normalizePublicStorageUrl($request->input('image'))
                 : null;
             $category->parent_id = $request->input('parent_id');
             $category->sort_order = $request->input('sort_order', 0);
@@ -89,10 +89,10 @@ class CategoryController extends Controller
 
         if ($request->has('image')) {
             $newImage = $request->filled('image')
-                ? $this->normalizePublicDiskPath($request->input('image'))
+                ? $this->normalizePublicStorageUrl($request->input('image'))
                 : null;
 
-            if ($category->image && $category->image !== $newImage) {
+            if ($category->image && (!$newImage || $this->normalizePublicDiskPath($category->image) !== $this->normalizePublicDiskPath($newImage))) {
                 $this->deleteCategoryImageFile($category->image);
             }
 
@@ -198,5 +198,14 @@ class CategoryController extends Controller
         }
 
         return $path;
+    }
+
+    private function normalizePublicStorageUrl(string $imagePath): string
+    {
+        if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+            return $imagePath;
+        }
+
+        return asset('storage/' . $this->normalizePublicDiskPath($imagePath));
     }
 }

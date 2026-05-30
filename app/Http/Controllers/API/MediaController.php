@@ -26,14 +26,15 @@ class MediaController extends Controller
         $extension = strtolower($file->getClientOriginalExtension());
         $fileName = now()->timestamp . '_' . Str::random(16) . '.' . $extension;
         $filePath = $file->storeAs($folder, $fileName, 'public');
+        $fileUrl = asset('storage/' . $filePath);
 
         return response()->json([
             'success' => true,
             'message' => 'Image uploaded successfully',
             'data' => [
                 'file_name' => $fileName,
-                'file_path' => $filePath,
-                'file_url' => asset('storage/' . $filePath),
+                'file_path' => $fileUrl,
+                'file_url' => $fileUrl,
             ],
         ]);
     }
