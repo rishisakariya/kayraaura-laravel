@@ -206,6 +206,6 @@ class CategoryController extends Controller
             return $imagePath;
         }
 
-        return asset('storage/' . $this->normalizePublicDiskPath($imagePath));
+        return Storage::disk('public')->url($this->normalizePublicDiskPath($imagePath));
     }
 }

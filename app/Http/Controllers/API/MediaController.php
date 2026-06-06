@@ -26,7 +26,7 @@ class MediaController extends Controller
         $extension = strtolower($file->getClientOriginalExtension());
         $fileName = now()->timestamp . '_' . Str::random(16) . '.' . $extension;
         $filePath = $file->storeAs($folder, $fileName, 'public');
-        $fileUrl = asset('storage/' . $filePath);
+        $fileUrl = Storage::disk('public')->url($filePath);
 
         return response()->json([
             'success' => true,

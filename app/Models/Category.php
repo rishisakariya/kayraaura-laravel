@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Category extends Model
@@ -51,7 +52,7 @@ class Category extends Model
 
         return filter_var($this->image, FILTER_VALIDATE_URL)
             ? $this->image
-            : asset('storage/' . $this->image);
+            : Storage::disk('public')->url($this->image);
     }
 
     protected static function boot()
