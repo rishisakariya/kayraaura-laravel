@@ -211,6 +211,54 @@ class CheckoutService
         return $payload;
     }
 
+    public function refundRazorpayPayment(Order $order): array
+    {
+        $key = config('services.razorpay.key');
+        $secret = config('services.razorpay.secret');
+
+        if (!$key || !$secret) {
+            throw new DomainException('Razorpay credentials are not configured');
+        }
+
+        if (!$order->razorpay_payment_id) {
+            throw new DomainException('Razorpay payment id is missing for this order');
+        }
+
+        $requestPayload = [
+            'amount' => (int) round(((float) $order->total_amount) * 100),
+            'speed' => 'normal',
+            'notes' => [
+                'local_order_id' => (string) $order->id,
+                'order_number' => $order->order_number,
+                'reason' => 'order_cancelled',
+            ],
+        ];
+
+        $response = Http::withBasicAuth($key, $secret)
+            ->post("https://api.razorpay.com/v1/payments/{$order->razorpay_payment_id}/refund", $requestPayload);
+
+        $responsePayload = $response->json() ?? [];
+
+        RazorpayPaymentLog::create([
+            'order_id' => $order->id,
+            'user_id' => $order->user_id,
+            'razorpay_order_id' => $order->razorpay_order_id,
+            'razorpay_payment_id' => $order->razorpay_payment_id,
+            'event_type' => 'refund.create',
+            'status' => $response->successful() ? ($responsePayload['status'] ?? 'refunded') : 'failed',
+            'request_payload' => $requestPayload,
+            'response_payload' => $responsePayload,
+            'error_code' => $responsePayload['error']['code'] ?? null,
+            'error_description' => $responsePayload['error']['description'] ?? null,
+        ]);
+
+        if (!$response->successful()) {
+            throw new DomainException($responsePayload['error']['description'] ?? 'Failed to refund Razorpay payment');
+        }
+
+        return $responsePayload;
+    }
+
     public function assertPaymentAmountMatches(Order $order, array $paymentPayload): void
     {
         $expectedAmount = (int) round(((float) $order->total_amount) * 100);
@@ -248,7 +296,7 @@ class CheckoutService
         }
 
         $order->update([
-            'status' => 'processing',
+            'status' => 'pending',
             'payment_status' => 'paid',
             'razorpay_payment_id' => $paymentData['razorpay_payment_id'] ?? $order->razorpay_payment_id,
             'razorpay_signature' => $paymentData['razorpay_signature'] ?? $order->razorpay_signature,

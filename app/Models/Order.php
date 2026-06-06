@@ -72,7 +72,7 @@ class Order extends Model
 
     public function canBeCancelled(): bool
     {
-        return in_array($this->status, ['pending', 'processing']);
+        return $this->status === 'pending';
     }
 
     public function cancel(): void

@@ -119,7 +119,7 @@ class OrderController extends Controller
         if (!$order->canBeCancelled()) {
             return response()->json([
                 'status' => false,
-                'message' => 'This order cannot be cancelled in its current status',
+                'message' => 'Only pending orders can be cancelled',
             ], 400);
         }
 
@@ -137,14 +137,20 @@ class OrderController extends Controller
                 }
             }
 
+            if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
+                $this->checkoutService->refundRazorpayPayment($order);
+                $order->payment_status = 'refunded';
+            }
+
             $order->cancel();
 
             // Add cancellation reason if provided
             if ($request->input('reason')) {
                 $order->notes = ($order->notes ? $order->notes . "\n\n" : '') . 
                                "Cancellation reason: " . $request->input('reason');
-                $order->save();
             }
+
+            $order->save();
 
             DB::commit();
 
@@ -153,6 +159,14 @@ class OrderController extends Controller
                 'data' => new OrderResource($order->load(['orderItems.product', 'orderItems.productSize'])),
                 'message' => 'Order cancelled successfully',
             ]);
+
+        } catch (DomainException $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 400);
 
         } catch (\Exception $e) {
             DB::rollBack();
