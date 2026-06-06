@@ -19,8 +19,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000','http://localhost:3001'],
-
+    // 'allowed_origins' => ['http://localhost:3000','http://localhost:3001','https://kyara-aura-web.vercel.app'],
+    'allowed_origins' => ['*'],
+    
     'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
