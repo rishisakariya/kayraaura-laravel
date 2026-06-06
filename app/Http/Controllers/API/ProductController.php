@@ -168,4 +168,30 @@ class ProductController extends Controller
             'message' => 'Search results retrieved successfully'
         ]);
     }
+
+    /**
+     * Search active products by product name only.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function searchByName(Request $request): JsonResponse
+    {
+        $request->validate([
+            'name' => 'required|string|min:2|max:100',
+        ]);
+
+        $name = $request->get('name');
+
+        $products = Product::where('is_active', true)
+            ->where('name', 'LIKE', "%{$name}%")
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
+        return response()->json([
+            'status' => true,
+            'data' => $products,
+            'message' => 'Product name search results retrieved successfully'
+        ]);
+    }
 }

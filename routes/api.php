@@ -47,6 +47,7 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/featured', [ProductController::class, 'featured']);
 Route::get('/products/category/{category_id}', [ProductController::class, 'byCategory']);
 Route::get('/products/search', [ProductController::class, 'search']);
+Route::get('/products/name-search', [ProductController::class, 'searchByName']);
 Route::get('/products/{slug}', [ProductController::class, 'show']);
 
 // Frontend Cart Routes (Protected)
