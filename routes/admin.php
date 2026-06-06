@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\BannerController;
 
 // Admin Authentication Routes
 Route::prefix('cpanel')->group(function () {
@@ -21,6 +22,9 @@ Route::prefix('cpanel')->group(function () {
         
         // Products Management
         Route::apiResource('products', ProductController::class);
+
+        // Banners Management
+        Route::apiResource('banners', BannerController::class)->except(['update']);
 
         // Orders Management
         Route::get('orders', [OrderController::class, 'index']);

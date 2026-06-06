@@ -11,6 +11,7 @@ use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\CheckoutController;
 use App\Http\Controllers\API\RazorpayController;
 use App\Http\Controllers\API\WishlistController;
+use App\Http\Controllers\API\BannerController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -37,6 +38,9 @@ Route::prefix('auth')->group(function () {
 // Frontend Category Routes (Public)
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{slug}', [CategoryController::class, 'show']);
+
+// Frontend Banner Routes (Public)
+Route::get('/banners', [BannerController::class, 'index']);
 
 // Frontend Product Routes (Public)
 Route::get('/products', [ProductController::class, 'index']);
