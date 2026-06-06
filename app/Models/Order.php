@@ -75,10 +75,26 @@ class Order extends Model
         return $this->status === 'pending';
     }
 
+    public function canBeReturned(): bool
+    {
+        return $this->status === 'delivered'
+            && $this->payment_method === 'online'
+            && $this->payment_status === 'paid'
+            && !empty($this->razorpay_payment_id);
+    }
+
     public function cancel(): void
     {
         if ($this->canBeCancelled()) {
             $this->status = 'cancelled';
+            $this->save();
+        }
+    }
+
+    public function markReturned(): void
+    {
+        if ($this->canBeReturned()) {
+            $this->status = 'returned';
             $this->save();
         }
     }

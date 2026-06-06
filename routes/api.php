@@ -70,6 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::post('/orders/create', [OrderController::class, 'store']);
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+    Route::post('/orders/{id}/return', [OrderController::class, 'returnOrder']);
     Route::post('/razorpay/payment/verify', [RazorpayController::class, 'verifyPayment']);
 });
 

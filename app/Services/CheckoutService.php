@@ -211,7 +211,7 @@ class CheckoutService
         return $payload;
     }
 
-    public function refundRazorpayPayment(Order $order): array
+    public function refundRazorpayPayment(Order $order, string $reason = 'order_cancelled'): array
     {
         $key = config('services.razorpay.key');
         $secret = config('services.razorpay.secret');
@@ -230,7 +230,7 @@ class CheckoutService
             'notes' => [
                 'local_order_id' => (string) $order->id,
                 'order_number' => $order->order_number,
-                'reason' => 'order_cancelled',
+                'reason' => $reason,
             ],
         ];
 

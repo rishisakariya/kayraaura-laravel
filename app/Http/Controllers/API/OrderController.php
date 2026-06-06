@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderStoreRequest;
 use App\Http\Requests\OrderCancelRequest;
+use App\Http\Requests\OrderReturnRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Models\ProductSize;
@@ -127,14 +128,7 @@ class OrderController extends Controller
             DB::beginTransaction();
 
             if ($order->payment_method === 'cod' || $order->payment_status === 'paid') {
-                foreach ($order->orderItems as $item) {
-                    $product = $item->product;
-                    $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
-
-                    if ($product && $productSize && $product->track_stock) {
-                        $productSize->increment('quantity', $item->quantity);
-                    }
-                }
+                $this->restoreStockForOrder($order);
             }
 
             if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
@@ -176,6 +170,75 @@ class OrderController extends Controller
                 'message' => 'Failed to cancel order. Please try again.',
                 'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
+        }
+    }
+
+    /**
+     * Return a delivered order and refund the online payment.
+     */
+    public function returnOrder(OrderReturnRequest $request, string $id): JsonResponse
+    {
+        $order = Order::where('user_id', Auth::id())->findOrFail($id);
+
+        if (!$order->canBeReturned()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Only delivered paid online orders can be returned',
+            ], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $this->checkoutService->refundRazorpayPayment($order, 'order_returned');
+            $this->restoreStockForOrder($order);
+
+            $order->markReturned();
+            $order->payment_status = 'refunded';
+
+            if ($request->input('reason')) {
+                $order->notes = ($order->notes ? $order->notes . "\n\n" : '') .
+                               "Return reason: " . $request->input('reason');
+            }
+
+            $order->save();
+
+            DB::commit();
+
+            return response()->json([
+                'status' => true,
+                'data' => new OrderResource($order->load(['orderItems.product', 'orderItems.productSize'])),
+                'message' => 'Order returned and payment refunded successfully',
+            ]);
+
+        } catch (DomainException $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to return order. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    private function restoreStockForOrder(Order $order): void
+    {
+        foreach ($order->orderItems as $item) {
+            $product = $item->product;
+            $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
+
+            if ($product && $productSize && $product->track_stock) {
+                $productSize->increment('quantity', $item->quantity);
+            }
         }
     }
 }
