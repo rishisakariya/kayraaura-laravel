@@ -27,7 +27,7 @@ class OrderController extends Controller
     public function index(): JsonResponse
     {
         $orders = Order::where('user_id', Auth::id())
-            ->with(['orderItems.product', 'orderItems.productSize'])
+            ->with(['orderItems.product.images', 'orderItems.productSize'])
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
@@ -69,7 +69,7 @@ class OrderController extends Controller
                 return $order;
             });
 
-            $order->load(['orderItems.product', 'orderItems.productSize']);
+            $order->load(['orderItems.product.images', 'orderItems.productSize']);
 
             return response()->json([
                 'status' => true,
@@ -101,7 +101,7 @@ class OrderController extends Controller
     public function show(string $id): JsonResponse
     {
         $order = Order::where('user_id', Auth::id())
-            ->with(['orderItems.product', 'orderItems.productSize'])
+            ->with(['orderItems.product.images', 'orderItems.productSize'])
             ->findOrFail($id);
 
         return response()->json([
@@ -150,7 +150,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'status' => true,
-                'data' => new OrderResource($order->load(['orderItems.product', 'orderItems.productSize'])),
+                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize'])),
                 'message' => 'Order cancelled successfully',
             ]);
 
@@ -207,7 +207,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'status' => true,
-                'data' => new OrderResource($order->load(['orderItems.product', 'orderItems.productSize'])),
+                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize'])),
                 'message' => 'Order returned and payment refunded successfully',
             ]);
 

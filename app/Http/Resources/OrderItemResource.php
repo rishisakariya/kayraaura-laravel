@@ -30,6 +30,9 @@ class OrderItemResource extends JsonResource
                     'id' => $this->product->id,
                     'name' => $this->product->name,
                     'slug' => $this->product->slug,
+                    'images' => $this->product->relationLoaded('images')
+                        ? ProductImageResource::collection($this->product->images)
+                        : [],
                 ];
             }),
             'product_size' => new ProductSizeResource($this->whenLoaded('productSize')),
