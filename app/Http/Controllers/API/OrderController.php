@@ -27,6 +27,7 @@ class OrderController extends Controller
     public function index(): JsonResponse
     {
         $orders = Order::where('user_id', Auth::id())
+            ->where('payment_status', '!=', 'pending')
             ->with(['orderItems.product.images', 'orderItems.productSize'])
             ->orderBy('created_at', 'desc')
             ->paginate(15);
@@ -101,6 +102,7 @@ class OrderController extends Controller
     public function show(string $id): JsonResponse
     {
         $order = Order::where('user_id', Auth::id())
+            ->where('payment_status', '!=', 'pending')
             ->with(['orderItems.product.images', 'orderItems.productSize'])
             ->findOrFail($id);
 

@@ -10,6 +10,7 @@ use App\Http\Controllers\API\MediaController;
 use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\CheckoutController;
 use App\Http\Controllers\API\RazorpayController;
+use App\Http\Controllers\API\WishlistController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -51,6 +52,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::PUT('/cart/update-quantity', [CartController::class, 'updateQuantity']);
     Route::delete('/cart/remove/{item_id}', [CartController::class, 'destroy']);
     Route::delete('/cart/clear', [CartController::class, 'clear']);
+});
+
+// Frontend Wishlist Routes (Protected)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/wishlist', [WishlistController::class, 'index']);
+    Route::post('/wishlist', [WishlistController::class, 'store']);
+    Route::delete('/wishlist/clear', [WishlistController::class, 'clear']);
+    Route::get('/wishlist/{id}', [WishlistController::class, 'show']);
+    Route::put('/wishlist/{id}', [WishlistController::class, 'update']);
+    Route::delete('/wishlist/{id}', [WishlistController::class, 'destroy']);
 });
 
 // Frontend Address and Checkout Routes (Protected)

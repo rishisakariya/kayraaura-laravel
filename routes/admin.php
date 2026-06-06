@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 
 // Admin Authentication Routes
@@ -20,5 +21,9 @@ Route::prefix('cpanel')->group(function () {
         
         // Products Management
         Route::apiResource('products', ProductController::class);
+
+        // Orders Management
+        Route::get('orders', [OrderController::class, 'index']);
+        Route::get('orders/{id}', [OrderController::class, 'show']);
     });
 });

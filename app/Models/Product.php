@@ -55,6 +55,11 @@ class Product extends Model
         return $this->hasMany(ProductSize::class)->orderBy('id');
     }
 
+    public function wishlists(): HasMany
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
     protected static function boot()
     {
         parent::boot();
