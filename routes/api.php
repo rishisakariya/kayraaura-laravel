@@ -12,6 +12,8 @@ use App\Http\Controllers\API\CheckoutController;
 use App\Http\Controllers\API\RazorpayController;
 use App\Http\Controllers\API\WishlistController;
 use App\Http\Controllers\API\BannerController;
+use App\Http\Controllers\API\OrderShipmentController;
+use App\Http\Controllers\API\DelhiveryWebhookController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -84,10 +86,14 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
+    Route::get('/orders/{id}/shipment', [OrderShipmentController::class, 'show']);
     Route::post('/orders/create', [OrderController::class, 'store']);
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{id}/return', [OrderController::class, 'returnOrder']);
+    Route::get('/shipments/track', [OrderShipmentController::class, 'track']);
+    Route::post('/orders/{id}/shipment/refresh', [OrderShipmentController::class, 'refresh'])->middleware('throttle:6,1');
     Route::post('/razorpay/payment/verify', [RazorpayController::class, 'verifyPayment']);
 });
 
 Route::post('/razorpay/webhook', [RazorpayController::class, 'webhook']);
+Route::post('/delhivery/webhook', DelhiveryWebhookController::class);

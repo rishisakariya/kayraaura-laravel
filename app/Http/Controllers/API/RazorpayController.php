@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RazorpayPaymentVerifyRequest;
 use App\Http\Resources\OrderResource;
+use App\Jobs\CreateDelhiveryShipmentJob;
 use App\Models\Order;
 use App\Models\RazorpayPaymentLog;
 use App\Services\CheckoutService;
@@ -63,9 +64,13 @@ class RazorpayController extends Controller
 
             $statusCode = $verifiedOrder->payment_status === 'paid_stock_failed' ? 409 : 200;
 
+            if ($verifiedOrder->payment_status === 'paid') {
+                CreateDelhiveryShipmentJob::dispatch($verifiedOrder->id);
+            }
+
             return response()->json([
                 'status' => $verifiedOrder->payment_status === 'paid',
-                'data' => new OrderResource($verifiedOrder->load(['orderItems.product', 'orderItems.productSize'])),
+                'data' => new OrderResource($verifiedOrder->load(['orderItems.product', 'orderItems.productSize', 'shipment'])),
                 'message' => $verifiedOrder->payment_status === 'paid'
                     ? 'Payment verified successfully'
                     : 'Payment captured but stock is no longer available',
@@ -111,8 +116,9 @@ class RazorpayController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($order, $webhookPayload) {
+            $processedOrder = DB::transaction(function () use ($order, $webhookPayload) {
                 $event = $webhookPayload['event'] ?? null;
+                $updatedOrder = null;
 
                 if (in_array($event, ['payment.captured', 'order.paid'], true)) {
                     $payment = $webhookPayload['payload']['payment']['entity'] ?? [];
@@ -121,7 +127,7 @@ class RazorpayController extends Controller
                         $this->checkoutService->assertPaymentAmountMatches($order, $payment);
                     }
 
-                    $this->checkoutService->markOrderPaid($order, [
+                    $updatedOrder = $this->checkoutService->markOrderPaid($order, [
                         'razorpay_order_id' => $this->razorpayOrderIdFromWebhookPayload($webhookPayload),
                         'razorpay_payment_id' => $this->razorpayPaymentIdFromWebhookPayload($webhookPayload),
                         'razorpay_signature' => null,
@@ -134,7 +140,13 @@ class RazorpayController extends Controller
                         $this->razorpayPaymentIdFromWebhookPayload($webhookPayload)
                     );
                 }
+
+                return $updatedOrder;
             });
+
+            if ($processedOrder?->payment_status === 'paid') {
+                CreateDelhiveryShipmentJob::dispatch($processedOrder->id);
+            }
         } catch (DomainException $e) {
             return response()->json([
                 'status' => false,

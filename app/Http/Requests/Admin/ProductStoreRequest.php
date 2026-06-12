@@ -49,6 +49,7 @@ class ProductStoreRequest extends FormRequest
             'category_id' => 'nullable|integer|exists:categories,id',
             'is_active' => 'nullable|boolean',
             'track_stock' => 'nullable|boolean',
+            'weight_grams' => 'nullable|integer|min:1|max:100000',
             'sizes' => [
                 'nullable',
                 'array',
@@ -76,6 +77,7 @@ class ProductStoreRequest extends FormRequest
             'edit_value.required' => 'Edit value is required',
             'image.max' => 'Maximum 5 product images allowed',
             'image.*.not_regex' => 'Product image must be a valid media URL or path',
+            'weight_grams.min' => 'Product weight must be at least 1 gram',
 
             'ideal_for.in' => 'ideal_for must be one of: men, woman, both',
         ];

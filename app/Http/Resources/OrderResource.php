@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\OrderShipment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -42,8 +43,65 @@ class OrderResource extends JsonResource
             'billing_address' => $this->billing_address,
             'notes' => $this->notes,
             'order_items' => OrderItemResource::collection($this->whenLoaded('orderItems')),
+            'shipment' => $this->shipmentPayload($request),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];
+    }
+
+    private function shipmentPayload(Request $request): array
+    {
+        $shipment = $this->relationLoaded('shipment') ? $this->shipment : null;
+
+        $payload = [
+            'provider' => OrderShipment::PROVIDER_DELHIVERY,
+            'waybill' => $shipment?->waybill,
+            'courier_tracking_url' => $shipment?->courier_tracking_url,
+            'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,
+            'raw_status' => $shipment?->raw_status,
+            'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
+        ];
+
+        if ($request->is('cpanel/orders/*') || $request->is('api/cpanel/orders/*')) {
+            $payload = array_merge($payload, [
+                'status_location' => $shipment?->status_location,
+                'status_instructions' => $shipment?->status_instructions,
+                'pickup_location' => $shipment?->pickup_location,
+                'payment_mode' => $shipment?->payment_mode,
+                'cod_amount' => $shipment ? (float) $shipment->cod_amount : 0.0,
+                'weight_grams' => $shipment?->weight_grams,
+                'length_cm' => $shipment?->length_cm,
+                'width_cm' => $shipment?->width_cm,
+                'height_cm' => $shipment?->height_cm,
+                'shipping_label_url' => $shipment?->shipping_label_url,
+                'manifested_at' => $shipment?->manifested_at?->format('Y-m-d H:i:s'),
+                'delivered_at' => $shipment?->delivered_at?->format('Y-m-d H:i:s'),
+                'cancelled_at' => $shipment?->cancelled_at?->format('Y-m-d H:i:s'),
+                'rto_at' => $shipment?->rto_at?->format('Y-m-d H:i:s'),
+                'failed_reason' => $shipment?->failed_reason,
+                'request_payload' => $shipment?->request_payload,
+                'response_payload' => $shipment?->response_payload,
+                'tracking_payload' => $shipment?->tracking_payload,
+                'tracking' => $this->trackingTimeline($shipment?->tracking_payload ?? []),
+            ]);
+        }
+
+        return $payload;
+    }
+
+    private function trackingTimeline(array $trackingPayload): array
+    {
+        $scans = data_get($trackingPayload, 'ShipmentData.0.Shipment.Scans', []);
+
+        return collect($scans)->map(function (array $scan) {
+            $detail = $scan['ScanDetail'] ?? $scan;
+
+            return [
+                'status' => $detail['Scan'] ?? $detail['status'] ?? null,
+                'location' => $detail['ScannedLocation'] ?? $detail['location'] ?? null,
+                'instructions' => $detail['Instructions'] ?? $detail['instructions'] ?? null,
+                'date_time' => $detail['ScanDateTime'] ?? $detail['date_time'] ?? null,
+            ];
+        })->values()->all();
     }
 }

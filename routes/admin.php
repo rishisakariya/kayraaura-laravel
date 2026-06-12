@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\OrderShipmentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\BannerController;
 
@@ -29,5 +30,9 @@ Route::prefix('cpanel')->group(function () {
         // Orders Management
         Route::get('orders', [OrderController::class, 'index']);
         Route::get('orders/{id}', [OrderController::class, 'show']);
+        Route::post('orders/{id}/shipment/create', [OrderShipmentController::class, 'create']);
+        Route::post('orders/{id}/shipment/sync', [OrderShipmentController::class, 'sync']);
+        Route::post('orders/{id}/shipment/cancel', [OrderShipmentController::class, 'cancel']);
+        Route::get('orders/{id}/shipment/label', [OrderShipmentController::class, 'label']);
     });
 });

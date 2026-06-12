@@ -69,6 +69,7 @@ class ProductController extends Controller
             $product->discount_percentage = $request->input('discount_percentage');
             $product->is_active = $request->input('is_active', true);
             $product->track_stock = $request->input('track_stock', true);
+            $product->weight_grams = $request->input('weight_grams');
             $product->save();
 
             // Persist sizes
@@ -111,6 +112,7 @@ class ProductController extends Controller
         $product->discount_percentage = $request->input('discount_percentage');
         $product->is_active = $request->input('is_active', $product->is_active);
         $product->track_stock = $request->input('track_stock', $product->track_stock);
+        $product->weight_grams = $request->input('weight_grams', $product->weight_grams);
         $product->save();
 
         // Persist sizes

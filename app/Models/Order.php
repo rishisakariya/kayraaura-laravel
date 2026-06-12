@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -61,6 +62,11 @@ class Order extends Model
         return $this->hasMany(RazorpayPaymentLog::class);
     }
 
+    public function shipment(): HasOne
+    {
+        return $this->hasOne(OrderShipment::class);
+    }
+
     public static function generateOrderNumber(): string
     {
         $prefix = 'ORD';
@@ -72,7 +78,7 @@ class Order extends Model
 
     public function canBeCancelled(): bool
     {
-        return $this->status === 'pending';
+        return in_array($this->status, ['pending', 'pending_admin_confirmation'], true);
     }
 
     public function canBeReturned(): bool

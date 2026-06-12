@@ -16,7 +16,7 @@ class OrderController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $orders = Order::with(['user', 'orderItems.product.images', 'orderItems.productSize'])
+        $orders = Order::with(['user', 'orderItems.product.images', 'orderItems.productSize', 'shipment'])
             ->when($request->input('search'), function ($query, $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('order_number', 'like', "%{$search}%")
@@ -29,6 +29,21 @@ class OrderController extends Controller
             })
             ->when($request->input('payment_status'), function ($query, $paymentStatus) {
                 $query->where('payment_status', $paymentStatus);
+            })
+            ->when($request->input('shipping_status'), function ($query, $shippingStatus) {
+                $query->whereHas('shipment', fn ($query) => $query->where('shipment_status', $shippingStatus));
+            })
+            ->when($request->input('shipping_provider'), function ($query, $provider) {
+                $query->whereHas('shipment', fn ($query) => $query->where('provider', $provider));
+            })
+            ->when($request->input('waybill'), function ($query, $waybill) {
+                $query->whereHas('shipment', fn ($query) => $query->where('waybill', 'like', "%{$waybill}%"));
+            })
+            ->when($request->input('shipment_created_from'), function ($query, $date) {
+                $query->whereHas('shipment', fn ($query) => $query->whereDate('created_at', '>=', $date));
+            })
+            ->when($request->input('shipment_created_to'), function ($query, $date) {
+                $query->whereHas('shipment', fn ($query) => $query->whereDate('created_at', '<=', $date));
             })
             ->orderBy('created_at', 'desc')
             ->paginate($request->input('per_page', 15));
@@ -51,7 +66,7 @@ class OrderController extends Controller
     public function show(string $id): JsonResponse
     {
         try {
-            $order = Order::with(['user', 'orderItems.product.images', 'orderItems.productSize'])
+            $order = Order::with(['user', 'orderItems.product.images', 'orderItems.productSize', 'shipment'])
                 ->findOrFail($id);
 
             return response()->json([

@@ -7,7 +7,9 @@ use App\Http\Requests\OrderStoreRequest;
 use App\Http\Requests\OrderCancelRequest;
 use App\Http\Requests\OrderReturnRequest;
 use App\Http\Resources\OrderResource;
+use App\Jobs\CancelDelhiveryShipmentJob;
 use App\Models\Order;
+use App\Models\OrderShipment;
 use App\Models\ProductSize;
 use App\Services\CheckoutService;
 use DomainException;
@@ -28,7 +30,7 @@ class OrderController extends Controller
     {
         $orders = Order::where('user_id', Auth::id())
             ->where('payment_status', '!=', 'pending')
-            ->with(['orderItems.product.images', 'orderItems.productSize'])
+            ->with(['orderItems.product.images', 'orderItems.productSize', 'shipment'])
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
@@ -70,7 +72,7 @@ class OrderController extends Controller
                 return $order;
             });
 
-            $order->load(['orderItems.product.images', 'orderItems.productSize']);
+            $order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment']);
 
             return response()->json([
                 'status' => true,
@@ -78,7 +80,9 @@ class OrderController extends Controller
                     'order' => new OrderResource($order),
                     'razorpay' => $razorpayCheckout,
                 ],
-                'message' => 'Order created successfully',
+                'message' => $order->payment_method === 'cod'
+                    ? 'Order placed successfully. Your COD order is pending confirmation.'
+                    : 'Order created successfully',
             ], 201);
 
         } catch (DomainException $e) {
@@ -103,7 +107,7 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', Auth::id())
             ->where('payment_status', '!=', 'pending')
-            ->with(['orderItems.product.images', 'orderItems.productSize'])
+            ->with(['orderItems.product.images', 'orderItems.productSize', 'shipment'])
             ->findOrFail($id);
 
         return response()->json([
@@ -117,7 +121,7 @@ class OrderController extends Controller
      */
     public function cancel(OrderCancelRequest $request, string $id): JsonResponse
     {
-        $order = Order::where('user_id', Auth::id())->findOrFail($id);
+        $order = Order::where('user_id', Auth::id())->with('shipment')->findOrFail($id);
 
         if (!$order->canBeCancelled()) {
             return response()->json([
@@ -127,6 +131,8 @@ class OrderController extends Controller
         }
 
         try {
+            $shipmentToCancel = null;
+
             DB::beginTransaction();
 
             if ($order->payment_method === 'cod' || $order->payment_status === 'paid') {
@@ -140,6 +146,14 @@ class OrderController extends Controller
 
             $order->cancel();
 
+            if ($order->shipment?->waybill && !in_array($order->shipment->shipment_status, [
+                OrderShipment::STATUS_DELIVERED,
+                OrderShipment::STATUS_CANCELLED,
+                OrderShipment::STATUS_RTO,
+            ], true)) {
+                $shipmentToCancel = $order->shipment;
+            }
+
             // Add cancellation reason if provided
             if ($request->input('reason')) {
                 $order->notes = ($order->notes ? $order->notes . "\n\n" : '') . 
@@ -150,9 +164,13 @@ class OrderController extends Controller
 
             DB::commit();
 
+            if ($shipmentToCancel) {
+                CancelDelhiveryShipmentJob::dispatch($shipmentToCancel->id);
+            }
+
             return response()->json([
                 'status' => true,
-                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize'])),
+                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
                 'message' => 'Order cancelled successfully',
             ]);
 
@@ -209,7 +227,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'status' => true,
-                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize'])),
+                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
                 'message' => 'Order returned and payment refunded successfully',
             ]);
 
