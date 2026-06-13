@@ -83,10 +83,7 @@ class Order extends Model
 
     public function canBeReturned(): bool
     {
-        return $this->status === 'delivered'
-            && $this->payment_method === 'online'
-            && $this->payment_status === 'paid'
-            && !empty($this->razorpay_payment_id);
+        return $this->status === 'delivered';
     }
 
     public function cancel(): void

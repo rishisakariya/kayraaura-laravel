@@ -10,6 +10,10 @@ class DelhiveryClient
 {
     public function createShipment(array $payload): array
     {
+        if ($this->mockEnabled()) {
+            return $this->mockCreateShipmentResponse($payload);
+        }
+
         $response = Http::asForm()
             ->withHeaders($this->headers())
             ->timeout(30)
@@ -23,6 +27,10 @@ class DelhiveryClient
 
     public function trackShipment(string $waybill): array
     {
+        if ($this->mockEnabled()) {
+            return $this->mockTrackShipmentResponse($waybill);
+        }
+
         $response = Http::withHeaders($this->headers())
             ->timeout(30)
             ->get($this->url('track'), [
@@ -35,6 +43,10 @@ class DelhiveryClient
 
     public function cancelShipment(string $waybill): array
     {
+        if ($this->mockEnabled()) {
+            return $this->mockCancelShipmentResponse($waybill);
+        }
+
         $response = Http::asForm()
             ->withHeaders($this->headers())
             ->timeout(30)
@@ -44,6 +56,71 @@ class DelhiveryClient
             ]);
 
         return $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
+    }
+
+    private function mockEnabled(): bool
+    {
+        return (bool) config('delhivery.mock');
+    }
+
+    private function mockCreateShipmentResponse(array $payload): array
+    {
+        $orderNumber = $payload['shipments'][0]['order'] ?? 'TEST';
+        $isReversePickup = ($payload['shipments'][0]['payment_mode'] ?? null) === 'Pickup';
+        $waybill = ($isReversePickup ? 'RMOCK' : 'MOCK') . now()->format('YmdHis');
+
+        return [
+            'mock' => true,
+            'success' => true,
+            'packages' => [
+                [
+                    'waybill' => $waybill,
+                    'wbn' => $waybill,
+                    'refnum' => $orderNumber,
+                    'order' => $orderNumber,
+                    'status' => $isReversePickup ? 'Pickup Scheduled' : 'Manifested',
+                ],
+            ],
+        ];
+    }
+
+    private function mockTrackShipmentResponse(string $waybill): array
+    {
+        return [
+            'mock' => true,
+            'ShipmentData' => [
+                [
+                    'Shipment' => [
+                        'AWB' => $waybill,
+                        'Status' => [
+                            'Status' => 'Manifested',
+                            'StatusLocation' => 'Local Mock',
+                            'Instructions' => 'Mock shipment created for local testing',
+                        ],
+                        'Scans' => [
+                            [
+                                'ScanDetail' => [
+                                    'Scan' => 'Manifested',
+                                    'ScannedLocation' => 'Local Mock',
+                                    'Instructions' => 'Mock shipment created for local testing',
+                                    'ScanDateTime' => now()->format('Y-m-d H:i:s'),
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    private function mockCancelShipmentResponse(string $waybill): array
+    {
+        return [
+            'mock' => true,
+            'success' => true,
+            'waybill' => $waybill,
+            'status' => 'Cancelled',
+        ];
     }
 
     private function headers(): array

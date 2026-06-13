@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ProductSize;
 use App\Services\CheckoutService;
+use App\Services\Delhivery\DelhiveryShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,10 @@ use Illuminate\Support\Facades\Auth;
 
 class OrderController extends Controller
 {
-    public function __construct(private readonly CheckoutService $checkoutService)
+    public function __construct(
+        private readonly CheckoutService $checkoutService,
+        private readonly DelhiveryShipmentService $shipmentService
+    )
     {
     }
 
@@ -106,9 +110,16 @@ class OrderController extends Controller
     public function show(string $id): JsonResponse
     {
         $order = Order::where('user_id', Auth::id())
-            ->where('payment_status', '!=', 'pending')
             ->with(['orderItems.product.images', 'orderItems.productSize', 'shipment'])
-            ->findOrFail($id);
+            ->firstWhere('id', $id);
+
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found for the authenticated customer.',
+                'hint' => 'Use the customer token that owns this order, or use the admin order detail endpoint.',
+            ], 404);
+        }
 
         return response()->json([
             'status' => true,
@@ -198,23 +209,47 @@ class OrderController extends Controller
      */
     public function returnOrder(OrderReturnRequest $request, string $id): JsonResponse
     {
-        $order = Order::where('user_id', Auth::id())->findOrFail($id);
+        $order = Order::where('user_id', Auth::id())
+            ->with(['shipment', 'orderItems.product'])
+            ->findOrFail($id);
 
         if (!$order->canBeReturned()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Only delivered paid online orders can be returned',
+                'message' => 'Only delivered orders can be returned',
             ], 400);
         }
 
-        try {
-            DB::beginTransaction();
+        if (!$order->shipment?->delivered_at) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Delivery date is not available for this order',
+            ], 400);
+        }
 
-            $this->checkoutService->refundRazorpayPayment($order, 'order_returned');
+        if (now()->gt($order->shipment->delivered_at->copy()->addDays(7))) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Return window expired. Returns are allowed within 7 days from delivery',
+            ], 400);
+        }
+
+        $transactionStarted = false;
+
+        try {
+            $this->shipmentService->createReversePickup($order);
+
+            DB::beginTransaction();
+            $transactionStarted = true;
+
+            if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
+                $this->checkoutService->refundRazorpayPayment($order, 'order_returned');
+                $order->payment_status = 'refunded';
+            }
+
             $this->restoreStockForOrder($order);
 
             $order->markReturned();
-            $order->payment_status = 'refunded';
 
             if ($request->input('reason')) {
                 $order->notes = ($order->notes ? $order->notes . "\n\n" : '') .
@@ -224,15 +259,20 @@ class OrderController extends Controller
             $order->save();
 
             DB::commit();
+            $transactionStarted = false;
 
             return response()->json([
                 'status' => true,
                 'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
-                'message' => 'Order returned and payment refunded successfully',
+                'message' => $order->payment_status === 'refunded'
+                    ? 'Return pickup created and payment refunded successfully'
+                    : 'Return pickup created successfully',
             ]);
 
         } catch (DomainException $e) {
-            DB::rollBack();
+            if ($transactionStarted) {
+                DB::rollBack();
+            }
 
             return response()->json([
                 'status' => false,
@@ -240,7 +280,9 @@ class OrderController extends Controller
             ], 400);
 
         } catch (\Exception $e) {
-            DB::rollBack();
+            if ($transactionStarted) {
+                DB::rollBack();
+            }
 
             return response()->json([
                 'status' => false,

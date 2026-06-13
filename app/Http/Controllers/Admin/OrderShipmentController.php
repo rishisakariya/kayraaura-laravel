@@ -7,6 +7,7 @@ use App\Http\Resources\OrderResource;
 use App\Jobs\CancelDelhiveryShipmentJob;
 use App\Jobs\CreateDelhiveryShipmentJob;
 use App\Jobs\SyncDelhiveryShipmentStatusJob;
+use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use Illuminate\Http\JsonResponse;
@@ -38,7 +39,7 @@ class OrderShipmentController extends Controller
                 [
                     'provider' => OrderShipment::PROVIDER_DELHIVERY,
                     'shipment_status' => OrderShipment::STATUS_NOT_CREATED,
-                    'pickup_location' => config('delhivery.pickup_location'),
+                    'pickup_location' => DelhiverySetting::current()->pickup_location,
                 ]
             );
 

@@ -60,6 +60,12 @@ class OrderResource extends JsonResource
             'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,
             'raw_status' => $shipment?->raw_status,
             'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
+            'return' => [
+                'waybill' => $shipment?->reverse_waybill,
+                'status' => $shipment?->reverse_status,
+                'tracking_url' => $shipment?->reverse_tracking_url,
+                'requested_at' => $shipment?->reverse_requested_at?->format('Y-m-d H:i:s'),
+            ],
         ];
 
         if ($request->is('cpanel/orders/*') || $request->is('api/cpanel/orders/*')) {
@@ -82,6 +88,9 @@ class OrderResource extends JsonResource
                 'request_payload' => $shipment?->request_payload,
                 'response_payload' => $shipment?->response_payload,
                 'tracking_payload' => $shipment?->tracking_payload,
+                'reverse_failed_reason' => $shipment?->reverse_failed_reason,
+                'reverse_request_payload' => $shipment?->reverse_request_payload,
+                'reverse_response_payload' => $shipment?->reverse_response_payload,
                 'tracking' => $this->trackingTimeline($shipment?->tracking_payload ?? []),
             ]);
         }

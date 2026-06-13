@@ -2,6 +2,7 @@
 
 namespace App\Services\Delhivery;
 
+use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use DomainException;
@@ -11,85 +12,105 @@ use Illuminate\Support\Facades\Log;
 
 class DelhiveryShipmentService
 {
+    private ?DelhiverySetting $settings = null;
+
     public function __construct(private readonly DelhiveryClient $client)
     {
     }
 
     public function createShipment(Order $order): OrderShipment
     {
-        return DB::transaction(function () use ($order) {
-            $order = Order::with(['orderItems.product'])
-                ->whereKey($order->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        $shipment = null;
 
-            $shipment = OrderShipment::firstOrCreate(
-                ['order_id' => $order->id],
-                [
+        try {
+            $shipment = DB::transaction(function () use (&$order) {
+                $order = Order::with(['orderItems.product'])
+                    ->whereKey($order->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $shipment = OrderShipment::firstOrCreate(
+                    ['order_id' => $order->id],
+                    [
+                        'provider' => OrderShipment::PROVIDER_DELHIVERY,
+                        'shipment_status' => OrderShipment::STATUS_NOT_CREATED,
+                        'pickup_location' => $this->delhiverySettings()->pickup_location,
+                    ]
+                );
+
+                $shipment->refresh();
+
+                if ($shipment->hasWaybill()) {
+                    return $shipment;
+                }
+
+                $weight = $this->calculateWeight($order);
+                $payload = $this->buildCreatePayload($order);
+
+                $shipment->fill([
                     'provider' => OrderShipment::PROVIDER_DELHIVERY,
                     'shipment_status' => OrderShipment::STATUS_NOT_CREATED,
-                    'pickup_location' => config('delhivery.pickup_location'),
-                ]
-            );
+                    'pickup_location' => $this->delhiverySettings()->pickup_location,
+                    'payment_mode' => $this->paymentMode($order),
+                    'cod_amount' => $this->codAmount($order),
+                    'weight_grams' => $weight,
+                    'length_cm' => $this->delhiverySettings()->default_length_cm,
+                    'width_cm' => $this->delhiverySettings()->default_width_cm,
+                    'height_cm' => $this->delhiverySettings()->default_height_cm,
+                    'request_payload' => $payload,
+                    'failed_reason' => null,
+                ])->save();
 
-            $shipment->refresh();
+                return $shipment;
+            });
 
             if ($shipment->hasWaybill()) {
                 return $shipment;
             }
 
-            $payload = $this->buildCreatePayload($order);
+            $payload = $shipment->request_payload ?? $this->buildCreatePayload($order);
+            $responsePayload = $this->client->createShipment($payload);
+            $shipment->fill(['response_payload' => $responsePayload])->save();
+
+            if ($responseError = $this->extractCreateError($responsePayload)) {
+                throw new DomainException($responseError);
+            }
+
+            $waybill = $this->extractWaybill($responsePayload);
+
+            if (!$waybill) {
+                throw new DomainException($this->missingWaybillMessage($responsePayload));
+            }
 
             $shipment->fill([
-                'provider' => OrderShipment::PROVIDER_DELHIVERY,
-                'shipment_status' => OrderShipment::STATUS_NOT_CREATED,
-                'pickup_location' => config('delhivery.pickup_location'),
-                'payment_mode' => $this->paymentMode($order),
-                'cod_amount' => $this->codAmount($order),
-                'weight_grams' => $this->calculateWeight($order),
-                'length_cm' => (int) config('delhivery.default_length_cm', 10),
-                'width_cm' => (int) config('delhivery.default_width_cm', 10),
-                'height_cm' => (int) config('delhivery.default_height_cm', 5),
-                'request_payload' => $payload,
+                'waybill' => $waybill,
+                'provider_reference' => $this->extractProviderReference($responsePayload),
+                'delhivery_order_id' => $this->extractDelhiveryOrderId($responsePayload),
+                'shipment_status' => OrderShipment::STATUS_MANIFESTED,
+                'raw_status' => $this->extractRawStatus($responsePayload) ?? 'Manifested',
+                'courier_tracking_url' => "https://www.delhivery.com/track/package/{$waybill}",
+                'manifested_at' => now(),
+                'response_payload' => $responsePayload,
                 'failed_reason' => null,
             ])->save();
 
-            try {
-                $responsePayload = $this->client->createShipment($payload);
-                $waybill = $this->extractWaybill($responsePayload);
-
-                if (!$waybill) {
-                    throw new DomainException('Delhivery did not return an AWB number');
-                }
-
-                $shipment->fill([
-                    'waybill' => $waybill,
-                    'provider_reference' => $this->extractProviderReference($responsePayload),
-                    'delhivery_order_id' => $this->extractDelhiveryOrderId($responsePayload),
-                    'shipment_status' => OrderShipment::STATUS_MANIFESTED,
-                    'raw_status' => $this->extractRawStatus($responsePayload) ?? 'Manifested',
-                    'courier_tracking_url' => "https://www.delhivery.com/track/package/{$waybill}",
-                    'manifested_at' => now(),
-                    'response_payload' => $responsePayload,
-                    'failed_reason' => null,
-                ])->save();
-
-                return $shipment;
-            } catch (\Throwable $e) {
+            return $shipment;
+        } catch (\Throwable $e) {
+            if ($shipment) {
                 $shipment->fill([
                     'shipment_status' => OrderShipment::STATUS_FAILED,
                     'failed_reason' => $e->getMessage(),
                 ])->save();
-
-                Log::error('Delhivery shipment creation failed', [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'error' => $e->getMessage(),
-                ]);
-
-                throw $e;
             }
-        });
+
+            Log::error('Delhivery shipment creation failed', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
     }
 
     public function queuePlaceholder(Order $order): OrderShipment
@@ -99,7 +120,7 @@ class DelhiveryShipmentService
             [
                 'provider' => OrderShipment::PROVIDER_DELHIVERY,
                 'shipment_status' => OrderShipment::STATUS_NOT_CREATED,
-                'pickup_location' => config('delhivery.pickup_location'),
+                'pickup_location' => $this->delhiverySettings()->pickup_location,
             ]
         );
     }
@@ -191,6 +212,72 @@ class DelhiveryShipmentService
         }
     }
 
+    public function createReversePickup(Order $order): OrderShipment
+    {
+        $order = Order::with(['shipment', 'orderItems.product'])
+            ->whereKey($order->id)
+            ->firstOrFail();
+
+        $shipment = $order->shipment;
+
+        if (!$shipment || !$shipment->hasWaybill()) {
+            throw new DomainException('Forward shipment AWB is required before return pickup can be created');
+        }
+
+        if ($shipment->reverse_waybill) {
+            return $shipment;
+        }
+
+        try {
+            $payload = $this->buildReversePickupPayload($order);
+
+            $shipment->fill([
+                'reverse_status' => OrderShipment::STATUS_NOT_CREATED,
+                'reverse_request_payload' => $payload,
+                'reverse_failed_reason' => null,
+            ])->save();
+
+            $responsePayload = $this->client->createShipment($payload);
+            $shipment->fill(['reverse_response_payload' => $responsePayload])->save();
+
+            if ($responseError = $this->extractCreateError($responsePayload)) {
+                throw new DomainException($responseError);
+            }
+
+            $waybill = $this->extractWaybill($responsePayload);
+
+            if (!$waybill) {
+                throw new DomainException($this->missingWaybillMessage($responsePayload));
+            }
+
+            $shipment->fill([
+                'reverse_waybill' => $waybill,
+                'reverse_provider_reference' => $this->extractProviderReference($responsePayload),
+                'reverse_status' => OrderShipment::STATUS_PICKUP_SCHEDULED,
+                'reverse_tracking_url' => "https://www.delhivery.com/track/package/{$waybill}",
+                'reverse_requested_at' => now(),
+                'reverse_response_payload' => $responsePayload,
+                'reverse_failed_reason' => null,
+            ])->save();
+
+            return $shipment;
+        } catch (\Throwable $e) {
+            $shipment->fill([
+                'reverse_status' => OrderShipment::STATUS_FAILED,
+                'reverse_failed_reason' => $e->getMessage(),
+            ])->save();
+
+            Log::error('Delhivery reverse pickup creation failed', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'waybill' => $shipment->waybill,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    }
+
     public function applyWebhookPayload(array $payload): ?OrderShipment
     {
         $waybill = $payload['waybill']
@@ -205,7 +292,9 @@ class DelhiveryShipmentService
             return null;
         }
 
-        $shipment = OrderShipment::where('waybill', $waybill)->first();
+        $shipment = OrderShipment::where('waybill', $waybill)
+            ->orWhere('reverse_waybill', $waybill)
+            ->first();
 
         if (!$shipment) {
             Log::info('Delhivery webhook received for unknown AWB', [
@@ -221,6 +310,16 @@ class DelhiveryShipmentService
             ?? $payload['Scan']
             ?? Arr::get($payload, 'Shipment.Status.Status')
             ?? null;
+
+        if ($shipment->reverse_waybill === $waybill) {
+            $shipment->fill([
+                'reverse_status' => $this->normalizeStatus($rawStatus),
+                'reverse_response_payload' => array_merge($shipment->reverse_response_payload ?? [], ['webhook' => $payload]),
+                'last_synced_at' => now(),
+            ])->save();
+
+            return $shipment;
+        }
 
         $shipment->fill([
             'shipment_status' => $this->normalizeStatus($rawStatus),
@@ -246,6 +345,13 @@ class DelhiveryShipmentService
             'courier_tracking_url' => $shipment->courier_tracking_url,
             'last_synced_at' => $shipment->last_synced_at?->format('Y-m-d H:i:s'),
             'tracking' => $this->trackingTimeline($shipment->tracking_payload ?? []),
+            'return' => [
+                'waybill' => $shipment->reverse_waybill,
+                'status' => $shipment->reverse_status,
+                'tracking_url' => $shipment->reverse_tracking_url,
+                'requested_at' => $shipment->reverse_requested_at?->format('Y-m-d H:i:s'),
+                'failed_reason' => $shipment->reverse_failed_reason,
+            ],
         ];
     }
 
@@ -258,6 +364,12 @@ class DelhiveryShipmentService
             'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,
             'raw_status' => $shipment?->raw_status,
             'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
+            'return' => [
+                'waybill' => $shipment?->reverse_waybill,
+                'status' => $shipment?->reverse_status,
+                'tracking_url' => $shipment?->reverse_tracking_url,
+                'requested_at' => $shipment?->reverse_requested_at?->format('Y-m-d H:i:s'),
+            ],
         ];
     }
 
@@ -265,6 +377,7 @@ class DelhiveryShipmentService
     {
         $address = $order->shipping_address ?? [];
         $weight = $this->calculateWeight($order);
+        $settings = $this->delhiverySettings();
 
         return [
             'shipments' => [
@@ -277,21 +390,55 @@ class DelhiveryShipmentService
                     'country' => $address['country'] ?? 'India',
                     'phone' => $address['phone'] ?? null,
                     'order' => $order->order_number,
+                    'client' => $this->requiredSetting($settings->client_name, 'Delhivery client name is not configured'),
                     'payment_mode' => $this->paymentMode($order),
                     'cod_amount' => number_format($this->codAmount($order), 2, '.', ''),
                     'total_amount' => number_format((float) $order->total_amount, 2, '.', ''),
                     'products_desc' => $this->productDescription($order),
                     'quantity' => (string) $order->orderItems->sum('quantity'),
                     'weight' => (string) $weight,
-                    'seller_gst_tin' => config('delhivery.seller_gst_tin'),
-                    'hsn_code' => config('delhivery.default_hsn_code'),
-                    'shipment_width' => (string) config('delhivery.default_width_cm', 10),
-                    'shipment_height' => (string) config('delhivery.default_height_cm', 5),
-                    'shipment_length' => (string) config('delhivery.default_length_cm', 10),
+                    'shipment_width' => (string) $settings->default_width_cm,
+                    'shipment_height' => (string) $settings->default_height_cm,
+                    'shipment_length' => (string) $settings->default_length_cm,
                 ],
             ],
             'pickup_location' => [
-                'name' => $this->requiredConfig('pickup_location', 'Delhivery pickup location is not configured'),
+                'name' => $this->requiredSetting($settings->pickup_location, 'Delhivery pickup location is not configured'),
+            ],
+        ];
+    }
+
+    private function buildReversePickupPayload(Order $order): array
+    {
+        $address = $order->shipping_address ?? [];
+        $weight = $this->calculateWeight($order);
+        $settings = $this->delhiverySettings();
+
+        return [
+            'shipments' => [
+                [
+                    'name' => $address['name'] ?? $order->user?->name ?? 'Customer',
+                    'add' => $this->formatAddress($address),
+                    'pin' => $address['postal_code'] ?? null,
+                    'city' => $address['city'] ?? null,
+                    'state' => $address['state'] ?? null,
+                    'country' => $address['country'] ?? 'India',
+                    'phone' => $address['phone'] ?? null,
+                    'order' => "{$order->order_number}-RETURN",
+                    'client' => $this->requiredSetting($settings->client_name, 'Delhivery client name is not configured'),
+                    'payment_mode' => 'Pickup',
+                    'cod_amount' => '0.00',
+                    'total_amount' => number_format((float) $order->total_amount, 2, '.', ''),
+                    'products_desc' => $this->productDescription($order),
+                    'quantity' => (string) $order->orderItems->sum('quantity'),
+                    'weight' => (string) $weight,
+                    'shipment_width' => (string) $settings->default_width_cm,
+                    'shipment_height' => (string) $settings->default_height_cm,
+                    'shipment_length' => (string) $settings->default_length_cm,
+                ],
+            ],
+            'pickup_location' => [
+                'name' => $this->requiredSetting($settings->pickup_location, 'Delhivery pickup location is not configured'),
             ],
         ];
     }
@@ -339,15 +486,77 @@ class DelhiveryShipmentService
             ->implode(', ');
     }
 
-    private function requiredConfig(string $key, string $message): string
+    private function delhiverySettings(): DelhiverySetting
     {
-        $value = config("delhivery.{$key}");
+        return $this->settings ??= DelhiverySetting::current();
+    }
 
+    private function requiredSetting(?string $value, string $message): string
+    {
         if (!$value) {
             throw new DomainException($message);
         }
 
         return $value;
+    }
+
+    private function extractCreateError(array $payload): ?string
+    {
+        if (($payload['success'] ?? null) === false || ($payload['status'] ?? null) === false) {
+            return $this->extractDelhiveryMessage($payload)
+                ?? 'Delhivery shipment creation was not successful';
+        }
+
+        $packageStatus = Arr::get($payload, 'packages.0.status')
+            ?? Arr::get($payload, 'packages.0.success');
+
+        if ($packageStatus === false || strtolower((string) $packageStatus) === 'fail') {
+            return $this->extractDelhiveryMessage($payload)
+                ?? 'Delhivery rejected the shipment';
+        }
+
+        return null;
+    }
+
+    private function missingWaybillMessage(array $payload): string
+    {
+        return $this->extractDelhiveryMessage($payload)
+            ?? 'Delhivery did not return an AWB number';
+    }
+
+    private function extractDelhiveryMessage(array $payload): ?string
+    {
+        $messages = [
+            Arr::get($payload, 'error.message'),
+            Arr::get($payload, 'error.description'),
+            Arr::get($payload, 'packages.0.remarks'),
+            Arr::get($payload, 'packages.0.remark'),
+            Arr::get($payload, 'packages.0.message'),
+            Arr::get($payload, 'packages.0.error'),
+            $payload['rmk'] ?? null,
+            $payload['remarks'] ?? null,
+            $payload['message'] ?? null,
+            $payload['error'] ?? null,
+        ];
+
+        foreach ($messages as $message) {
+            if (is_string($message) && trim($message) !== '') {
+                return trim($message);
+            }
+
+            if (is_array($message)) {
+                $flattened = collect(Arr::flatten($message))
+                    ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+                    ->map(fn ($value) => trim($value))
+                    ->values();
+
+                if ($flattened->isNotEmpty()) {
+                    return $flattened->implode('; ');
+                }
+            }
+        }
+
+        return null;
     }
 
     private function extractWaybill(array $payload): ?string

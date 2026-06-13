@@ -52,6 +52,12 @@ class OrderShipment extends Model
         'order_id',
         'provider',
         'waybill',
+        'reverse_waybill',
+        'reverse_provider_reference',
+        'reverse_status',
+        'reverse_tracking_url',
+        'reverse_requested_at',
+        'reverse_failed_reason',
         'provider_reference',
         'delhivery_order_id',
         'shipment_status',
@@ -76,6 +82,8 @@ class OrderShipment extends Model
         'request_payload',
         'response_payload',
         'tracking_payload',
+        'reverse_request_payload',
+        'reverse_response_payload',
     ];
 
     protected $casts = [
@@ -88,6 +96,9 @@ class OrderShipment extends Model
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'rto_at' => 'datetime',
+        'reverse_requested_at' => 'datetime',
+        'reverse_request_payload' => 'array',
+        'reverse_response_payload' => 'array',
     ];
 
     public function order(): BelongsTo
