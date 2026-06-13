@@ -485,10 +485,19 @@ Recommended:
 Existing:
 
 ```http
-GET /cpanel/orders
+GET /cpanel/orders?type=cod
+GET /cpanel/orders?type=online
 ```
 
-Add optional filters:
+Required filter:
+
+```text
+type=cod|online
+```
+
+Use separate admin menu links for COD Orders and Online Orders with the corresponding `type` value.
+
+Optional filters:
 
 ```text
 shipping_status

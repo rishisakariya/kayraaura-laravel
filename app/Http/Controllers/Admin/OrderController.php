@@ -8,6 +8,7 @@ use App\Models\Order;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
@@ -16,7 +17,12 @@ class OrderController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'type' => ['required', Rule::in(['cod', 'online'])],
+        ]);
+
         $orders = Order::with(['user', 'orderItems.product.images', 'orderItems.productSize', 'shipment'])
+            ->where('payment_method', $validated['type'])
             ->when($request->input('search'), function ($query, $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('order_number', 'like', "%{$search}%")

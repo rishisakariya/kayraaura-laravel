@@ -114,9 +114,11 @@ Frontend compatibility note: cancellation success still uses the existing `statu
 
 ## Admin APIs
 
-### `GET /cpanel/orders`
+### `GET /cpanel/orders?type=cod|online`
 
 Each order now includes an appended `shipment` object.
+
+The `type` query filter is required and accepts `cod` or `online`. Use separate admin menu links for COD Orders and Online Orders with the matching `type` value.
 
 Optional filters were added to the same endpoint:
 

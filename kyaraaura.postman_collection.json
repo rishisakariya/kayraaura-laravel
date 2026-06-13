@@ -69,7 +69,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/cpanel/orders?shipping_status=not_created&shipping_provider=delhivery&waybill=&shipment_created_from=&shipment_created_to=",
+                  "raw": "{{base_url}}/cpanel/orders?type=cod&shipping_status=not_created&shipping_provider=delhivery&waybill=&shipment_created_from=&shipment_created_to=",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -78,6 +78,10 @@
                     "orders"
                   ],
                   "query": [
+                    {
+                      "key": "type",
+                      "value": "cod"
+                    },
                     {
                       "key": "shipping_status",
                       "value": "not_created"
