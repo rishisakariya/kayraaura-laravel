@@ -206,6 +206,16 @@
                     "cpanel",
                     "delhivery-settings"
                   ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -218,7 +228,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{customer_token}}",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -303,7 +313,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "1|J0mRLarGcOuA7SNSjQbEFhIggafxvg6yffffUsTC06a2bfae",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -312,7 +322,7 @@
                 "header": [
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
+                    "value": "Bearer {{admin_token}}",
                     "type": "text"
                   },
                   {
@@ -369,7 +379,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "1|J0mRLarGcOuA7SNSjQbEFhIggafxvg6yffffUsTC06a2bfae",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -378,7 +388,7 @@
                 "header": [
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
+                    "value": "Bearer {{admin_token}}",
                     "type": "text"
                   },
                   {
@@ -409,7 +419,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "1|J0mRLarGcOuA7SNSjQbEFhIggafxvg6yffffUsTC06a2bfae",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -418,7 +428,7 @@
                 "header": [
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
+                    "value": "Bearer {{admin_token}}",
                     "type": "text"
                   },
                   {
@@ -457,7 +467,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{customer_token}}",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -466,7 +476,7 @@
                 "header": [
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
+                    "value": "Bearer {{admin_token}}",
                     "type": "text"
                   },
                   {
@@ -590,7 +600,7 @@
                 "header": [
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
+                    "value": "Bearer {{admin_token}}",
                     "type": "text"
                   },
                   {
@@ -609,7 +619,277 @@
                     "products",
                     "1"
                   ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Banners Management",
+          "item": [
+            {
+              "name": "List Banners",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/cpanel/banners?per_page=15&page=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "cpanel",
+                    "banners"
+                  ],
+                  "query": [
+                    {
+                      "key": "per_page",
+                      "value": "15"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "List admin banners with pagination."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Banner",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/cpanel/banners",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "cpanel",
+                    "banners"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"edit_value\": 0,\n  \"image\": \"banners/example.jpg\",\n  \"sort_order\": 1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Create a banner. Upload the image first with the media upload API, then pass the returned public storage path or URL here."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "let jsonData = {};",
+                      "try {",
+                      "  jsonData = pm.response.json();",
+                      "} catch (e) {",
+                      "  jsonData = {};",
+                      "}",
+                      "",
+                      "if (pm.response.code >= 200 && pm.response.code < 300 && jsonData.data && jsonData.data.id) {",
+                      "  pm.collectionVariables.set('banner_id', jsonData.data.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Single Banner",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/cpanel/banners/{{banner_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "cpanel",
+                    "banners",
+                    "{{banner_id}}"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "Get one banner by ID."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Banner",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/cpanel/banners",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "cpanel",
+                    "banners"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"edit_value\": \"{{banner_id}}\",\n  \"image\": \"banners/updated-example.jpg\",\n  \"sort_order\": 2\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Update a banner using the existing backend pattern: POST /cpanel/banners with edit_value set to the banner ID."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "let jsonData = {};",
+                      "try {",
+                      "  jsonData = pm.response.json();",
+                      "} catch (e) {",
+                      "  jsonData = {};",
+                      "}",
+                      "",
+                      "if (pm.response.code >= 200 && pm.response.code < 300 && jsonData.data && jsonData.data.id) {",
+                      "  pm.collectionVariables.set('banner_id', jsonData.data.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Banner",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/cpanel/banners/{{banner_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "cpanel",
+                    "banners",
+                    "{{banner_id}}"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "Delete a banner by ID."
               },
               "response": []
             }
@@ -649,7 +929,28 @@
                   ]
                 }
               },
-              "response": []
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "let jsonData = {};",
+                      "try {",
+                      "  jsonData = pm.response.json();",
+                      "} catch (e) {",
+                      "  jsonData = {};",
+                      "}",
+                      "",
+                      "if (pm.response.code >= 200 && pm.response.code < 300 && jsonData.data && jsonData.data.token) {",
+                      "  pm.collectionVariables.set('admin_token', jsonData.data.token);",
+                      "  console.log('Admin token saved to admin_token');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },
@@ -667,7 +968,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "4|wsIaeVbhewQ37v5ATKm0NQhC55rbptvI3sHt6kyN0c9e197e",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -724,7 +1025,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "2|cM4uyyo0hBeoUWYhDX9TixKRtW8uFywopU9bAxdv2e906605",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -766,7 +1067,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "31|t7S8Cp7ISfuvcGlb0TFZgwollGmTvCP351IgNUmA198966ca",
+                      "value": "{{admin_token}}",
                       "type": "string"
                     }
                   ]
@@ -801,6 +1102,16 @@
                     "cpanel",
                     "categories",
                     "2"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin_token}}",
+                      "type": "string"
+                    }
                   ]
                 }
               },
@@ -849,7 +1160,28 @@
                 },
                 "description": "Register a new user account"
               },
-              "response": []
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "let jsonData = {};",
+                      "try {",
+                      "  jsonData = pm.response.json();",
+                      "} catch (e) {",
+                      "  jsonData = {};",
+                      "}",
+                      "",
+                      "if (pm.response.code >= 200 && pm.response.code < 300 && jsonData.data && jsonData.data.token) {",
+                      "  pm.collectionVariables.set('user_token', jsonData.data.token);",
+                      "  console.log('User token saved to user_token');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
             },
             {
               "name": "Login User",
@@ -884,7 +1216,28 @@
                 },
                 "description": "Login with email and password"
               },
-              "response": []
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "let jsonData = {};",
+                      "try {",
+                      "  jsonData = pm.response.json();",
+                      "} catch (e) {",
+                      "  jsonData = {};",
+                      "}",
+                      "",
+                      "if (pm.response.code >= 200 && pm.response.code < 300 && jsonData.data && jsonData.data.token) {",
+                      "  pm.collectionVariables.set('user_token', jsonData.data.token);",
+                      "  console.log('User token saved to user_token');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
             },
             {
               "name": "Get User Profile",
@@ -894,7 +1247,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{auth_token}}",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -935,7 +1288,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{auth_token}}",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -1282,6 +1635,37 @@
           "description": "Products API endpoints"
         },
         {
+          "name": "Banners",
+          "item": [
+            {
+              "name": "Get Banners",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/banners",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "banners"
+                  ]
+                },
+                "description": "Public endpoint for frontend banners."
+              },
+              "response": []
+            }
+          ],
+          "description": "Frontend banner API endpoints"
+        },
+        {
           "name": "Cart Management",
           "item": [
             {
@@ -1292,7 +1676,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "1|J0mRLarGcOuA7SNSjQbEFhIggafxvg6yffffUsTC06a2bfae",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -1332,7 +1716,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "2|uLo7wG6NFjo564GOMl78dabxggtSwC1MKC1857ex5c0fa571",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -1382,7 +1766,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "1|J0mRLarGcOuA7SNSjQbEFhIggafxvg6yffffUsTC06a2bfae",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -1442,7 +1826,17 @@
                     "clear"
                   ]
                 },
-                "description": "Remove all items from the user's cart"
+                "description": "Remove all items from the user's cart",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
               },
               "response": []
             },
@@ -1454,7 +1848,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "1|J0mRLarGcOuA7SNSjQbEFhIggafxvg6yffffUsTC06a2bfae",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -1463,7 +1857,7 @@
                 "header": [
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
+                    "value": "Bearer {{user_token}}",
                     "type": "text"
                   },
                   {
@@ -1509,7 +1903,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "2|uLo7wG6NFjo564GOMl78dabxggtSwC1MKC1857ex5c0fa571",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -1583,6 +1977,16 @@
                   "path": [
                     "addresses"
                   ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -1606,6 +2010,16 @@
                   "path": [
                     "addresses",
                     "{{address_id}}"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
                   ]
                 }
               },
@@ -1645,6 +2059,16 @@
                     "addresses",
                     "{{address_id}}"
                   ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -1668,6 +2092,16 @@
                   "path": [
                     "addresses",
                     "{{address_id}}"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
                   ]
                 }
               },
@@ -1707,6 +2141,16 @@
                     "addresses",
                     "{{address_id}}",
                     "default"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
                   ]
                 }
               },
@@ -1874,7 +2318,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{customer_token}}",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -1971,6 +2415,16 @@
                     "{id}",
                     "return"
                   ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -2032,7 +2486,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{customer_token}}",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -2065,7 +2519,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{customer_token}}",
+                      "value": "{{user_token}}",
                       "type": "string"
                     }
                   ]
@@ -2129,6 +2583,16 @@
                     "wishlist",
                     "{id}"
                   ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -2162,6 +2626,16 @@
                     "api",
                     "wishlist",
                     "{id}"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
                   ]
                 }
               },
@@ -2197,6 +2671,16 @@
                     "wishlist",
                     "clear"
                   ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{user_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -2204,6 +2688,23 @@
           ]
         }
       ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "banner_id",
+      "value": "1",
+      "type": "string"
     }
   ]
 }
