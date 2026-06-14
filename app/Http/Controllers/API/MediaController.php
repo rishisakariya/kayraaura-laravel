@@ -11,12 +11,12 @@ use Illuminate\Support\Str;
 class MediaController extends Controller
 {
     /**
-     * Upload a reusable image asset into the public storage disk.
+     * Upload a reusable media asset into the public storage disk.
      */
     public function upload(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'file' => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'file' => 'required|file|mimes:jpg,jpeg,png,webp,mp4,mov,avi,webm|max:51200',
             'folder' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9_-]+$/'],
             'alt_text' => 'nullable|string|max:255',
         ]);
@@ -24,23 +24,27 @@ class MediaController extends Controller
         $file = $validated['file'];
         $folder = $validated['folder'];
         $extension = strtolower($file->getClientOriginalExtension());
+        $mimeType = $file->getMimeType();
+        $mediaType = str_starts_with((string) $mimeType, 'video/') ? 'video' : 'image';
         $fileName = now()->timestamp . '_' . Str::random(16) . '.' . $extension;
         $filePath = $file->storeAs($folder, $fileName, 'public');
         $fileUrl = Storage::disk('public')->url($filePath);
 
         return response()->json([
             'success' => true,
-            'message' => 'Image uploaded successfully',
+            'message' => 'Media uploaded successfully',
             'data' => [
                 'file_name' => $fileName,
                 'file_path' => $fileUrl,
                 'file_url' => $fileUrl,
+                'media_type' => $mediaType,
+                'mime_type' => $mimeType,
             ],
         ]);
     }
 
     /**
-     * Delete an uploaded image from the public storage disk.
+     * Delete an uploaded media file from the public storage disk.
      */
     public function destroy(Request $request): JsonResponse
     {
@@ -53,7 +57,7 @@ class MediaController extends Controller
         if (!Storage::disk('public')->exists($filePath)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Image not found',
+                'message' => 'Media not found',
             ], 404);
         }
 
@@ -61,7 +65,7 @@ class MediaController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Image deleted successfully',
+            'message' => 'Media deleted successfully',
         ]);
     }
 

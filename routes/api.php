@@ -15,6 +15,7 @@ use App\Http\Controllers\API\BannerController;
 use App\Http\Controllers\API\OrderShipmentController;
 use App\Http\Controllers\API\DelhiveryWebhookController;
 use App\Http\Controllers\API\CustomerReviewController;
+use App\Http\Controllers\API\WebSettingController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -44,6 +45,9 @@ Route::get('/categories/{slug}', [CategoryController::class, 'show']);
 
 // Frontend Banner Routes (Public)
 Route::get('/banners', [BannerController::class, 'index']);
+
+// Frontend Web Settings Routes (Public)
+Route::get('/web-settings', [WebSettingController::class, 'show']);
 
 // Frontend Customer Review Routes (Public)
 Route::post('/customer-reviews', [CustomerReviewController::class, 'store']);

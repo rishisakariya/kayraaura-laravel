@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckoutSummaryRequest;
 use App\Http\Resources\AddressResource;
+use App\Http\Resources\ProductResource;
 use App\Services\CheckoutService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -20,11 +21,20 @@ class CheckoutController extends Controller
     {
         try {
             $checkout = $this->checkoutService->buildCheckout(Auth::user(), $request->validated());
+            $items = $checkout['items']->map(function (array $item): array {
+                $product = $item['product'] ?? null;
+                unset($item['product']);
+
+                return [
+                    ...$item,
+                    'product' => $product ? new ProductResource($product) : null,
+                ];
+            });
 
             return response()->json([
                 'status' => true,
                 'data' => [
-                    'items' => $checkout['items']->values(),
+                    'items' => $items->values(),
                     'subtotal' => $checkout['subtotal'],
                     'tax_amount' => $checkout['tax_amount'],
                     'shipping_amount' => $checkout['shipping_amount'],

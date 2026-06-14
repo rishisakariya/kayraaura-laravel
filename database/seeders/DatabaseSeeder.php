@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AdminSeeder::class,
             DelhiverySettingSeeder::class,
+            WebSettingSeeder::class,
         ]);
 
         // User::factory(10)->create();

@@ -349,7 +349,12 @@ class CheckoutService
 
     private function checkoutItemFromProductSize(int $productSizeId, int $quantity, bool $lockProductSizes): array
     {
-        $query = ProductSize::with('product')->whereKey($productSizeId);
+        $query = ProductSize::with([
+            'product.category',
+            'product.images',
+            'product.primaryImage',
+            'product.sizes',
+        ])->whereKey($productSizeId);
 
         if ($lockProductSizes) {
             $query->lockForUpdate();
@@ -377,6 +382,7 @@ class CheckoutService
             'product_size_id' => $productSize->id,
             'product_name' => $product->name,
             'product_slug' => $product->slug,
+            'product' => $product,
             'size_text' => $productSize->size_text,
             'size_price' => $price,
             'quantity' => $quantity,

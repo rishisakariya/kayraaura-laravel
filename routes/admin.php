@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\OrderShipmentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\CustomerReviewController;
+use App\Http\Controllers\Admin\WebSettingController;
 
 // Admin Authentication Routes
 Route::prefix('cpanel')->group(function () {
@@ -35,6 +36,10 @@ Route::prefix('cpanel')->group(function () {
         // Delhivery Settings
         Route::get('delhivery-settings', [DelhiverySettingController::class, 'show']);
         Route::put('delhivery-settings', [DelhiverySettingController::class, 'update']);
+
+        // Web Settings
+        Route::get('web-settings', [WebSettingController::class, 'show']);
+        Route::put('web-settings', [WebSettingController::class, 'update']);
 
         // Orders Management
         Route::get('orders', [OrderController::class, 'index']);
