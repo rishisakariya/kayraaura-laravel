@@ -23,17 +23,46 @@ return new class extends Migration
             SET u.phone = NULL
         ");
 
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropUnique('users_email_unique');
-            $table->unique('phone');
-        });
+        if ($this->indexExists('users_email_unique')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropUnique('users_email_unique');
+            });
+        }
+
+        if (! $this->indexExists('users_phone_unique')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->unique('phone');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropUnique('users_phone_unique');
-            $table->unique('email');
-        });
+        if ($this->indexExists('users_phone_unique')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropUnique('users_phone_unique');
+            });
+        }
+
+        if (! $this->indexExists('users_email_unique')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->unique('email');
+            });
+        }
+    }
+
+    private function indexExists(string $indexName): bool
+    {
+        return ! empty(DB::select(
+            "
+            SELECT 1
+            FROM information_schema.statistics
+            WHERE table_schema = DATABASE()
+                AND table_name = 'users'
+                AND index_name = ?
+            LIMIT 1
+            ",
+            [$indexName]
+        ));
     }
 };
