@@ -58,6 +58,21 @@ class DelhiveryClient
         return $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
     }
 
+    public function packingSlip(string $waybill): array
+    {
+        if ($this->mockEnabled()) {
+            return $this->mockPackingSlipResponse($waybill);
+        }
+
+        $response = Http::withHeaders($this->headers())
+            ->timeout(30)
+            ->get($this->url('packing_slip'), [
+                'wbns' => $waybill,
+            ]);
+
+        return $this->decodeResponse($response, 'Delhivery packing slip generation failed');
+    }
+
     private function mockEnabled(): bool
     {
         return (bool) config('delhivery.mock');
@@ -120,6 +135,30 @@ class DelhiveryClient
             'success' => true,
             'waybill' => $waybill,
             'status' => 'Cancelled',
+        ];
+    }
+
+    private function mockPackingSlipResponse(string $waybill): array
+    {
+        return [
+            'mock' => true,
+            'packages' => [
+                [
+                    'wbn' => $waybill,
+                    'waybill' => $waybill,
+                    'order' => 'MOCK-ORDER',
+                    'client' => 'Mock Client',
+                    'payment_mode' => 'Pre-paid',
+                    'sort_code' => 'MOCK/SC',
+                    'pin' => '000000',
+                    'name' => 'Mock Customer',
+                    'add' => 'Mock address for local label generation',
+                    'city' => 'Mock City',
+                    'state' => 'Mock State',
+                    'phone' => '9999999999',
+                    'products_desc' => 'Mock product',
+                ],
+            ],
         ];
     }
 

@@ -10,11 +10,17 @@ use App\Jobs\SyncDelhiveryShipmentStatusJob;
 use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
+use App\Services\Delhivery\DelhiveryShipmentService;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class OrderShipmentController extends Controller
 {
+    public function __construct(private readonly DelhiveryShipmentService $shipmentService)
+    {
+    }
+
     public function create(string $id): JsonResponse
     {
         $order = Order::with(['shipment', 'orderItems.product.images', 'orderItems.productSize'])
@@ -126,17 +132,26 @@ class OrderShipmentController extends Controller
     {
         $order = Order::with('shipment')->findOrFail($id);
 
-        if (!$order->shipment?->shipping_label_url) {
+        if (!$order->shipment?->waybill) {
             return response()->json([
                 'success' => false,
-                'message' => 'Shipment label is not available yet',
-            ], 404);
+                'message' => 'Shipment AWB is not available yet',
+            ], 409);
+        }
+
+        try {
+            $shipment = $this->shipmentService->generateShippingLabel($order->shipment);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
         }
 
         return response()->json([
             'success' => true,
             'data' => [
-                'shipping_label_url' => $order->shipment->shipping_label_url,
+                'shipping_label_url' => $shipment->shipping_label_url,
             ],
         ]);
     }

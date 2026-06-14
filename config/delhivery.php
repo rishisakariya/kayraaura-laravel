@@ -11,11 +11,13 @@ return [
             'create' => 'https://staging-express.delhivery.com/api/cmu/create.json',
             'track' => 'https://staging-express.delhivery.com/api/v1/packages/json/',
             'cancel' => 'https://staging-express.delhivery.com/api/p/edit',
+            'packing_slip' => 'https://staging-express.delhivery.com/api/p/packing_slip',
         ],
         'production' => [
             'create' => 'https://track.delhivery.com/api/cmu/create.json',
             'track' => 'https://track.delhivery.com/api/v1/packages/json/',
             'cancel' => 'https://track.delhivery.com/api/p/edit',
+            'packing_slip' => 'https://track.delhivery.com/api/p/packing_slip',
         ],
     ],
 ];

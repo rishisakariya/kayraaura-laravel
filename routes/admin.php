@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderShipmentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\BannerController;
+use App\Http\Controllers\Admin\CustomerReviewController;
 
 // Admin Authentication Routes
 Route::prefix('cpanel')->group(function () {
@@ -27,6 +28,9 @@ Route::prefix('cpanel')->group(function () {
 
         // Banners Management
         Route::apiResource('banners', BannerController::class)->except(['update']);
+
+        // Customer Reviews Management
+        Route::get('customer-reviews', [CustomerReviewController::class, 'index']);
 
         // Delhivery Settings
         Route::get('delhivery-settings', [DelhiverySettingController::class, 'show']);

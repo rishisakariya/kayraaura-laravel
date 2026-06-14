@@ -5,10 +5,12 @@ namespace App\Services\Delhivery;
 use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
+use Barryvdh\DomPDF\Facade\Pdf;
 use DomainException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class DelhiveryShipmentService
 {
@@ -203,6 +205,56 @@ class DelhiveryShipmentService
             $shipment->fill(['failed_reason' => $e->getMessage()])->save();
 
             Log::warning('Delhivery shipment cancellation failed', [
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    }
+
+    public function generateShippingLabel(OrderShipment $shipment): OrderShipment
+    {
+        if (!$shipment->hasWaybill()) {
+            throw new DomainException('Shipment AWB is required before label can be generated');
+        }
+
+        if ($shipment->shipping_label_url) {
+            return $shipment;
+        }
+
+        try {
+            $shipment->loadMissing(['order.orderItems.product']);
+
+            $payload = $this->client->packingSlip($shipment->waybill);
+            $package = $this->firstPackingSlipPackage($payload);
+            $fileName = preg_replace('/[^A-Za-z0-9_\-]/', '-', $shipment->waybill) . '.pdf';
+            $path = "shipping-labels/delhivery/{$fileName}";
+
+            $pdf = Pdf::loadView('shipments.delhivery-label', [
+                'shipment' => $shipment,
+                'order' => $shipment->order,
+                'package' => $package,
+                'packingSlip' => $payload,
+                'generatedAt' => now(),
+            ])->setPaper('a4');
+
+            Storage::disk('public')->put($path, $pdf->output());
+
+            $shipment->fill([
+                'shipping_label_url' => Storage::disk('public')->url($path),
+                'response_payload' => array_merge($shipment->response_payload ?? [], [
+                    'packing_slip' => $payload,
+                ]),
+                'failed_reason' => null,
+            ])->save();
+
+            return $shipment;
+        } catch (\Throwable $e) {
+            $shipment->fill(['failed_reason' => $e->getMessage()])->save();
+
+            Log::warning('Delhivery shipping label generation failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -557,6 +609,18 @@ class DelhiveryShipmentService
         }
 
         return null;
+    }
+
+    private function firstPackingSlipPackage(array $payload): array
+    {
+        $package = Arr::get($payload, 'packages.0')
+            ?? Arr::get($payload, 'Packages.0')
+            ?? Arr::get($payload, 'data.0')
+            ?? Arr::get($payload, 'package.0')
+            ?? Arr::get($payload, 'ShipmentData.0.Shipment')
+            ?? $payload;
+
+        return is_array($package) ? $package : [];
     }
 
     private function extractWaybill(array $payload): ?string
