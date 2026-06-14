@@ -67,7 +67,7 @@ class FrontendAuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'email' => 'required|string|max:255',
             'password' => 'required|string'
         ]);
 
@@ -83,16 +83,19 @@ class FrontendAuthController extends Controller
         }
 
         $credentials = $request->only('email', 'password');
+        $login = $credentials['email'];
         
-        // Find user by email
-        $user = User::where('email', $credentials['email'])->first();
+        // Find user by email address or mobile number.
+        $user = User::where('email', $login)
+            ->orWhere('phone', $login)
+            ->first();
         
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             return response()->json([
                 'success' => false,
                 'error' => [
                     'code' => 'INVALID_CREDENTIALS',
-                    'message' => 'Invalid email or password'
+                    'message' => 'Invalid email/mobile or password'
                 ]
             ], 401);
         }
