@@ -87,6 +87,32 @@ class ProductController extends Controller
     }
 
     /**
+     * Display collection products.
+     *
+     * @return JsonResponse
+     */
+    public function collection(): JsonResponse
+    {
+        $products = Product::where('is_active', true)
+            ->where('is_collection', true)
+            ->with(['category', 'images', 'primaryImage', 'sizes.size'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(12);
+
+        return response()->json([
+            'status' => true,
+            'data' => ProductResource::collection($products),
+            'meta' => [
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
+                'total' => $products->total(),
+            ],
+            'message' => 'Collection products retrieved successfully'
+        ]);
+    }
+
+    /**
      * Display products by category.
      *
      * @param int $categoryId
