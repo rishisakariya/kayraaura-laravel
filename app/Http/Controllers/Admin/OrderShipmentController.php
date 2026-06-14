@@ -133,6 +133,17 @@ class OrderShipmentController extends Controller
         $order = Order::with('shipment')->findOrFail($id);
 
         if (!$order->shipment?->waybill) {
+            if (!app()->isProduction()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'shipping_label_url' => $this->shipmentService->generateTestShippingLabel($order),
+                        'is_test_label' => true,
+                    ],
+                    'message' => 'Test shipment label generated because AWB is not available yet',
+                ]);
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Shipment AWB is not available yet',

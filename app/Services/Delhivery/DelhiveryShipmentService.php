@@ -264,6 +264,53 @@ class DelhiveryShipmentService
         }
     }
 
+    public function generateTestShippingLabel(Order $order): string
+    {
+        $order->loadMissing(['orderItems.product']);
+
+        $waybill = 'TEST-AWB-' . $order->id;
+        $shipment = new OrderShipment([
+            'provider' => OrderShipment::PROVIDER_DELHIVERY,
+            'waybill' => $waybill,
+            'shipment_status' => OrderShipment::STATUS_MANIFESTED,
+            'payment_mode' => $this->paymentMode($order),
+            'cod_amount' => $this->codAmount($order),
+            'weight_grams' => max(1, (int) $order->orderItems->sum(
+                fn ($item) => (int) ($item->product?->weight_grams ?? 0) * (int) $item->quantity
+            )),
+        ]);
+        $shipment->setRelation('order', $order);
+
+        $package = [
+            'wbn' => $waybill,
+            'waybill' => $waybill,
+            'order' => $order->order_number,
+            'client' => 'Test Client',
+            'payment_mode' => $shipment->payment_mode,
+            'sort_code' => 'TEST/SORT',
+            'name' => $order->shipping_address['name'] ?? $order->user?->name ?? 'Test Customer',
+            'add' => $this->formatAddress($order->shipping_address ?? []) ?: 'Test shipping address',
+            'city' => $order->shipping_address['city'] ?? 'Test City',
+            'state' => $order->shipping_address['state'] ?? 'Test State',
+            'pin' => $order->shipping_address['postal_code'] ?? '000000',
+            'phone' => $order->shipping_address['phone'] ?? '9999999999',
+            'products_desc' => $this->productDescription($order) ?: 'Test product',
+        ];
+
+        $path = "shipping-labels/test/{$waybill}.pdf";
+        $pdf = Pdf::loadView('shipments.delhivery-label', [
+            'shipment' => $shipment,
+            'order' => $order,
+            'package' => $package,
+            'packingSlip' => ['mock' => true, 'packages' => [$package]],
+            'generatedAt' => now(),
+        ])->setPaper('a4');
+
+        Storage::disk('public')->put($path, $pdf->output());
+
+        return Storage::disk('public')->url($path);
+    }
+
     public function createReversePickup(Order $order): OrderShipment
     {
         $order = Order::with(['shipment', 'orderItems.product'])
