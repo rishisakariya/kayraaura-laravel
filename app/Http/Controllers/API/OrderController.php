@@ -11,10 +11,13 @@ use App\Jobs\CancelDelhiveryShipmentJob;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ProductSize;
+use App\Models\UserAddress;
 use App\Services\CheckoutService;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\OtpService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -22,7 +25,8 @@ class OrderController extends Controller
 {
     public function __construct(
         private readonly CheckoutService $checkoutService,
-        private readonly DelhiveryShipmentService $shipmentService
+        private readonly DelhiveryShipmentService $shipmentService,
+        private readonly OtpService $otpService
     )
     {
     }
@@ -62,6 +66,15 @@ class OrderController extends Controller
             $order = DB::transaction(function () use ($payload, &$razorpayCheckout) {
                 $user = Auth::user();
                 $checkout = $this->checkoutService->buildCheckout($user, $payload, true);
+
+                if ($payload['payment_method'] === 'cod') {
+                    $this->otpService->verifyAndConsume(
+                        $checkout['address']->phone,
+                        OtpService::PURPOSE_COD_ORDER,
+                        $payload['cod_otp']
+                    );
+                }
+
                 $order = $this->checkoutService->createOrder($user, $payload, $checkout);
 
                 if ($payload['payment_method'] === 'cod') {
@@ -101,6 +114,43 @@ class OrderController extends Controller
                 'message' => 'Failed to create order. Please try again.',
                 'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
+        }
+    }
+
+    /**
+     * Send OTP before placing a COD order.
+     */
+    public function sendCodOtp(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'address_id' => 'required|integer|exists:user_addresses,id',
+        ]);
+
+        try {
+            $address = UserAddress::where('user_id', Auth::id())->find($payload['address_id']);
+
+            if (!$address) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Selected address was not found',
+                ], 404);
+            }
+
+            $this->otpService->send(
+                $address->phone,
+                OtpService::PURPOSE_COD_ORDER
+            );
+
+            return response()->json([
+                'status' => true,
+                'message' => 'COD confirmation OTP sent to delivery mobile number',
+            ]);
+
+        } catch (DomainException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 429);
         }
     }
 

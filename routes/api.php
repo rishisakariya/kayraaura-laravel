@@ -96,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::get('/orders/{id}/shipment', [OrderShipmentController::class, 'show']);
+    Route::post('/orders/cod/send-otp', [OrderController::class, 'sendCodOtp']);
     Route::post('/orders/create', [OrderController::class, 'store']);
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{id}/return', [OrderController::class, 'returnOrder']);

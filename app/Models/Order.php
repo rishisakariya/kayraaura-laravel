@@ -26,6 +26,7 @@ class Order extends Model
         'razorpay_signature',
         'paid_at',
         'payment_failed_at',
+        'cod_verified_at',
         'shipping_address',
         'billing_address',
         'notes',
@@ -40,6 +41,7 @@ class Order extends Model
         'total_amount' => 'decimal:2',
         'paid_at' => 'datetime',
         'payment_failed_at' => 'datetime',
+        'cod_verified_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

@@ -5,17 +5,20 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Frontend\UserResource;
 use App\Models\User;
+use App\Services\OtpService;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Auth\Events\PasswordReset;
-use Illuminate\Support\Str;
 
 class FrontendAuthController extends Controller
 {
+    public function __construct(private readonly OtpService $otpService)
+    {
+    }
+
     /**
      * User registration
      */
@@ -23,9 +26,9 @@ class FrontendAuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => 'required|string|email|max:255',
             'password' => 'required|string|min:8|confirmed',
-            'phone' => 'required|string|max:12'
+            'phone' => 'required|string|max:12|unique:users,phone'
         ]);
 
         if ($validator->fails()) {
@@ -168,12 +171,12 @@ class FrontendAuthController extends Controller
     }
 
     /**
-     * Send password reset link
+     * Send password reset OTP.
      */
     public function forgotPassword(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|exists:users,email'
+            'phone' => 'required|string|exists:users,phone'
         ]);
 
         if ($validator->fails()) {
@@ -187,33 +190,34 @@ class FrontendAuthController extends Controller
             ], 422);
         }
 
-        $status = Password::sendResetLink($request->only('email'));
+        try {
+            $this->otpService->send($request->phone, OtpService::PURPOSE_FORGOT_PASSWORD);
 
-        if ($status == Password::RESET_LINK_SENT) {
             return response()->json([
                 'success' => true,
-                'message' => 'Password reset link sent to your email'
+                'message' => 'Password reset OTP sent to your mobile number'
             ]);
-        }
 
-        return response()->json([
-            'success' => false,
-            'error' => [
-                'code' => 'RESET_LINK_FAILED',
-                'message' => 'Failed to send password reset link'
-            ]
-        ], 500);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'OTP_SEND_FAILED',
+                    'message' => $e->getMessage()
+                ]
+            ], 429);
+        }
     }
 
     /**
-     * Reset password
+     * Reset password using mobile OTP.
      */
     public function resetPassword(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'phone' => 'required|string|exists:users,phone',
+            'otp' => 'required|string|digits:6',
             'password' => 'required|string|min:8|confirmed',
-            'token' => 'required|string'
         ]);
 
         if ($validator->fails()) {
@@ -227,32 +231,32 @@ class FrontendAuthController extends Controller
             ], 422);
         }
 
-        $credentials = $request->only('email', 'password', 'password_confirmation', 'token');
+        try {
+            $this->otpService->verifyAndConsume(
+                $request->phone,
+                OtpService::PURPOSE_FORGOT_PASSWORD,
+                $request->otp
+            );
 
-        $status = Password::reset($credentials, function (User $user, string $password) {
+            $user = User::where('phone', $request->phone)->firstOrFail();
             $user->forceFill([
-                'password' => Hash::make($password)
-            ])->setRememberToken(Str::random(60));
+                'password' => Hash::make($request->password)
+            ])->save();
 
-            $user->save();
-
-            event(new PasswordReset($user));
-        });
-
-        if ($status == Password::PASSWORD_RESET) {
             return response()->json([
                 'success' => true,
                 'message' => 'Password reset successfully'
             ]);
-        }
 
-        return response()->json([
-            'success' => false,
-            'error' => [
-                'code' => 'RESET_FAILED',
-                'message' => 'Failed to reset password'
-            ]
-        ], 500);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'OTP_VERIFICATION_FAILED',
+                    'message' => $e->getMessage()
+                ]
+            ], 422);
+        }
     }
 
     /**

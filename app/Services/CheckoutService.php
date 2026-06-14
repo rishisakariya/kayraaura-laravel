@@ -58,6 +58,7 @@ class CheckoutService
             'total_amount' => $checkout['total_amount'],
             'payment_method' => $payload['payment_method'],
             'payment_status' => 'pending',
+            'cod_verified_at' => $payload['payment_method'] === 'cod' ? now() : null,
             'shipping_address' => $addressSnapshot,
             'billing_address' => $addressSnapshot,
             'notes' => $payload['notes'] ?? null,
