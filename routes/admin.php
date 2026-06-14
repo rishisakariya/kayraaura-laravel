@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\OrderShipmentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SizeController;
 use App\Http\Controllers\Admin\BannerController;
+use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerReviewController;
 use App\Http\Controllers\Admin\WebSettingController;
 
@@ -36,6 +37,11 @@ Route::prefix('cpanel')->group(function () {
 
         // Banners Management
         Route::apiResource('banners', BannerController::class)->except(['update']);
+
+        // Customers Management
+        Route::get('users', [CustomerController::class, 'index']);
+        Route::post('users/{id}/ban', [CustomerController::class, 'ban']);
+        Route::put('users/{id}/unban', [CustomerController::class, 'unban']);
 
         // Customer Reviews Management
         Route::get('customer-reviews', [CustomerReviewController::class, 'index']);
