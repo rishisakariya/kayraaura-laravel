@@ -17,18 +17,8 @@
 
         .label {
             border: 2px solid #111827;
-            padding: 18px;
+            padding: 12px;
             width: 100%;
-        }
-
-        .row {
-            clear: both;
-            width: 100%;
-        }
-
-        .col {
-            float: left;
-            width: 50%;
         }
 
         .box {
@@ -37,8 +27,45 @@
             padding: 10px;
         }
 
-        .title {
+        .layout {
+            border-collapse: collapse;
+            margin: 0;
+            table-layout: fixed;
+            width: 100%;
+        }
+
+        .layout td {
+            border: 0;
+            padding: 0;
+            vertical-align: top;
+        }
+
+        .header {
+            border-bottom: 1px solid #d1d5db;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: bold;
+            line-height: 1.25;
+            text-transform: uppercase;
+        }
+
+        .payment-badge {
+            border: 1px solid #111827;
+            display: inline-block;
             font-size: 18px;
+            font-weight: bold;
+            min-width: 92px;
+            padding: 6px 10px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .title {
+            font-size: 13px;
             font-weight: bold;
             margin-bottom: 4px;
             text-transform: uppercase;
@@ -54,7 +81,7 @@
             font-size: 28px;
             font-weight: bold;
             letter-spacing: 1px;
-            margin: 10px 0;
+            margin: 0 0 12px;
             padding: 14px;
             text-align: center;
         }
@@ -113,44 +140,50 @@
 @endphp
 
 <div class="label">
-    <div class="row">
-        <div class="col">
-            <div class="title">Delhivery Shipping Label</div>
+    <div class="header">
+        <table class="layout">
+            <tr>
+                <td style="width: 68%;">
+            <div class="header-title">Delhivery Shipping Label</div>
             <div class="muted">Generated {{ $generatedAt->format('d M Y, h:i A') }}</div>
-        </div>
-        <div class="col" style="text-align: right;">
-            <div class="title">{{ $paymentMode }}</div>
+                </td>
+                <td style="width: 32%; text-align: right;">
+            <div class="payment-badge">{{ $paymentMode }}</div>
             @if($sortCode)
                 <div class="muted">Sort Code: {{ $sortCode }}</div>
             @endif
-        </div>
+                </td>
+            </tr>
+        </table>
     </div>
 
     <div class="awb">AWB {{ $shipment->waybill }}</div>
 
-    <div class="row">
-        <div class="col">
-            <div class="box" style="margin-right: 6px;">
-                <div class="title" style="font-size: 13px;">Ship To</div>
+    <table class="layout">
+        <tr>
+            <td style="width: 50%; padding-right: 6px;">
+            <div class="box">
+                <div class="title">Ship To</div>
                 <div class="line"><strong>{{ $customerName }}</strong></div>
                 <div class="line">{{ $address }}</div>
                 <div class="line">{{ collect([$city, $state, $pin])->filter()->implode(', ') }}</div>
                 <div class="line">Phone: {{ $phone }}</div>
             </div>
-        </div>
-        <div class="col">
-            <div class="box" style="margin-left: 6px;">
-                <div class="title" style="font-size: 13px;">Shipment</div>
+            </td>
+            <td style="width: 50%; padding-left: 6px;">
+            <div class="box">
+                <div class="title">Shipment</div>
                 <div class="line"><span class="label-key">Order</span>{{ $orderNumber }}</div>
                 <div class="line"><span class="label-key">Client</span>{{ $value(['client'], 'Delhivery') }}</div>
                 <div class="line"><span class="label-key">Weight</span>{{ $value(['weight'], $shipment->weight_grams) }} g</div>
                 <div class="line"><span class="label-key">COD Amount</span>{{ number_format((float) $shipment->cod_amount, 2) }}</div>
             </div>
-        </div>
-    </div>
+            </td>
+        </tr>
+    </table>
 
     <div class="box">
-        <div class="title" style="font-size: 13px;">Products</div>
+        <div class="title">Products</div>
         <div>{{ $value(['products_desc', 'product_description'], $order->orderItems->pluck('product_name')->implode(', ')) }}</div>
 
         @if($order->orderItems->isNotEmpty())

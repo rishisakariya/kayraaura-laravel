@@ -243,7 +243,7 @@ class DelhiveryShipmentService
             Storage::disk('public')->put($path, $pdf->output());
 
             $shipment->fill([
-                'shipping_label_url' => Storage::disk('public')->url($path),
+                'shipping_label_url' => $this->publicStorageUrl($path),
                 'response_payload' => array_merge($shipment->response_payload ?? [], [
                     'packing_slip' => $payload,
                 ]),
@@ -308,7 +308,7 @@ class DelhiveryShipmentService
 
         Storage::disk('public')->put($path, $pdf->output());
 
-        return Storage::disk('public')->url($path);
+        return $this->publicStorageUrl($path);
     }
 
     public function createReversePickup(Order $order): OrderShipment
@@ -668,6 +668,11 @@ class DelhiveryShipmentService
             ?? $payload;
 
         return is_array($package) ? $package : [];
+    }
+
+    private function publicStorageUrl(string $path): string
+    {
+        return url('/storage/' . ltrim($path, '/'));
     }
 
     private function extractWaybill(array $payload): ?string

@@ -14,6 +14,9 @@ use App\Services\Delhivery\DelhiveryShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 class OrderShipmentController extends Controller
 {
@@ -132,38 +135,110 @@ class OrderShipmentController extends Controller
     {
         $order = Order::with('shipment')->findOrFail($id);
 
-        if (!$order->shipment?->waybill) {
-            if (!app()->isProduction()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'shipping_label_url' => $this->shipmentService->generateTestShippingLabel($order),
-                        'is_test_label' => true,
-                    ],
-                    'message' => 'Test shipment label generated because AWB is not available yet',
-                ]);
-            }
-
+        try {
+            $label = $this->labelPayload($order);
+        } catch (DomainException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Shipment AWB is not available yet',
-            ], 409);
+                'message' => $e->getMessage(),
+            ], $e->getCode() === 409 ? 409 : 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $label['data'],
+            'message' => $label['message'] ?? null,
+        ]);
+    }
+
+    public function downloadLabel(string $id): BinaryFileResponse|JsonResponse
+    {
+        $order = Order::with('shipment')->findOrFail($id);
+
+        try {
+            $label = $this->labelPayload($order);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], $e->getCode() === 409 ? 409 : 422);
+        }
+
+        $path = $this->publicStoragePathFromUrl($label['data']['shipping_label_url']);
+
+        if (!$path || !Storage::disk('public')->exists($path)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Shipment label PDF file was not found',
+            ], 404);
+        }
+
+        return response()->download(
+            Storage::disk('public')->path($path),
+            basename($path),
+            ['Content-Type' => 'application/pdf']
+        );
+    }
+
+    private function labelPayload(Order $order): array
+    {
+        if (!$order->shipment?->waybill) {
+            if (!app()->isProduction()) {
+                return $this->testLabelPayload($order, 'Test shipment label generated because AWB is not available yet');
+            }
+
+            throw new DomainException('Shipment AWB is not available yet', 409);
         }
 
         try {
             $shipment = $this->shipmentService->generateShippingLabel($order->shipment);
         } catch (DomainException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
+            if (!app()->isProduction()) {
+                return $this->testLabelPayload($order, 'Test shipment label generated because Delhivery label API is not available');
+            }
+
+            throw $e;
+        } catch (Throwable $e) {
+            if (!app()->isProduction()) {
+                return $this->testLabelPayload($order, 'Test shipment label generated because Delhivery label API is not reachable');
+            }
+
+            throw $e;
         }
 
-        return response()->json([
-            'success' => true,
+        return [
             'data' => [
                 'shipping_label_url' => $shipment->shipping_label_url,
+                'download_label_url' => $this->downloadLabelUrl($order),
             ],
-        ]);
+        ];
+    }
+
+    private function testLabelPayload(Order $order, string $message): array
+    {
+        return [
+            'data' => [
+                'shipping_label_url' => $this->shipmentService->generateTestShippingLabel($order),
+                'download_label_url' => $this->downloadLabelUrl($order),
+                'is_test_label' => true,
+            ],
+            'message' => $message,
+        ];
+    }
+
+    private function downloadLabelUrl(Order $order): string
+    {
+        return url("/cpanel/orders/{$order->id}/shipment/label/download");
+    }
+
+    private function publicStoragePathFromUrl(string $url): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+
+        if (!is_string($path) || !str_starts_with($path, '/storage/')) {
+            return null;
+        }
+
+        return urldecode(substr($path, strlen('/storage/')));
     }
 }

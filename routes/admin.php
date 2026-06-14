@@ -12,6 +12,9 @@ use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\CustomerReviewController;
 use App\Http\Controllers\Admin\WebSettingController;
 
+
+Route::get('/cpanel/orders/{id}/shipment/label/download', [OrderShipmentController::class, 'downloadLabel']); //this is used to download the shipment label pdf
+
 // Admin Authentication Routes
 Route::prefix('cpanel')->group(function () {
     Route::post('login', [AdminAuthController::class, 'login']);
