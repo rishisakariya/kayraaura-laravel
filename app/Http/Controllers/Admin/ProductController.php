@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -23,19 +24,56 @@ class ProductController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'price' => ['nullable', 'regex:/^\d+(\.\d{1,2})?-\d+(\.\d{1,2})?$/'],
+            'min_price' => ['nullable', 'numeric', 'min:0'],
+            'max_price' => ['nullable', 'numeric', 'min:0'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'size_id' => ['nullable', 'integer', 'exists:sizes,id'],
+            'is_active' => ['nullable', 'boolean'],
+            'is_collection' => ['nullable', 'boolean'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        [$minPrice, $maxPrice] = $this->priceBounds($validated);
+
+        if ($minPrice !== null && $maxPrice !== null && $minPrice > $maxPrice) {
+            throw ValidationException::withMessages([
+                'price' => ['The minimum price must be less than or equal to the maximum price.'],
+            ]);
+        }
+
+        $search = $validated['search'] ?? null;
+        $categoryId = $validated['category_id'] ?? null;
+        $sizeId = $validated['size_id'] ?? null;
+
         $products = Product::with(['category', 'images', 'primaryImage', 'sizes.size'])
-            ->when($request->input('search'), function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
             })
-            ->when($request->input('category_id'), function ($query, $categoryId) {
+            ->when($categoryId, function ($query) use ($categoryId) {
                 $query->where('category_id', $categoryId);
             })
-            ->when($request->input('is_active') !== null, function ($query, $isActive) {
-                $query->where('is_active', $isActive);
+            ->when($minPrice !== null || $maxPrice !== null || $sizeId, function ($query) use ($minPrice, $maxPrice, $sizeId) {
+                $query->whereHas('sizes', function ($sizeQuery) use ($minPrice, $maxPrice, $sizeId) {
+                    $sizeQuery
+                        ->when($sizeId, fn ($query) => $query->where('size_id', $sizeId))
+                        ->when($minPrice !== null, fn ($query) => $query->where('price', '>=', $minPrice))
+                        ->when($maxPrice !== null, fn ($query) => $query->where('price', '<=', $maxPrice));
+                });
+            })
+            ->when(array_key_exists('is_active', $validated), function ($query) use ($validated) {
+                $query->where('is_active', $validated['is_active']);
+            })
+            ->when(array_key_exists('is_collection', $validated), function ($query) use ($validated) {
+                $query->where('is_collection', $validated['is_collection']);
             })
             ->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 15));
+            ->paginate($validated['per_page'] ?? 15);
 
         return response()->json([
             'success' => true,
@@ -47,6 +85,18 @@ class ProductController extends Controller
                 'total' => $products->total(),
             ]
         ]);
+    }
+
+    private function priceBounds(array $filters): array
+    {
+        if (!empty($filters['price'])) {
+            return array_map('floatval', explode('-', $filters['price'], 2));
+        }
+
+        return [
+            isset($filters['min_price']) ? (float) $filters['min_price'] : null,
+            isset($filters['max_price']) ? (float) $filters['max_price'] : null,
+        ];
     }
 
     /**

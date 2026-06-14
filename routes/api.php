@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\FrontendAuthController;
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\SizeController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\OrderController;
@@ -42,6 +43,9 @@ Route::prefix('auth')->group(function () {
 // Frontend Category Routes (Public)
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{slug}', [CategoryController::class, 'show']);
+
+// Frontend Size Routes (Public)
+Route::get('/sizes', [SizeController::class, 'index']);
 
 // Frontend Banner Routes (Public)
 Route::get('/banners', [BannerController::class, 'index']);
