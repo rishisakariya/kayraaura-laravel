@@ -51,7 +51,7 @@ class SmsService
     private function sendViaMsg91(string $mobile, array $variables, ?string $purpose = null): void
     {
         $authKey = config('services.sms.msg91.auth_key');
-        $flowId = $this->flowIdFor($purpose);
+        $flowId = $this->flowIdFor();
 
         if (!$authKey || !$flowId) {
             throw new DomainException('MSG91 SMS credentials are not configured');
@@ -87,13 +87,9 @@ class SmsService
         }
     }
 
-    private function flowIdFor(?string $purpose): ?string
+    private function flowIdFor(): ?string
     {
-        return match ($purpose) {
-            OtpService::PURPOSE_FORGOT_PASSWORD => config('services.sms.msg91.forgot_password_flow_id') ?: config('services.sms.msg91.flow_id'),
-            OtpService::PURPOSE_COD_ORDER => config('services.sms.msg91.cod_order_flow_id') ?: config('services.sms.msg91.flow_id'),
-            default => config('services.sms.msg91.flow_id'),
-        };
+        return config('services.sms.msg91.flow_id');
     }
 
     private function formatMsg91Mobile(string $mobile): string

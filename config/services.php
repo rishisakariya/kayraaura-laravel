@@ -47,8 +47,6 @@ return [
             'endpoint' => env('MSG91_ENDPOINT', 'https://api.msg91.com/api/v5/flow/'),
             'auth_key' => env('MSG91_AUTH_KEY'),
             'flow_id' => env('MSG91_FLOW_ID'),
-            'forgot_password_flow_id' => env('MSG91_FORGOT_PASSWORD_FLOW_ID'),
-            'cod_order_flow_id' => env('MSG91_COD_ORDER_FLOW_ID'),
             'sender_id' => env('MSG91_SENDER_ID'),
             'country_code' => env('MSG91_COUNTRY_CODE', '91'),
             'variables' => [
