@@ -26,7 +26,7 @@ class CartController extends Controller
         $user = Auth::user();
 
         $cartItems = Cart::forUser($user->id)
-            ->with(['product', 'product.category', 'product.images', 'productSize'])
+            ->with(['product', 'product.category', 'product.images', 'productSize.size'])
             ->get();
 
         $total = $cartItems->sum(function ($item) {
@@ -60,7 +60,8 @@ class CartController extends Controller
         $productSize = ProductSize::with([
             'product' => function ($q) {
                 $q->where('is_active', true);
-            }
+            },
+            'size',
         ])->find($productSizeId);
 
         if (!$productSize || !$productSize->product) {
@@ -91,14 +92,14 @@ class CartController extends Controller
                     'user_id' => $user->id,
                     'product_id' => $product->id,
                     'product_size_id' => $productSize->id,
-                    'size_text' => $productSize->size_text,
+                    'size_text' => $productSize->size?->name ?? $productSize->size_text,
                     'size_price' => $productSize->price,
                     'quantity' => $quantity,
                 ]);
             });
 
             // Load relationships for response
-            $cartItem->load(['product', 'product.category', 'product.images', 'productSize']);
+            $cartItem->load(['product', 'product.category', 'product.images', 'productSize.size']);
 
             return response()->json([
                 'status' => true,
@@ -132,7 +133,7 @@ class CartController extends Controller
 
         $cartItem = Cart::forUser($user->id)
             ->where('product_size_id', $productSizeId)
-            ->with(['product', 'product.category', 'product.images', 'productSize'])
+            ->with(['product', 'product.category', 'product.images', 'productSize.size'])
             ->first();
 
         if (!$cartItem) {
@@ -170,12 +171,12 @@ class CartController extends Controller
 
         $cartItem->update([
             'product_id' => $product->id,
-            'size_text' => $productSize->size_text,
+            'size_text' => $productSize->size?->name ?? $productSize->size_text,
             'size_price' => $productSize->price,
             'quantity' => $quantity,
         ]);
 
-        $cartItem->load(['product', 'product.category', 'product.images', 'productSize']);
+        $cartItem->load(['product', 'product.category', 'product.images', 'productSize.size']);
 
         return response()->json([
             'status' => true,

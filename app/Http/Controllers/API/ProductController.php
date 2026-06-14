@@ -19,7 +19,7 @@ class ProductController extends Controller
     public function index(): JsonResponse
     {
         $products = Product::where('is_active', true)
-            ->with(['category', 'images', 'primaryImage', 'sizes'])
+            ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
             ->paginate(12);
 
@@ -44,7 +44,7 @@ class ProductController extends Controller
      */
     public function show(string $slug): JsonResponse
     {
-        $product = Product::with(['category', 'images', 'primaryImage', 'sizes'])
+        $product = Product::with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->where('slug', $slug)
             ->where('is_active', true)
             ->first();
@@ -74,7 +74,7 @@ class ProductController extends Controller
             ->whereHas('sizes', function ($query) {
                 $query->where('quantity', '>', 0);
             })
-            ->with(['category', 'images', 'primaryImage', 'sizes'])
+            ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
             ->limit(8)
             ->get();
@@ -107,7 +107,7 @@ class ProductController extends Controller
 
         $products = Product::where('is_active', true)
             ->where('category_id', $categoryId)
-            ->with(['category', 'images', 'primaryImage', 'sizes'])
+            ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
             ->paginate(12);
 
@@ -152,7 +152,7 @@ class ProductController extends Controller
             ->when($categoryId, function ($categoryQuery) use ($categoryId) {
                 return $categoryQuery->where('category_id', $categoryId);
             })
-            ->with(['category', 'images', 'primaryImage', 'sizes'])
+            ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
             ->paginate(12);
 

@@ -23,7 +23,7 @@ class ProductController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $products = Product::with(['category', 'images', 'primaryImage', 'sizes'])
+        $products = Product::with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->when($request->input('search'), function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
@@ -87,7 +87,7 @@ class ProductController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Product created successfully',
-                'data' => new ProductResource($product->load(['category', 'images', 'primaryImage', 'sizes']))
+                'data' => new ProductResource($product->load(['category', 'images', 'primaryImage', 'sizes.size']))
             ]);
         }
 
@@ -130,7 +130,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Product updated successfully',
-            'data' => new ProductResource($product->load(['category', 'images', 'primaryImage', 'sizes']))
+            'data' => new ProductResource($product->load(['category', 'images', 'primaryImage', 'sizes.size']))
         ]);
     }
 
@@ -140,7 +140,7 @@ class ProductController extends Controller
     public function show(string $id): JsonResponse
     {
         try {
-            $product = Product::with(['category', 'images', 'primaryImage', 'sizes'])
+            $product = Product::with(['category', 'images', 'primaryImage', 'sizes.size'])
                 ->findOrFail($id);
 
             return response()->json([

@@ -5,7 +5,7 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class ProductSizeResource extends JsonResource
+class SizeResource extends JsonResource
 {
     /**
      * Transform the resource into an array.
@@ -14,15 +14,11 @@ class ProductSizeResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'product_id' => $this->product_id,
-            'size_id' => $this->size_id,
-            'size_text' => $this->relationLoaded('size') && $this->size ? $this->size->name : $this->size_text,
-            'size' => new SizeResource($this->whenLoaded('size')),
-            'quantity' => (int) $this->quantity,
-            'price' => $this->price !== null ? (float) $this->price : null,
+            'name' => $this->name,
+            'sort_order' => $this->sort_order,
+            'is_active' => $this->is_active,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];
     }
 }
-

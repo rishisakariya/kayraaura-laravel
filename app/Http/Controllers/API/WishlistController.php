@@ -17,7 +17,7 @@ class WishlistController extends Controller
     public function index(): JsonResponse
     {
         $wishlistItems = Wishlist::forUser(Auth::id())
-            ->with(['product.category', 'product.images', 'product.sizes'])
+            ->with(['product.category', 'product.images', 'product.sizes.size'])
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
@@ -63,7 +63,7 @@ class WishlistController extends Controller
                 ]);
             });
 
-            $wishlistItem->load(['product.category', 'product.images', 'product.sizes']);
+            $wishlistItem->load(['product.category', 'product.images', 'product.sizes.size']);
 
             return response()->json([
                 'status' => true,
@@ -82,7 +82,7 @@ class WishlistController extends Controller
     public function show(int $id): JsonResponse
     {
         $wishlistItem = Wishlist::forUser(Auth::id())
-            ->with(['product.category', 'product.images', 'product.sizes'])
+            ->with(['product.category', 'product.images', 'product.sizes.size'])
             ->find($id);
 
         if (!$wishlistItem) {
@@ -146,7 +146,7 @@ class WishlistController extends Controller
                 ], 404);
             }
 
-            $wishlistItem->load(['product.category', 'product.images', 'product.sizes']);
+            $wishlistItem->load(['product.category', 'product.images', 'product.sizes.size']);
 
             return response()->json([
                 'status' => true,

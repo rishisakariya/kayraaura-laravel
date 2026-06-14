@@ -56,7 +56,7 @@ class ProductStoreRequest extends FormRequest
                 'required_if:edit_value,0',
                 'min:1',
             ],
-            'sizes.*.size_text' => 'required_with:sizes|string|max:50',
+            'sizes.*.size_id' => 'required_with:sizes|integer|distinct|exists:sizes,id',
             'sizes.*.quantity' => 'required_with:sizes|integer|min:0',
             'sizes.*.price' => 'required_with:sizes|numeric|min:0|max:99999999.99',
             'image' => 'nullable|array|max:5',
@@ -78,6 +78,9 @@ class ProductStoreRequest extends FormRequest
             'image.max' => 'Maximum 5 product images allowed',
             'image.*.not_regex' => 'Product image must be a valid media URL or path',
             'weight_grams.min' => 'Product weight must be at least 1 gram',
+            'sizes.*.size_id.required_with' => 'Size is required',
+            'sizes.*.size_id.exists' => 'Selected size does not exist',
+            'sizes.*.size_id.distinct' => 'Duplicate sizes are not allowed',
 
             'ideal_for.in' => 'ideal_for must be one of: men, woman, both',
         ];

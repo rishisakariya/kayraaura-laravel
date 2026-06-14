@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DelhiverySettingController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderShipmentController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\SizeController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\CustomerReviewController;
 use App\Http\Controllers\Admin\WebSettingController;
@@ -26,6 +27,9 @@ Route::prefix('cpanel')->group(function () {
         
         // Products Management
         Route::apiResource('products', ProductController::class);
+
+        // Sizes Management
+        Route::apiResource('sizes', SizeController::class)->except(['update']);
 
         // Banners Management
         Route::apiResource('banners', BannerController::class)->except(['update']);
