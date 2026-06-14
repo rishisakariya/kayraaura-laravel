@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -16,9 +17,41 @@ class ProductController extends Controller
      *
      * @return JsonResponse
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'price' => ['nullable', 'regex:/^\d+(\.\d{1,2})?-\d+(\.\d{1,2})?$/'],
+            'min_price' => ['nullable', 'numeric', 'min:0'],
+            'max_price' => ['nullable', 'numeric', 'min:0'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'size_id' => ['nullable', 'integer', 'exists:sizes,id'],
+        ]);
+
+        [$minPrice, $maxPrice] = $this->priceBounds($validated);
+
+        if ($minPrice !== null && $maxPrice !== null && $minPrice > $maxPrice) {
+            throw ValidationException::withMessages([
+                'price' => ['The minimum price must be less than or equal to the maximum price.'],
+            ]);
+        }
+
+        $categoryId = $validated['category_id'] ?? null;
+        $sizeId = $validated['size_id'] ?? null;
+
         $products = Product::where('is_active', true)
+            ->when($minPrice !== null || $maxPrice !== null || $sizeId, function ($productQuery) use ($minPrice, $maxPrice, $sizeId) {
+                $productQuery->whereHas('sizes', function ($sizeQuery) use ($minPrice, $maxPrice, $sizeId) {
+                    $sizeQuery
+                        ->when($sizeId, fn ($query) => $query->where('size_id', $sizeId))
+                        ->when($minPrice !== null, fn ($query) => $query->where('price', '>=', $minPrice))
+                        ->when($maxPrice !== null, fn ($query) => $query->where('price', '<=', $maxPrice));
+                });
+            })
+            ->when($categoryId, function ($productQuery) use ($categoryId) {
+                $productQuery->whereHas('category', function ($categoryQuery) use ($categoryId) {
+                    $categoryQuery->where('id', $categoryId)->where('is_active', true);
+                });
+            })
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
             ->paginate(12);
@@ -34,6 +67,18 @@ class ProductController extends Controller
             ],
             'message' => 'Products retrieved successfully'
         ]);
+    }
+
+    private function priceBounds(array $filters): array
+    {
+        if (!empty($filters['price'])) {
+            return array_map('floatval', explode('-', $filters['price'], 2));
+        }
+
+        return [
+            isset($filters['min_price']) ? (float) $filters['min_price'] : null,
+            isset($filters['max_price']) ? (float) $filters['max_price'] : null,
+        ];
     }
 
     /**
