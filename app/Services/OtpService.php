@@ -48,7 +48,7 @@ class OtpService
             'expires_at' => now()->addMinutes(self::EXPIRY_MINUTES),
         ]);
 
-        $this->smsService->send($mobile, $this->messageFor($otp, $purpose));
+        $this->smsService->sendOtp($mobile, $otp, $purpose, self::EXPIRY_MINUTES);
     }
 
     public function verifyAndConsume(string $mobile, string $purpose, string $otp): void
@@ -88,14 +88,4 @@ class OtpService
         return preg_replace('/[\s\-()]/', '', trim($mobile)) ?? trim($mobile);
     }
 
-    private function messageFor(string $otp, string $purpose): string
-    {
-        $label = match ($purpose) {
-            self::PURPOSE_COD_ORDER => 'COD order confirmation',
-            self::PURPOSE_FORGOT_PASSWORD => 'password reset',
-            default => 'verification',
-        };
-
-        return "Your {$label} OTP is {$otp}. It is valid for " . self::EXPIRY_MINUTES . ' minutes.';
-    }
 }

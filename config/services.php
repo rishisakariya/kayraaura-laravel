@@ -43,8 +43,20 @@ return [
 
     'sms' => [
         'driver' => env('SMS_DRIVER', 'log'),
-        'url' => env('SMS_GATEWAY_URL'),
-        'token' => env('SMS_GATEWAY_TOKEN'),
+        'msg91' => [
+            'endpoint' => env('MSG91_ENDPOINT', 'https://api.msg91.com/api/v5/flow/'),
+            'auth_key' => env('MSG91_AUTH_KEY'),
+            'flow_id' => env('MSG91_FLOW_ID'),
+            'forgot_password_flow_id' => env('MSG91_FORGOT_PASSWORD_FLOW_ID'),
+            'cod_order_flow_id' => env('MSG91_COD_ORDER_FLOW_ID'),
+            'sender_id' => env('MSG91_SENDER_ID'),
+            'country_code' => env('MSG91_COUNTRY_CODE', '91'),
+            'variables' => [
+                'otp' => env('MSG91_OTP_VARIABLE', 'OTP'),
+                'purpose' => env('MSG91_PURPOSE_VARIABLE', 'PURPOSE'),
+                'expiry' => env('MSG91_EXPIRY_VARIABLE', 'EXPIRY_MINUTES'),
+            ],
+        ],
     ],
 
 ];
