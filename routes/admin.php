@@ -13,8 +13,9 @@ use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerReviewController;
 use App\Http\Controllers\Admin\WebSettingController;
 
-
-Route::get('/cpanel/orders/{id}/shipment/label/download', [OrderShipmentController::class, 'downloadLabel']); //this is used to download the shipment label pdf
+Route::get('/cpanel/orders/{id}/shipment/label/download', [OrderShipmentController::class, 'downloadLabel'])
+    ->middleware('signed')
+    ->name('admin.orders.shipment.label.download'); // Signed URL used to download the shipment label PDF.
 
 // Admin Authentication Routes
 Route::prefix('cpanel')->group(function () {

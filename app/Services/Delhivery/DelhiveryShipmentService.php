@@ -136,14 +136,19 @@ class DelhiveryShipmentService
         try {
             $payload = $this->client->trackShipment($shipment->waybill);
             $scan = $this->latestTrackingScan($payload);
-            $rawStatus = $scan['status'] ?? $scan['Scan'] ?? $this->extractRawStatus($payload);
+            $rawStatus = $this->extractRawStatus($payload) ?? $scan['status'] ?? $scan['Scan'] ?? null;
+
+            if (!$rawStatus) {
+                throw new DomainException('Delhivery tracking response did not contain shipment status');
+            }
+
             $normalizedStatus = $this->normalizeStatus($rawStatus);
 
             $shipment->fill([
                 'shipment_status' => $normalizedStatus,
                 'raw_status' => $rawStatus,
-                'status_location' => $scan['location'] ?? $scan['ScannedLocation'] ?? null,
-                'status_instructions' => $scan['instructions'] ?? $scan['Instructions'] ?? null,
+                'status_location' => $this->extractStatusLocation($payload) ?? $scan['location'] ?? $scan['ScannedLocation'] ?? null,
+                'status_instructions' => $this->extractStatusInstructions($payload) ?? $scan['instructions'] ?? $scan['Instructions'] ?? null,
                 'tracking_payload' => $payload,
                 'last_synced_at' => now(),
             ]);
@@ -191,6 +196,10 @@ class DelhiveryShipmentService
 
         try {
             $payload = $this->client->cancelShipment($shipment->waybill);
+
+            if ($responseError = $this->extractDelhiveryFailure($payload)) {
+                throw new DomainException($responseError);
+            }
 
             $shipment->fill([
                 'shipment_status' => OrderShipment::STATUS_CANCELLED,
@@ -496,6 +505,15 @@ class DelhiveryShipmentService
                     'products_desc' => $this->productDescription($order),
                     'quantity' => (string) $order->orderItems->sum('quantity'),
                     'weight' => (string) $weight,
+                    'seller_gst_tin' => $this->sellerGstTin($settings),
+                    'client_gst_tin' => $this->sellerGstTin($settings),
+                    'hsn_code' => $this->defaultHsnCode($settings),
+                    'invoice_reference' => $order->order_number,
+                    'seller_name' => $this->requiredSetting($settings->client_name, 'Delhivery client name is not configured'),
+                    'seller_inv' => $order->order_number,
+                    'seller_add' => $this->formatAddress($address),
+                    'shipping_mode' => 'Surface',
+                    'address_type' => 'home',
                     'shipment_width' => (string) $settings->default_width_cm,
                     'shipment_height' => (string) $settings->default_height_cm,
                     'shipment_length' => (string) $settings->default_length_cm,
@@ -531,6 +549,15 @@ class DelhiveryShipmentService
                     'products_desc' => $this->productDescription($order),
                     'quantity' => (string) $order->orderItems->sum('quantity'),
                     'weight' => (string) $weight,
+                    'seller_gst_tin' => $this->sellerGstTin($settings),
+                    'client_gst_tin' => $this->sellerGstTin($settings),
+                    'hsn_code' => $this->defaultHsnCode($settings),
+                    'invoice_reference' => "{$order->order_number}-RETURN",
+                    'seller_name' => $this->requiredSetting($settings->client_name, 'Delhivery client name is not configured'),
+                    'seller_inv' => "{$order->order_number}-RETURN",
+                    'seller_add' => $this->formatAddress($address),
+                    'shipping_mode' => 'Surface',
+                    'address_type' => 'home',
                     'shipment_width' => (string) $settings->default_width_cm,
                     'shipment_height' => (string) $settings->default_height_cm,
                     'shipment_length' => (string) $settings->default_length_cm,
@@ -556,6 +583,22 @@ class DelhiveryShipmentService
 
         return (int) $order->orderItems->sum(
             fn ($item) => (int) $item->product->weight_grams * (int) $item->quantity
+        );
+    }
+
+    private function sellerGstTin(DelhiverySetting $settings): string
+    {
+        return $this->requiredSetting(
+            $settings->seller_gst_tin ?: config('delhivery.seller_gst_tin'),
+            'Delhivery seller GST TIN is not configured'
+        );
+    }
+
+    private function defaultHsnCode(DelhiverySetting $settings): string
+    {
+        return $this->requiredSetting(
+            $settings->default_hsn_code ?: config('delhivery.default_hsn_code'),
+            'Delhivery default HSN code is not configured'
         );
     }
 
@@ -601,9 +644,8 @@ class DelhiveryShipmentService
 
     private function extractCreateError(array $payload): ?string
     {
-        if (($payload['success'] ?? null) === false || ($payload['status'] ?? null) === false) {
-            return $this->extractDelhiveryMessage($payload)
-                ?? 'Delhivery shipment creation was not successful';
+        if ($responseError = $this->extractDelhiveryFailure($payload)) {
+            return $responseError;
         }
 
         $packageStatus = Arr::get($payload, 'packages.0.status')
@@ -612,6 +654,20 @@ class DelhiveryShipmentService
         if ($packageStatus === false || strtolower((string) $packageStatus) === 'fail') {
             return $this->extractDelhiveryMessage($payload)
                 ?? 'Delhivery rejected the shipment';
+        }
+
+        return null;
+    }
+
+    private function extractDelhiveryFailure(array $payload): ?string
+    {
+        if (
+            ($payload['success'] ?? null) === false
+            || ($payload['status'] ?? null) === false
+            || ($payload['error'] ?? null) === true
+        ) {
+            return $this->extractDelhiveryMessage($payload)
+                ?? 'Delhivery request was not successful';
         }
 
         return null;
@@ -705,8 +761,24 @@ class DelhiveryShipmentService
     {
         return Arr::get($payload, 'packages.0.status')
             ?? Arr::get($payload, 'ShipmentData.0.Shipment.Status.Status')
+            ?? Arr::get($payload, 'ShipmentData.0.Status.Status')
+            ?? Arr::get($payload, 'Status.Status')
             ?? $payload['status']
             ?? null;
+    }
+
+    private function extractStatusLocation(array $payload): ?string
+    {
+        return Arr::get($payload, 'ShipmentData.0.Shipment.Status.StatusLocation')
+            ?? Arr::get($payload, 'ShipmentData.0.Status.StatusLocation')
+            ?? Arr::get($payload, 'Status.StatusLocation');
+    }
+
+    private function extractStatusInstructions(array $payload): ?string
+    {
+        return Arr::get($payload, 'ShipmentData.0.Shipment.Status.Instructions')
+            ?? Arr::get($payload, 'ShipmentData.0.Status.Instructions')
+            ?? Arr::get($payload, 'Status.Instructions');
     }
 
     private function latestTrackingScan(array $payload): array
@@ -744,14 +816,16 @@ class DelhiveryShipmentService
 
         return match (true) {
             str_contains($status, 'delivered') => OrderShipment::STATUS_DELIVERED,
-            str_contains($status, 'out for delivery') => OrderShipment::STATUS_OUT_FOR_DELIVERY,
-            str_contains($status, 'rto') || str_contains($status, 'return') => OrderShipment::STATUS_RTO,
+            str_contains($status, 'out for delivery') || str_contains($status, 'dispatched') => OrderShipment::STATUS_OUT_FOR_DELIVERY,
+            str_contains($status, 'rto') || str_contains($status, 'dto') || str_contains($status, 'return') => OrderShipment::STATUS_RTO,
             str_contains($status, 'cancel') => OrderShipment::STATUS_CANCELLED,
+            str_contains($status, 'lost') => OrderShipment::STATUS_FAILED,
             str_contains($status, 'picked') => OrderShipment::STATUS_PICKED_UP,
             str_contains($status, 'pickup scheduled') => OrderShipment::STATUS_PICKUP_SCHEDULED,
             str_contains($status, 'pickup') => OrderShipment::STATUS_PICKUP_PENDING,
             str_contains($status, 'manifest') => OrderShipment::STATUS_MANIFESTED,
-            str_contains($status, 'transit') || str_contains($status, 'dispatched') => OrderShipment::STATUS_IN_TRANSIT,
+            str_contains($status, 'pending') || str_contains($status, 'open') || str_contains($status, 'scheduled') => OrderShipment::STATUS_PICKUP_PENDING,
+            str_contains($status, 'transit') => OrderShipment::STATUS_IN_TRANSIT,
             default => OrderShipment::STATUS_IN_TRANSIT,
         };
     }

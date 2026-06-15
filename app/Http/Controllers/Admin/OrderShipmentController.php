@@ -15,6 +15,7 @@ use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
@@ -228,7 +229,11 @@ class OrderShipmentController extends Controller
 
     private function downloadLabelUrl(Order $order): string
     {
-        return url("/cpanel/orders/{$order->id}/shipment/label/download");
+        return URL::temporarySignedRoute(
+            'admin.orders.shipment.label.download',
+            now()->addMinutes(30),
+            ['id' => $order->id]
+        );
     }
 
     private function publicStoragePathFromUrl(string $url): ?string

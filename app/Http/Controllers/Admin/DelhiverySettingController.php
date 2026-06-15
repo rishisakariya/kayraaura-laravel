@@ -22,6 +22,8 @@ class DelhiverySettingController extends Controller
         $payload = $request->validate([
             'client_name' => ['required', 'string', 'max:255'],
             'pickup_location' => ['required', 'string', 'max:255'],
+            'seller_gst_tin' => ['nullable', 'string', 'max:32'],
+            'default_hsn_code' => ['nullable', 'string', 'max:32'],
             'default_length_cm' => ['required', 'integer', 'min:1', 'max:999'],
             'default_width_cm' => ['required', 'integer', 'min:1', 'max:999'],
             'default_height_cm' => ['required', 'integer', 'min:1', 'max:999'],
