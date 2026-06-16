@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedTinyInteger('min_discount_percent')->default(1);
             $table->unsignedTinyInteger('max_discount_percent')->default(50);
-            $table->boolean('is_active')->default(false);
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }
