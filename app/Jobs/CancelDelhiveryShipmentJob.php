@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\Shiprocket\ShiprocketShipmentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,10 +29,18 @@ class CancelDelhiveryShipmentJob implements ShouldQueue
         return [60, 300, 900];
     }
 
-    public function handle(DelhiveryShipmentService $shipmentService): void
+    public function handle(
+        DelhiveryShipmentService $delhiveryShipmentService,
+        ShiprocketShipmentService $shiprocketShipmentService
+    ): void
     {
         $shipment = OrderShipment::findOrFail($this->shipmentId);
 
-        $shipmentService->cancelShipment($shipment);
+        if ($shipment->provider === OrderShipment::PROVIDER_SHIPROCKET) {
+            $shiprocketShipmentService->cancelShipment($shipment);
+            return;
+        }
+
+        $delhiveryShipmentService->cancelShipment($shipment);
     }
 }

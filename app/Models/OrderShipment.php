@@ -10,6 +10,8 @@ class OrderShipment extends Model
 {
     public const PROVIDER_DELHIVERY = 'delhivery';
 
+    public const PROVIDER_SHIPROCKET = 'shiprocket';
+
     public const STATUS_NOT_CREATED = 'not_created';
 
     public const STATUS_MANIFESTED = 'manifested';
@@ -113,6 +115,13 @@ class OrderShipment extends Model
             ->whereIn('shipment_status', self::ACTIVE_STATUSES);
     }
 
+    public function scopeActiveForShiprocketSync(Builder $query): Builder
+    {
+        return $query->where('provider', self::PROVIDER_SHIPROCKET)
+            ->whereNotNull('waybill')
+            ->whereIn('shipment_status', self::ACTIVE_STATUSES);
+    }
+
     public function hasWaybill(): bool
     {
         return filled($this->waybill);
@@ -120,6 +129,12 @@ class OrderShipment extends Model
 
     public function trackingUrl(): ?string
     {
-        return $this->waybill ? "https://www.delhivery.com/track/package/{$this->waybill}" : null;
+        if (!$this->waybill) {
+            return null;
+        }
+
+        return $this->provider === self::PROVIDER_SHIPROCKET
+            ? "https://shiprocket.co/tracking/{$this->waybill}"
+            : "https://www.delhivery.com/track/package/{$this->waybill}";
     }
 }

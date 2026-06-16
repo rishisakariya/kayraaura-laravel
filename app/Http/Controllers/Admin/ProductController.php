@@ -115,7 +115,6 @@ class ProductController extends Controller
 
             $this->fillSpecificationFields($product, $request);
             $product->category_id = $request->input('category_id');
-
             $product->discount_percentage = $request->input('discount_percentage');
             $product->is_active = $request->input('is_active', true);
             $product->is_collection = $request->input('is_collection', false);

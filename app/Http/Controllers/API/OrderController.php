@@ -15,6 +15,8 @@ use App\Models\UserAddress;
 use App\Services\CheckoutService;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use App\Services\OtpService;
+use App\Services\ScratchCardService;
+use App\Services\Shiprocket\ShiprocketShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +28,9 @@ class OrderController extends Controller
     public function __construct(
         private readonly CheckoutService $checkoutService,
         private readonly DelhiveryShipmentService $shipmentService,
-        private readonly OtpService $otpService
+        private readonly ShiprocketShipmentService $shiprocketShipmentService,
+        private readonly OtpService $otpService,
+        private readonly ScratchCardService $scratchCardService,
     )
     {
     }
@@ -66,6 +70,12 @@ class OrderController extends Controller
             $order = DB::transaction(function () use ($payload, &$razorpayCheckout) {
                 $user = Auth::user();
                 $checkout = $this->checkoutService->buildCheckout($user, $payload, true);
+                $checkout = $this->scratchCardService->applyCouponToCheckout(
+                    $user,
+                    $checkout,
+                    $payload['coupon_code'] ?? null
+                );
+                $coupon = $checkout['scratch_coupon'] ?? null;
 
                 if ($payload['payment_method'] === 'cod') {
                     $this->otpService->verifyAndConsume(
@@ -76,6 +86,15 @@ class OrderController extends Controller
                 }
 
                 $order = $this->checkoutService->createOrder($user, $payload, $checkout);
+
+                if ($coupon) {
+                    $this->scratchCardService->redeem(
+                        $user,
+                        $coupon->code,
+                        $order->id,
+                        $checkout['discount_amount'] ?? null
+                    );
+                }
 
                 if ($payload['payment_method'] === 'cod') {
                     $this->checkoutService->deductStockForOrder($order);
@@ -103,6 +122,14 @@ class OrderController extends Controller
             ], 201);
 
         } catch (DomainException $e) {
+            if (!empty($request->input('coupon_code')) && !$this->scratchCardService->isActive()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => $e->getMessage(),
+                    'error' => ['code' => 'SCRATCH_CARD_DISABLED'],
+                ], 403);
+            }
+
             return response()->json([
                 'status' => false,
                 'message' => $e->getMessage(),
@@ -287,7 +314,11 @@ class OrderController extends Controller
         $transactionStarted = false;
 
         try {
-            $this->shipmentService->createReversePickup($order);
+            $service = $order->shipment?->provider === OrderShipment::PROVIDER_SHIPROCKET
+                ? $this->shiprocketShipmentService
+                : $this->shipmentService;
+
+            $service->createReversePickup($order);
 
             DB::beginTransaction();
             $transactionStarted = true;

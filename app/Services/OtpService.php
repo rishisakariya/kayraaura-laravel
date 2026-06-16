@@ -11,7 +11,7 @@ class OtpService
     public const PURPOSE_FORGOT_PASSWORD = 'forgot_password';
     public const PURPOSE_COD_ORDER = 'cod_order';
 
-    private const EXPIRY_MINUTES = 10;
+    private const EXPIRY_MINUTES = 5;
     private const RESEND_SECONDS = 60;
     private const MAX_ATTEMPTS = 5;
 

@@ -19,10 +19,10 @@ class AdminAuthController extends Controller
     public function login(AdminLoginRequest $request): JsonResponse
     {
         $credentials = $request->only('email', 'password');
-        
+
         // Find user by email
         $user = User::where('email', $credentials['email'])->first();
-        
+
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             return response()->json([
                 'success' => false,
@@ -106,7 +106,7 @@ class AdminAuthController extends Controller
     public function updateProfile(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $user->id,
@@ -130,10 +130,10 @@ class AdminAuthController extends Controller
     public function refreshToken(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         // Revoke current token
         $request->user()->currentAccessToken()->delete();
-        
+
         // Create new token
         $token = $user->createToken('admin-token', ['admin'])->plainTextToken;
 

@@ -17,6 +17,7 @@ use App\Http\Controllers\API\OrderShipmentController;
 use App\Http\Controllers\API\DelhiveryWebhookController;
 use App\Http\Controllers\API\CustomerReviewController;
 use App\Http\Controllers\API\WebSettingController;
+use App\Http\Controllers\API\ScratchCardController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -52,6 +53,9 @@ Route::get('/banners', [BannerController::class, 'index']);
 
 // Frontend Web Settings Routes (Public)
 Route::get('/web-settings', [WebSettingController::class, 'show']);
+
+// Scratch Card Routes (Public status)
+Route::get('/scratch-card/status', [ScratchCardController::class, 'status']);
 
 // Frontend Customer Review Routes (Public)
 Route::post('/customer-reviews', [CustomerReviewController::class, 'store']);
@@ -93,6 +97,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/addresses/{id}', [AddressController::class, 'destroy']);
     Route::post('/addresses/{id}/default', [AddressController::class, 'makeDefault']);
     Route::post('/checkout/summary', [CheckoutController::class, 'summary']);
+    Route::get('/scratch-card/scratch', [ScratchCardController::class, 'scratch']);
 });
 
 // Frontend Order Routes (Protected)
