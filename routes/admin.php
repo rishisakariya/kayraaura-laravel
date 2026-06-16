@@ -12,6 +12,8 @@ use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerReviewController;
 use App\Http\Controllers\Admin\WebSettingController;
+use App\Http\Controllers\Admin\ScratchCardSettingController;
+use App\Http\Controllers\Admin\ScratchCardCouponController;
 
 
 Route::get('/cpanel/orders/{id}/shipment/label/download', [OrderShipmentController::class, 'downloadLabel']); //this is used to download the shipment label pdf
@@ -53,6 +55,14 @@ Route::prefix('cpanel')->group(function () {
         // Web Settings
         Route::get('web-settings', [WebSettingController::class, 'show']);
         Route::put('web-settings', [WebSettingController::class, 'update']);
+
+        // Scratch Card Settings
+        Route::get('scratch-card-settings', [ScratchCardSettingController::class, 'show']);
+        Route::put('scratch-card-settings', [ScratchCardSettingController::class, 'update']);
+
+        // Scratch Card Coupons
+        Route::get('scratch-card-coupons', [ScratchCardCouponController::class, 'index']);
+        Route::get('scratch-card-coupons/{id}', [ScratchCardCouponController::class, 'show']);
 
         // Orders Management
         Route::get('orders', [OrderController::class, 'index']);

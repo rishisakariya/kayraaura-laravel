@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Http;
 
 class CheckoutService
 {
+    private const COD_CHARGE_RATE = 0.10;
+
     public function buildCheckout(User $user, array $payload, bool $lockProductSizes = false): array
     {
         $address = UserAddress::where('user_id', $user->id)->find($payload['address_id']);
@@ -30,7 +32,10 @@ class CheckoutService
         $subtotal = round($items->sum('total'), 2);
         $taxAmount = round($subtotal * 0.18, 2);
         $shippingAmount = $subtotal > 1000 ? 0.0 : 50.0;
-        $totalAmount = round($subtotal + $taxAmount + $shippingAmount, 2);
+        $baseTotal = round($subtotal + $taxAmount + $shippingAmount, 2);
+        $isCod = ($payload['payment_method'] ?? null) === 'cod';
+        $codCharge = $isCod ? round($baseTotal * self::COD_CHARGE_RATE, 2) : 0.0;
+        $totalAmount = round($baseTotal + $codCharge, 2);
 
         return [
             'address' => $address,
@@ -38,6 +43,7 @@ class CheckoutService
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
             'shipping_amount' => $shippingAmount,
+            'cod_charge' => $codCharge,
             'total_amount' => $totalAmount,
         ];
     }
@@ -55,7 +61,11 @@ class CheckoutService
             'subtotal' => $checkout['subtotal'],
             'tax_amount' => $checkout['tax_amount'],
             'shipping_amount' => $checkout['shipping_amount'],
-            'total_amount' => $checkout['total_amount'],
+            'cod_charge' => $checkout['cod_charge'],
+            'scratch_coupon_code' => $checkout['coupon_code'] ?? null,
+            'discount_percent' => $checkout['discount_percent'] ?? null,
+            'discount_amount' => $checkout['discount_amount'] ?? 0,
+            'total_amount' => $checkout['final_total_amount'] ?? $checkout['total_amount'],
             'payment_method' => $payload['payment_method'],
             'payment_status' => 'pending',
             'cod_verified_at' => $payload['payment_method'] === 'cod' ? now() : null,

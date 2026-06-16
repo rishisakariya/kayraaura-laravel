@@ -20,6 +20,7 @@ class CheckoutSummaryRequest extends FormRequest
             'payment_method' => ['required', Rule::in(['cod', 'online'])],
             'product_size_id' => 'required_if:checkout_type,buy_now|integer|exists:product_sizes,id',
             'quantity' => 'required_if:checkout_type,buy_now|integer|min:1|max:99',
+            'coupon_code' => ['nullable', 'string', 'size:6'],
         ];
     }
 }
