@@ -104,16 +104,37 @@ class OrderResource extends JsonResource
 
     private function trackingTimeline(array $trackingPayload): array
     {
-        $scans = data_get($trackingPayload, 'ShipmentData.0.Shipment.Scans', []);
+        // Delhivery shape:
+        // ShipmentData[0].Shipment.Scans[].ScanDetail.{Scan, ScannedLocation, Instructions, ScanDateTime}
+        $delhiveryScans = data_get($trackingPayload, 'ShipmentData.0.Shipment.Scans', []);
+        if (is_array($delhiveryScans) && $delhiveryScans !== []) {
+            return collect($delhiveryScans)->map(function (array $scan) {
+                $detail = $scan['ScanDetail'] ?? $scan;
 
-        return collect($scans)->map(function (array $scan) {
-            $detail = $scan['ScanDetail'] ?? $scan;
+                return [
+                    'status' => $detail['Scan'] ?? $detail['status'] ?? null,
+                    'location' => $detail['ScannedLocation'] ?? $detail['location'] ?? null,
+                    'instructions' => $detail['Instructions'] ?? $detail['instructions'] ?? null,
+                    'date_time' => $detail['ScanDateTime'] ?? $detail['date_time'] ?? null,
+                ];
+            })->values()->all();
+        }
+
+        // Shiprocket shape:
+        // scans[].{date, status, activity, location, sr-status-label}
+        $shiprocketScans = data_get($trackingPayload, 'scans', []);
+        if (!is_array($shiprocketScans) || $shiprocketScans === []) {
+            return [];
+        }
+
+        return collect($shiprocketScans)->map(function (array $scan) {
+            $status = $scan['sr-status-label'] ?? $scan['status'] ?? null;
 
             return [
-                'status' => $detail['Scan'] ?? $detail['status'] ?? null,
-                'location' => $detail['ScannedLocation'] ?? $detail['location'] ?? null,
-                'instructions' => $detail['Instructions'] ?? $detail['instructions'] ?? null,
-                'date_time' => $detail['ScanDateTime'] ?? $detail['date_time'] ?? null,
+                'status' => $status,
+                'location' => $scan['location'] ?? null,
+                'instructions' => $scan['activity'] ?? null,
+                'date_time' => $scan['date'] ?? null,
             ];
         })->values()->all();
     }

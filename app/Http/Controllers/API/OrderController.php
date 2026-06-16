@@ -16,6 +16,7 @@ use App\Services\CheckoutService;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use App\Services\OtpService;
 use App\Services\ScratchCardService;
+use App\Services\Shiprocket\ShiprocketShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ class OrderController extends Controller
     public function __construct(
         private readonly CheckoutService $checkoutService,
         private readonly DelhiveryShipmentService $shipmentService,
+        private readonly ShiprocketShipmentService $shiprocketShipmentService,
         private readonly OtpService $otpService,
         private readonly ScratchCardService $scratchCardService,
     )
@@ -312,7 +314,11 @@ class OrderController extends Controller
         $transactionStarted = false;
 
         try {
-            $this->shipmentService->createReversePickup($order);
+            $service = $order->shipment?->provider === OrderShipment::PROVIDER_SHIPROCKET
+                ? $this->shiprocketShipmentService
+                : $this->shipmentService;
+
+            $service->createReversePickup($order);
 
             DB::beginTransaction();
             $transactionStarted = true;

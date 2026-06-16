@@ -11,6 +11,7 @@ use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\Shiprocket\ShiprocketShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,10 @@ use Throwable;
 
 class OrderShipmentController extends Controller
 {
-    public function __construct(private readonly DelhiveryShipmentService $shipmentService)
+    public function __construct(
+        private readonly DelhiveryShipmentService $delhiveryShipmentService,
+        private readonly ShiprocketShipmentService $shiprocketShipmentService
+    )
     {
     }
 
@@ -190,17 +194,20 @@ class OrderShipmentController extends Controller
             throw new DomainException('Shipment AWB is not available yet', 409);
         }
 
+        $shipment = $order->shipment;
+        $shipmentService = $this->shipmentServiceForProvider($shipment);
+
         try {
-            $shipment = $this->shipmentService->generateShippingLabel($order->shipment);
+            $shipment = $shipmentService->generateShippingLabel($shipment);
         } catch (DomainException $e) {
             if (!app()->isProduction()) {
-                return $this->testLabelPayload($order, 'Test shipment label generated because Delhivery label API is not available');
+                return $this->testLabelPayload($order, 'Test shipment label generated because label API is not available');
             }
 
             throw $e;
         } catch (Throwable $e) {
             if (!app()->isProduction()) {
-                return $this->testLabelPayload($order, 'Test shipment label generated because Delhivery label API is not reachable');
+                return $this->testLabelPayload($order, 'Test shipment label generated because label API is not reachable');
             }
 
             throw $e;
@@ -216,14 +223,26 @@ class OrderShipmentController extends Controller
 
     private function testLabelPayload(Order $order, string $message): array
     {
+        $shipment = $order->shipment;
+        $shipmentService = $shipment
+            ? $this->shipmentServiceForProvider($shipment)
+            : $this->delhiveryShipmentService;
+
         return [
             'data' => [
-                'shipping_label_url' => $this->shipmentService->generateTestShippingLabel($order),
+                'shipping_label_url' => $shipmentService->generateTestShippingLabel($order),
                 'download_label_url' => $this->downloadLabelUrl($order),
                 'is_test_label' => true,
             ],
             'message' => $message,
         ];
+    }
+
+    private function shipmentServiceForProvider(OrderShipment $shipment): DelhiveryShipmentService|ShiprocketShipmentService
+    {
+        return $shipment->provider === OrderShipment::PROVIDER_SHIPROCKET
+            ? $this->shiprocketShipmentService
+            : $this->delhiveryShipmentService;
     }
 
     private function downloadLabelUrl(Order $order): string

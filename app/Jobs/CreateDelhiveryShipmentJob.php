@@ -6,6 +6,7 @@ use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\Shiprocket\ShiprocketShipmentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -31,22 +32,41 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
         return [60, 300, 900];
     }
 
-    public function handle(DelhiveryShipmentService $shipmentService): void
+    public function handle(
+        DelhiveryShipmentService $shipmentService,
+        ShiprocketShipmentService $shiprocketService
+    ): void
     {
         $order = Order::findOrFail($this->orderId);
 
-        $shipmentService->createShipment($order);
+        try {
+            $shipmentService->createShipment($order);
+            return;
+        } catch (\Throwable $e) {
+            if (!config('shiprocket.fallback_enabled') || !$shiprocketService->isConfigured()) {
+                throw $e;
+            }
+
+            $shiprocketService->createShipment($order);
+        }
     }
 
     public function failed(Throwable $exception): void
     {
+        $shipment = OrderShipment::where('order_id', $this->orderId)->first();
+
+        $provider = $shipment?->provider ?? OrderShipment::PROVIDER_DELHIVERY;
+        $pickupLocation = $provider === OrderShipment::PROVIDER_SHIPROCKET
+            ? (string) config('shiprocket.pickup_location')
+            : DelhiverySetting::current()->pickup_location;
+
         OrderShipment::updateOrCreate(
             ['order_id' => $this->orderId],
             [
-                'provider' => OrderShipment::PROVIDER_DELHIVERY,
+                'provider' => $provider,
                 'shipment_status' => OrderShipment::STATUS_FAILED,
                 'failed_reason' => $exception->getMessage(),
-                'pickup_location' => DelhiverySetting::current()->pickup_location,
+                'pickup_location' => $pickupLocation,
             ]
         );
     }

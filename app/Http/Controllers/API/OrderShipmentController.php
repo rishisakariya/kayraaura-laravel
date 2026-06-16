@@ -7,13 +7,17 @@ use App\Jobs\SyncDelhiveryShipmentStatusJob;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\Shiprocket\ShiprocketShipmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class OrderShipmentController extends Controller
 {
-    public function __construct(private readonly DelhiveryShipmentService $shipmentService)
+    public function __construct(
+        private readonly DelhiveryShipmentService $delhiveryShipmentService,
+        private readonly ShiprocketShipmentService $shiprocketShipmentService
+    )
     {
     }
 
@@ -26,7 +30,7 @@ class OrderShipmentController extends Controller
         return response()->json([
             'status' => true,
             'data' => $order->shipment
-                ? $this->shipmentService->trackingData($order->shipment)
+                ? $this->trackingResponse($order->shipment)
                 : $this->notCreatedPayload(),
         ]);
     }
@@ -51,7 +55,7 @@ class OrderShipmentController extends Controller
         return response()->json([
             'status' => true,
             'data' => $order->shipment
-                ? $this->shipmentService->trackingData($order->shipment)
+                ? $this->trackingResponse($order->shipment)
                 : $this->notCreatedPayload(),
         ]);
     }
@@ -84,7 +88,7 @@ class OrderShipmentController extends Controller
 
         return response()->json([
             'status' => true,
-            'data' => $this->shipmentService->trackingData($shipment->refresh()),
+            'data' => $this->trackingResponse($shipment->refresh()),
             'message' => 'Tracking refresh queued',
         ]);
     }
@@ -102,5 +106,23 @@ class OrderShipmentController extends Controller
             'last_synced_at' => null,
             'tracking' => [],
         ];
+    }
+
+    private function trackingResponse(OrderShipment $shipment): array
+    {
+        $service = $this->shipmentServiceForProvider($shipment);
+        $data = $service->trackingData($shipment);
+
+        // Hide Shiprocket from frontend customers; keep provider as delhivery.
+        $data['provider'] = OrderShipment::PROVIDER_DELHIVERY;
+
+        return $data;
+    }
+
+    private function shipmentServiceForProvider(OrderShipment $shipment): DelhiveryShipmentService|ShiprocketShipmentService
+    {
+        return $shipment->provider === OrderShipment::PROVIDER_SHIPROCKET
+            ? $this->shiprocketShipmentService
+            : $this->delhiveryShipmentService;
     }
 }

@@ -25,6 +25,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('delhivery:sync-active-shipments')
             ->everyThirtyMinutes()
             ->withoutOverlapping();
+
+        if (config('shiprocket.enabled') || config('shiprocket.fallback_enabled')) {
+            $schedule->command('shiprocket:sync-active-shipments')
+                ->everyThirtyMinutes()
+                ->withoutOverlapping();
+        }
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(HandleCors::class);
