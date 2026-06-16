@@ -8,6 +8,8 @@ use App\Http\Requests\CartUpdateQuantityRequest;
 use App\Http\Resources\CartResource;
 use App\Models\Cart;
 use App\Models\ProductSize;
+use App\Models\WebSetting;
+use App\Services\CheckoutService;
 
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +18,10 @@ use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
+    public function __construct(private readonly CheckoutService $checkoutService)
+    {
+    }
+
     /**
      * Display the user's cart.
      *
@@ -29,15 +35,23 @@ class CartController extends Controller
             ->with(['product', 'product.category', 'product.images', 'productSize.size'])
             ->get();
 
-        $total = $cartItems->sum(function ($item) {
+        $subtotal = $cartItems->sum(function ($item) {
             return $item->quantity * (float) ($item->size_price ?? 0);
         });
+        $offerEnabled = WebSetting::current()->buy_two_get_one_free_enabled;
+        $buyTwoGetOneDiscountAmount = $offerEnabled
+            ? $this->checkoutService->calculateBuyTwoGetOneDiscount($cartItems)
+            : 0.0;
+        $total = round(max($subtotal - $buyTwoGetOneDiscountAmount, 0), 2);
 
         return response()->json([
             'status' => true,
             'data' => [
                 'items' => CartResource::collection($cartItems),
-                'total' => round($total, 2),
+                'subtotal' => round($subtotal, 2),
+                'buy_two_get_one_free_enabled' => $offerEnabled,
+                'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,
+                'total' => $total,
                 'item_count' => $cartItems->sum('quantity')
             ],
             'message' => 'Cart retrieved successfully'

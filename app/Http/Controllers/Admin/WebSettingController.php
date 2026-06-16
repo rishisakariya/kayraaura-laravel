@@ -38,6 +38,7 @@ class WebSettingController extends Controller
             'address' => ['required', 'string', 'max:5000'],
             'mobile_number' => ['required', 'string', 'max:20'],
             'logo' => ['nullable', 'string', 'max:2048', 'not_regex:/\.\./'],
+            'buy_two_get_one_free_enabled' => ['sometimes', 'boolean'],
         ]);
 
         if (!empty($payload['logo'])) {

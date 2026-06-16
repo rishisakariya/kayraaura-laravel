@@ -16,6 +16,7 @@ class WebSettingSeeder extends Seeder
                 'address' => 'Kayraaura',
                 'mobile_number' => '+919999999999',
                 'logo' => null,
+                'buy_two_get_one_free_enabled' => false,
             ]
         );
     }

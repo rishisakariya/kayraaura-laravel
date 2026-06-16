@@ -9,6 +9,7 @@ use App\Models\ProductSize;
 use App\Models\RazorpayPaymentLog;
 use App\Models\User;
 use App\Models\UserAddress;
+use App\Models\WebSetting;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -29,7 +30,12 @@ class CheckoutService
             ? $this->cartItems($user, $lockProductSizes)
             : $this->buyNowItems($payload, $lockProductSizes);
 
-        $subtotal = round($items->sum('total'), 2);
+        $itemsSubtotal = round($items->sum('total'), 2);
+        $buyTwoGetOneFreeEnabled = WebSetting::current()->buy_two_get_one_free_enabled;
+        $buyTwoGetOneDiscountAmount = $buyTwoGetOneFreeEnabled
+            ? $this->calculateBuyTwoGetOneDiscount($items)
+            : 0.0;
+        $subtotal = round(max($itemsSubtotal - $buyTwoGetOneDiscountAmount, 0), 2);
         $taxAmount = round($subtotal * 0.18, 2);
         $shippingAmount = $subtotal > 1000 ? 0.0 : 50.0;
         $baseTotal = round($subtotal + $taxAmount + $shippingAmount, 2);
@@ -40,6 +46,9 @@ class CheckoutService
         return [
             'address' => $address,
             'items' => $items,
+            'items_subtotal' => $itemsSubtotal,
+            'buy_two_get_one_free_enabled' => $buyTwoGetOneFreeEnabled,
+            'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
             'shipping_amount' => $shippingAmount,
@@ -62,6 +71,7 @@ class CheckoutService
             'tax_amount' => $checkout['tax_amount'],
             'shipping_amount' => $checkout['shipping_amount'],
             'cod_charge' => $checkout['cod_charge'],
+            'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'] ?? 0,
             'scratch_coupon_code' => $checkout['coupon_code'] ?? null,
             'discount_percent' => $checkout['discount_percent'] ?? null,
             'discount_amount' => $checkout['discount_amount'] ?? 0,
@@ -401,5 +411,29 @@ class CheckoutService
             'price' => $price,
             'total' => round($price * $quantity, 2),
         ];
+    }
+
+    public function calculateBuyTwoGetOneDiscount(Collection $items): float
+    {
+        $unitPrices = [];
+
+        foreach ($items as $item) {
+            $price = round((float) (data_get($item, 'price') ?? data_get($item, 'size_price') ?? 0), 2);
+            $quantity = (int) data_get($item, 'quantity', 0);
+
+            for ($i = 0; $i < $quantity; $i++) {
+                $unitPrices[] = $price;
+            }
+        }
+
+        $freeItemCount = intdiv(count($unitPrices), 3);
+
+        if ($freeItemCount < 1) {
+            return 0.0;
+        }
+
+        sort($unitPrices, SORT_NUMERIC);
+
+        return round(array_sum(array_slice($unitPrices, 0, $freeItemCount)), 2);
     }
 }

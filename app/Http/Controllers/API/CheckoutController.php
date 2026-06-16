@@ -45,6 +45,9 @@ class CheckoutController extends Controller
                 'status' => true,
                 'data' => [
                     'items' => $items->values(),
+                    'items_subtotal' => $checkout['items_subtotal'],
+                    'buy_two_get_one_free_enabled' => $checkout['buy_two_get_one_free_enabled'],
+                    'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'],
                     'subtotal' => $checkout['subtotal'],
                     'tax_amount' => $checkout['tax_amount'],
                     'shipping_amount' => $checkout['shipping_amount'],

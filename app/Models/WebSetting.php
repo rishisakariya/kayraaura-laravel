@@ -16,6 +16,11 @@ class WebSetting extends Model
         'address',
         'mobile_number',
         'logo',
+        'buy_two_get_one_free_enabled',
+    ];
+
+    protected $casts = [
+        'buy_two_get_one_free_enabled' => 'boolean',
     ];
 
     public static function current(): self
@@ -27,6 +32,7 @@ class WebSetting extends Model
                 'address' => 'Kayraaura',
                 'mobile_number' => '+919999999999',
                 'logo' => null,
+                'buy_two_get_one_free_enabled' => false,
             ]
         );
     }

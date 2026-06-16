@@ -16,6 +16,7 @@ class WebSettingResource extends JsonResource
             'mobile_number' => $this->mobile_number,
             'logo' => $this->logo,
             'logo_url' => $this->logo_url,
+            'buy_two_get_one_free_enabled' => (bool) $this->buy_two_get_one_free_enabled,
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];
