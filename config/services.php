@@ -43,6 +43,28 @@ return [
 
     'sms' => [
         'driver' => env('SMS_DRIVER', 'log'),
+        'whatsapp' => [
+            'base_url' => env('WHATSAPP_CLOUD_BASE_URL', 'https://graph.facebook.com'),
+            'version' => env('WHATSAPP_CLOUD_API_VERSION', 'v25.0'),
+            'access_token' => env('WHATSAPP_CLOUD_ACCESS_TOKEN'),
+            'phone_number_id' => env('WHATSAPP_CLOUD_PHONE_NUMBER_ID'),
+            'language' => env('WHATSAPP_CLOUD_TEMPLATE_LANGUAGE', 'en_US'),
+            'country_code' => env('WHATSAPP_CLOUD_COUNTRY_CODE', '91'),
+            'body_parameters' => array_values(array_filter(array_map(
+                'trim',
+                explode(',', env('WHATSAPP_CLOUD_BODY_PARAMETERS', 'otp'))
+            ))),
+            'button' => [
+                'enabled' => env('WHATSAPP_CLOUD_OTP_BUTTON_ENABLED', true),
+                'sub_type' => env('WHATSAPP_CLOUD_OTP_BUTTON_SUB_TYPE', 'url'),
+                'index' => env('WHATSAPP_CLOUD_OTP_BUTTON_INDEX', '0'),
+            ],
+            'templates' => [
+                'default' => env('WHATSAPP_CLOUD_DEFAULT_TEMPLATE'),
+                'forgot_password' => env('WHATSAPP_CLOUD_FORGOT_PASSWORD_TEMPLATE'),
+                'cod_order' => env('WHATSAPP_CLOUD_COD_ORDER_TEMPLATE'),
+            ],
+        ],
         'msg91' => [
             'endpoint' => env('MSG91_ENDPOINT', 'https://api.msg91.com/api/v5/flow/'),
             'auth_key' => env('MSG91_AUTH_KEY'),

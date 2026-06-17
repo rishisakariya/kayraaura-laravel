@@ -24,6 +24,10 @@ class BannerStoreRequest extends FormRequest
         return [
             'edit_value' => 'nullable|integer|min:0',
             'image' => [$isCreateRequest ? 'required' : 'sometimes', 'string', 'max:2048', 'not_regex:/\.\./'],
+            'banner_title' => 'nullable|string|max:255',
+            'banner_description' => 'nullable|string',
+            'video_title' => 'nullable|string|max:255',
+            'video_description' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
         ];
     }

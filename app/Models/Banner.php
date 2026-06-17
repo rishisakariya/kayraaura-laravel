@@ -16,6 +16,10 @@ class Banner extends Model
 
     protected $fillable = [
         'image',
+        'banner_title',
+        'banner_description',
+        'video_title',
+        'video_description',
         'sort_order',
     ];
 

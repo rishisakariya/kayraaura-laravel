@@ -55,6 +55,10 @@ class BannerController extends Controller
 
         $banner = Banner::create([
             'image' => $this->normalizePublicStorageUrl($request->input('image')),
+            'banner_title' => $request->input('banner_title'),
+            'banner_description' => $request->input('banner_description'),
+            'video_title' => $request->input('video_title'),
+            'video_description' => $request->input('video_description'),
             'sort_order' => $request->input('sort_order', 0),
         ]);
 
@@ -134,6 +138,13 @@ class BannerController extends Controller
         }
 
         $banner->sort_order = $request->input('sort_order', $banner->sort_order);
+
+        foreach (['banner_title', 'banner_description', 'video_title', 'video_description'] as $field) {
+            if ($request->has($field)) {
+                $banner->{$field} = $request->input($field);
+            }
+        }
+
         $banner->save();
 
         DB::commit();
