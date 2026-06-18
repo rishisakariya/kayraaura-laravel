@@ -2,11 +2,12 @@
 
 namespace App\Jobs;
 
-use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\Shipping\ShippingProviderResolver;
 use App\Services\Shiprocket\ShiprocketShipmentService;
+use DomainException;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -33,32 +34,42 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
     }
 
     public function handle(
-        DelhiveryShipmentService $shipmentService,
-        ShiprocketShipmentService $shiprocketService
+        DelhiveryShipmentService $delhiveryService,
+        ShiprocketShipmentService $shiprocketService,
+        ShippingProviderResolver $providerResolver
     ): void
     {
         $order = Order::findOrFail($this->orderId);
+        $provider = $providerResolver->activeProvider();
 
-        try {
-            $shipmentService->createShipment($order);
-            return;
-        } catch (\Throwable $e) {
-            if (!config('shiprocket.fallback_enabled') || !$shiprocketService->isConfigured()) {
-                throw $e;
+        if ($provider === OrderShipment::PROVIDER_SHIPROCKET) {
+            if (!$shiprocketService->isConfigured()) {
+                throw new DomainException('Shiprocket is enabled but credentials are not configured.');
             }
 
             $shiprocketService->createShipment($order);
+
+            return;
         }
+
+        if (!$delhiveryService->isConfigured()) {
+            throw new DomainException('Delhivery is enabled but API token is not configured.');
+        }
+
+        $delhiveryService->createShipment($order);
     }
 
     public function failed(Throwable $exception): void
     {
         $shipment = OrderShipment::where('order_id', $this->orderId)->first();
 
-        $provider = $shipment?->provider ?? OrderShipment::PROVIDER_DELHIVERY;
-        $pickupLocation = $provider === OrderShipment::PROVIDER_SHIPROCKET
-            ? (string) config('shiprocket.pickup_location')
-            : DelhiverySetting::current()->pickup_location;
+        try {
+            $provider = $shipment?->provider ?? app(ShippingProviderResolver::class)->activeProvider();
+            $pickupLocation = app(ShippingProviderResolver::class)->pickupLocation();
+        } catch (Throwable) {
+            $provider = $shipment?->provider ?? OrderShipment::PROVIDER_DELHIVERY;
+            $pickupLocation = $shipment?->pickup_location;
+        }
 
         OrderShipment::updateOrCreate(
             ['order_id' => $this->orderId],

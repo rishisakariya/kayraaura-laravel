@@ -22,11 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('delhivery:sync-active-shipments')
-            ->everyThirtyMinutes()
-            ->withoutOverlapping();
+        if (config('delhivery.enabled')) {
+            $schedule->command('delhivery:sync-active-shipments')
+                ->everyThirtyMinutes()
+                ->withoutOverlapping();
+        }
 
-        if (config('shiprocket.enabled') || config('shiprocket.fallback_enabled')) {
+        if (config('shiprocket.enabled')) {
             $schedule->command('shiprocket:sync-active-shipments')
                 ->everyThirtyMinutes()
                 ->withoutOverlapping();

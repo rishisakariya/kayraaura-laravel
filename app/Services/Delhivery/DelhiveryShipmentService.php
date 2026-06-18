@@ -20,6 +20,15 @@ class DelhiveryShipmentService
     {
     }
 
+    public function isConfigured(): bool
+    {
+        if (config('delhivery.mock')) {
+            return true;
+        }
+
+        return filled(config('delhivery.token'));
+    }
+
     public function createShipment(Order $order): OrderShipment
     {
         $shipment = null;

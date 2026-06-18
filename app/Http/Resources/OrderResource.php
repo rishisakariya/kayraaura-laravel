@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\OrderShipment;
+use App\Services\Shipping\ShippingProviderResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -59,7 +60,7 @@ class OrderResource extends JsonResource
         $shipment = $this->relationLoaded('shipment') ? $this->shipment : null;
 
         $payload = [
-            'provider' => OrderShipment::PROVIDER_DELHIVERY,
+            'provider' => $shipment?->provider ?? app(ShippingProviderResolver::class)->activeProvider(),
             'waybill' => $shipment?->waybill,
             'courier_tracking_url' => $shipment?->courier_tracking_url,
             'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,

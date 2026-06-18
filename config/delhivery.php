@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'enabled' => (bool) env('DELHIVERY_ENABLED', true),
     'env' => env('DELHIVERY_ENV', 'staging'),
     'mock' => (bool) env('DELHIVERY_MOCK', false),
     'token' => env('DELHIVERY_TOKEN'),
