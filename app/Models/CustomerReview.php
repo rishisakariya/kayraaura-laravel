@@ -11,18 +11,22 @@ class CustomerReview extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'product_id',
-        'customer_name',
-        'customer_email',
-        'customer_phone',
         'rating',
-        'title',
         'review',
+        'on_web_show',
     ];
 
     protected $casts = [
         'rating' => 'integer',
+        'on_web_show' => 'boolean',
     ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function product(): BelongsTo
     {

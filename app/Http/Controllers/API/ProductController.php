@@ -110,7 +110,8 @@ class ProductController extends Controller
      */
     public function show(string $slug): JsonResponse
     {
-        $product = Product::with(['category', 'images', 'primaryImage', 'sizes.size'])
+        $product = Product::with(['category', 'images', 'primaryImage', 'sizes.size', 'webReviews.user'])
+            ->withCount('reviews')
             ->where('slug', $slug)
             ->where('is_active', true)
             ->first();

@@ -37,6 +37,8 @@ class ProductResource extends JsonResource
             'image' => ProductImageResource::collection($this->whenLoaded('images')),
             // 'primary_image' => ProductImageResource::collection($this->whenLoaded('primaryImage')),
             'sizes' => ProductSizeResource::collection($this->whenLoaded('sizes')),
+            'reviews' => ProductReviewResource::collection($this->whenLoaded('webReviews')),
+            'reviews_count' => $this->when(isset($this->reviews_count), $this->reviews_count),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];

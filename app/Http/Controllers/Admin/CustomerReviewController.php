@@ -15,14 +15,14 @@ class CustomerReviewController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $reviews = CustomerReview::with('product')
+        $reviews = CustomerReview::with(['product', 'user'])
             ->when($request->input('search'), function ($query, $search) {
                 $query->where(function ($query) use ($search) {
-                    $query->where('customer_name', 'like', "%{$search}%")
-                        ->orWhere('customer_email', 'like', "%{$search}%")
-                        ->orWhere('customer_phone', 'like', "%{$search}%")
-                        ->orWhere('title', 'like', "%{$search}%")
-                        ->orWhere('review', 'like', "%{$search}%");
+                    $query->where('review', 'like', "%{$search}%")
+                        ->orWhereHas('user', function ($query) use ($search) {
+                            $query->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                        });
                 });
             })
             ->when($request->input('product_id'), function ($query, $productId) {
@@ -30,6 +30,9 @@ class CustomerReviewController extends Controller
             })
             ->when($request->input('rating'), function ($query, $rating) {
                 $query->where('rating', $rating);
+            })
+            ->when($request->has('on_web_show'), function ($query) use ($request) {
+                $query->where('on_web_show', filter_var($request->input('on_web_show'), FILTER_VALIDATE_BOOLEAN));
             })
             ->orderBy('created_at', 'desc')
             ->paginate($request->input('per_page', 15));
@@ -43,6 +46,24 @@ class CustomerReviewController extends Controller
                 'per_page' => $reviews->perPage(),
                 'total' => $reviews->total(),
             ],
+        ]);
+    }
+
+    /**
+     * Update review visibility on the product detail page.
+     */
+    public function update(Request $request, CustomerReview $customerReview): JsonResponse
+    {
+        $validated = $request->validate([
+            'on_web_show' => ['required', 'boolean'],
+        ]);
+
+        $customerReview->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Review updated successfully',
+            'data' => new CustomerReviewResource($customerReview->load(['product', 'user'])),
         ]);
     }
 }

@@ -57,9 +57,6 @@ Route::get('/web-settings', [WebSettingController::class, 'show']);
 // Scratch Card Routes (Public status)
 Route::get('/scratch-card/status', [ScratchCardController::class, 'status']);
 
-// Frontend Customer Review Routes (Public)
-Route::post('/customer-reviews', [CustomerReviewController::class, 'store']);
-
 // Frontend Product Routes (Public)
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/featured', [ProductController::class, 'featured']);
@@ -78,8 +75,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cart/clear', [CartController::class, 'clear']);
 });
 
-// Frontend Wishlist Routes (Protected)
+// Frontend Wishlist & Review Routes (Protected)
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/customer-reviews', [CustomerReviewController::class, 'store']);
     Route::get('/wishlist', [WishlistController::class, 'index']);
     Route::post('/wishlist', [WishlistController::class, 'store']);
     Route::delete('/wishlist/clear', [WishlistController::class, 'clear']);

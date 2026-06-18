@@ -14,6 +14,14 @@ class CustomerReviewResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'user_id' => $this->user_id,
+            'user' => $this->whenLoaded('user', function () {
+                return [
+                    'id' => $this->user->id,
+                    'name' => $this->user->name,
+                    'email' => $this->user->email,
+                ];
+            }),
             'product' => $this->whenLoaded('product', function () {
                 return [
                     'id' => $this->product->id,
@@ -22,12 +30,9 @@ class CustomerReviewResource extends JsonResource
                 ];
             }),
             'product_id' => $this->product_id,
-            'customer_name' => $this->customer_name,
-            'customer_email' => $this->customer_email,
-            'customer_phone' => $this->customer_phone,
             'rating' => $this->rating,
-            'title' => $this->title,
             'review' => $this->review,
+            'on_web_show' => $this->on_web_show,
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];

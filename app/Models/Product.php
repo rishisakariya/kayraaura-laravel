@@ -64,6 +64,18 @@ class Product extends Model
         return $this->hasMany(Wishlist::class);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(CustomerReview::class);
+    }
+
+    public function webReviews(): HasMany
+    {
+        return $this->hasMany(CustomerReview::class)
+            ->where('on_web_show', true)
+            ->orderByDesc('created_at');
+    }
+
     protected static function boot()
     {
         parent::boot();

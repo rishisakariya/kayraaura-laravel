@@ -48,6 +48,7 @@ Route::prefix('cpanel')->group(function () {
 
         // Customer Reviews Management
         Route::get('customer-reviews', [CustomerReviewController::class, 'index']);
+        Route::put('customer-reviews/{customerReview}', [CustomerReviewController::class, 'update']);
 
         // Delhivery Settings
         Route::get('delhivery-settings', [DelhiverySettingController::class, 'show']);

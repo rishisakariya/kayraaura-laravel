@@ -7,6 +7,8 @@ use App\Http\Resources\CustomerReviewResource;
 use App\Models\CustomerReview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class CustomerReviewController extends Controller
 {
@@ -16,21 +18,27 @@ class CustomerReviewController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'product_id' => ['nullable', 'integer', 'exists:products,id'],
-            'customer_name' => ['required', 'string', 'max:255'],
-            'customer_email' => ['required', 'email', 'max:255'],
-            'customer_phone' => ['nullable', 'string', 'max:20'],
+            'product_id' => [
+                'required',
+                'integer',
+                'exists:products,id',
+                Rule::unique('customer_reviews')->where(fn ($query) => $query->where('user_id', Auth::id())),
+            ],
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
-            'title' => ['nullable', 'string', 'max:255'],
-            'review' => ['required', 'string', 'max:5000'],
+            'review' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        $review = CustomerReview::create($validated);
+        $review = CustomerReview::create([
+            'user_id' => Auth::id(),
+            'product_id' => $validated['product_id'],
+            'rating' => $validated['rating'],
+            'review' => $validated['review'] ?? null,
+        ]);
 
         return response()->json([
             'status' => true,
             'message' => 'Review submitted successfully',
-            'data' => new CustomerReviewResource($review->load('product')),
+            'data' => new CustomerReviewResource($review->load(['product', 'user'])),
         ], 201);
     }
 }
