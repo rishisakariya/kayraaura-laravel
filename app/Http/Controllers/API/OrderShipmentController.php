@@ -7,6 +7,7 @@ use App\Jobs\SyncDelhiveryShipmentStatusJob;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\Shipping\ShippingProviderResolver;
 use App\Services\Shiprocket\ShiprocketShipmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,8 @@ class OrderShipmentController extends Controller
 {
     public function __construct(
         private readonly DelhiveryShipmentService $delhiveryShipmentService,
-        private readonly ShiprocketShipmentService $shiprocketShipmentService
+        private readonly ShiprocketShipmentService $shiprocketShipmentService,
+        private readonly ShippingProviderResolver $shippingProviderResolver
     )
     {
     }
@@ -76,7 +78,9 @@ class OrderShipmentController extends Controller
             ]);
         }
 
-        $cacheMinutes = (int) config('delhivery.sync_cache_minutes', 15);
+        $cacheMinutes = $shipment->provider === OrderShipment::PROVIDER_SHIPROCKET
+            ? (int) config('shiprocket.sync_cache_minutes', 15)
+            : (int) config('delhivery.sync_cache_minutes', 15);
 
         if (
             $shipment->waybill
@@ -96,7 +100,7 @@ class OrderShipmentController extends Controller
     private function notCreatedPayload(): array
     {
         return [
-            'provider' => OrderShipment::PROVIDER_DELHIVERY,
+            'provider' => $this->shippingProviderResolver->activeProvider(),
             'waybill' => null,
             'shipment_status' => OrderShipment::STATUS_NOT_CREATED,
             'raw_status' => null,
@@ -110,13 +114,7 @@ class OrderShipmentController extends Controller
 
     private function trackingResponse(OrderShipment $shipment): array
     {
-        $service = $this->shipmentServiceForProvider($shipment);
-        $data = $service->trackingData($shipment);
-
-        // Hide Shiprocket from frontend customers; keep provider as delhivery.
-        $data['provider'] = OrderShipment::PROVIDER_DELHIVERY;
-
-        return $data;
+        return $this->shipmentServiceForProvider($shipment)->trackingData($shipment);
     }
 
     private function shipmentServiceForProvider(OrderShipment $shipment): DelhiveryShipmentService|ShiprocketShipmentService

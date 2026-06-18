@@ -438,6 +438,8 @@ class ShiprocketShipmentService
         })->values()->all();
 
         $billingAddress = $order->billing_address ?? $address;
+        $billingName = $this->splitCustomerName($billingAddress['name'] ?? $order->user?->name ?? 'Customer');
+        $shippingName = $this->splitCustomerName($address['name'] ?? $order->user?->name ?? 'Customer');
 
         $channelId = $this->maybeInt(config('shiprocket.channel_id'));
 
@@ -447,7 +449,8 @@ class ShiprocketShipmentService
             'pickup_location' => (string) $pickupLocation,
             'comment' => null,
 
-            'billing_customer_name' => (string) ($billingAddress['name'] ?? $order->user?->name ?? 'Customer'),
+            'billing_customer_name' => $billingName['first'],
+            'billing_last_name' => $billingName['last'],
             'billing_address' => $this->formatAddress($billingAddress),
             'billing_city' => $billingAddress['city'] ?? 'City',
             'billing_pincode' => (string) ($billingAddress['postal_code'] ?? $billingAddress['pincode'] ?? '000000'),
@@ -457,7 +460,8 @@ class ShiprocketShipmentService
             'billing_phone' => (string) ($billingAddress['phone'] ?? $address['phone'] ?? ''),
 
             'shipping_is_billing' => true,
-            'shipping_customer_name' => (string) ($address['name'] ?? $order->user?->name ?? 'Customer'),
+            'shipping_customer_name' => $shippingName['first'],
+            'shipping_last_name' => $shippingName['last'],
             'shipping_address' => $this->formatAddress($address),
             'shipping_city' => (string) ($address['city'] ?? 'City'),
             'shipping_pincode' => (string) ($address['postal_code'] ?? $address['pincode'] ?? '000000'),
@@ -584,6 +588,22 @@ class ShiprocketShipmentService
             $address['address_line_2'] ?? null,
             $address['landmark'] ?? null,
         ])->filter()->values()->all());
+    }
+
+    private function splitCustomerName(?string $fullName): array
+    {
+        $fullName = trim((string) $fullName);
+
+        if ($fullName === '') {
+            return ['first' => 'Customer', 'last' => '.'];
+        }
+
+        $parts = preg_split('/\s+/', $fullName, 2);
+
+        return [
+            'first' => $parts[0],
+            'last' => $parts[1] ?? '.',
+        ];
     }
 
     private function formatSellerAddress(array $seller): string

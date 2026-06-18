@@ -7,7 +7,6 @@ return [
     'env' => $environment,
 
     'enabled' => (bool) env('SHIPROCKET_ENABLED', false),
-    'fallback_enabled' => (bool) env('SHIPROCKET_FALLBACK_ENABLED', false),
 
     // When true, no real Shiprocket HTTP calls are made (recommended for local/staging tests).
     'mock' => (bool) env('SHIPROCKET_MOCK', false),

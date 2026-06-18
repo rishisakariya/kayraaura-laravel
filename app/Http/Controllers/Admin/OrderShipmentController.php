@@ -7,10 +7,10 @@ use App\Http\Resources\OrderResource;
 use App\Jobs\CancelDelhiveryShipmentJob;
 use App\Jobs\CreateDelhiveryShipmentJob;
 use App\Jobs\SyncDelhiveryShipmentStatusJob;
-use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\Shipping\ShippingProviderResolver;
 use App\Services\Shiprocket\ShiprocketShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +24,8 @@ class OrderShipmentController extends Controller
 {
     public function __construct(
         private readonly DelhiveryShipmentService $delhiveryShipmentService,
-        private readonly ShiprocketShipmentService $shiprocketShipmentService
+        private readonly ShiprocketShipmentService $shiprocketShipmentService,
+        private readonly ShippingProviderResolver $shippingProviderResolver
     )
     {
     }
@@ -48,12 +49,14 @@ class OrderShipmentController extends Controller
                 $order->forceFill(['status' => 'processing'])->save();
             }
 
+            $provider = $this->shippingProviderResolver->activeProvider();
+
             $shipment = OrderShipment::firstOrCreate(
                 ['order_id' => $order->id],
                 [
-                    'provider' => OrderShipment::PROVIDER_DELHIVERY,
+                    'provider' => $provider,
                     'shipment_status' => OrderShipment::STATUS_NOT_CREATED,
-                    'pickup_location' => DelhiverySetting::current()->pickup_location,
+                    'pickup_location' => $this->shippingProviderResolver->pickupLocation(),
                 ]
             );
 
@@ -227,7 +230,9 @@ class OrderShipmentController extends Controller
         $shipment = $order->shipment;
         $shipmentService = $shipment
             ? $this->shipmentServiceForProvider($shipment)
-            : $this->delhiveryShipmentService;
+            : ($this->shippingProviderResolver->activeProvider() === OrderShipment::PROVIDER_SHIPROCKET
+                ? $this->shiprocketShipmentService
+                : $this->delhiveryShipmentService);
 
         return [
             'data' => [
