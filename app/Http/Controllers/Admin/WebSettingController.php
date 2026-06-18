@@ -38,6 +38,11 @@ class WebSettingController extends Controller
             'address' => ['required', 'string', 'max:5000'],
             'mobile_number' => ['required', 'string', 'max:20'],
             'logo' => ['nullable', 'string', 'max:2048', 'not_regex:/\.\./'],
+            'instagram_url' => ['nullable', 'url', 'max:2048'],
+            'facebook_url' => ['nullable', 'url', 'max:2048'],
+            'youtube_url' => ['nullable', 'url', 'max:2048'],
+            'whatsapp_url' => ['nullable', 'url', 'max:2048'],
+            'linkedin_url' => ['nullable', 'url', 'max:2048'],
             'buy_two_get_one_free_enabled' => ['sometimes', 'boolean'],
         ]);
 

@@ -54,7 +54,10 @@ class BannerController extends Controller
         }
 
         $banner = Banner::create([
-            'image' => $this->normalizePublicStorageUrl($request->input('image')),
+            'image' => $this->normalizeMediaArray($request->input('image', [])),
+            'video' => $request->filled('video')
+                ? $this->normalizePublicStorageUrl($request->input('video'))
+                : null,
             'banner_title' => $request->input('banner_title'),
             'banner_description' => $request->input('banner_description'),
             'video_title' => $request->input('video_title'),
@@ -104,7 +107,8 @@ class BannerController extends Controller
         }
 
         DB::beginTransaction();
-        $this->deleteBannerImageFile($banner->image);
+        $this->deleteRemovedBannerMedia($banner->image ?? [], []);
+        $this->deleteBannerMediaFile($banner->video);
         $banner->delete();
         DB::commit();
 
@@ -114,27 +118,26 @@ class BannerController extends Controller
         ]);
     }
 
-    private function deleteBannerImageFile(string $imagePath): void
-    {
-        $filePath = $this->normalizePublicDiskPath($imagePath);
-
-        if (Storage::disk('public')->exists($filePath)) {
-            Storage::disk('public')->delete($filePath);
-        }
-    }
-
     private function updateBanner(BannerStoreRequest $request, Banner $banner): JsonResponse
     {
         DB::beginTransaction();
 
         if ($request->has('image')) {
-            $newImage = $this->normalizePublicStorageUrl($request->input('image'));
+            $newImages = $this->normalizeMediaArray($request->input('image', []));
+            $this->deleteRemovedBannerMedia($banner->image ?? [], $newImages);
+            $banner->image = $newImages;
+        }
 
-            if ($banner->image && $this->normalizePublicDiskPath($banner->image) !== $this->normalizePublicDiskPath($newImage)) {
-                $this->deleteBannerImageFile($banner->image);
+        if ($request->has('video')) {
+            $newVideo = $request->filled('video')
+                ? $this->normalizePublicStorageUrl($request->input('video'))
+                : null;
+
+            if ($banner->video && (!$newVideo || $this->normalizePublicDiskPath($banner->video) !== $this->normalizePublicDiskPath($newVideo))) {
+                $this->deleteBannerMediaFile($banner->video);
             }
 
-            $banner->image = $newImage;
+            $banner->video = $newVideo;
         }
 
         $banner->sort_order = $request->input('sort_order', $banner->sort_order);
@@ -156,9 +159,45 @@ class BannerController extends Controller
         ]);
     }
 
-    private function normalizePublicDiskPath(string $imagePath): string
+    private function deleteRemovedBannerMedia(array $existingMedia, array $incomingMedia): void
     {
-        $path = parse_url($imagePath, PHP_URL_PATH) ?: $imagePath;
+        $incomingPaths = array_map(
+            fn (string $path) => $this->normalizePublicDiskPath($path),
+            $incomingMedia
+        );
+
+        foreach ($existingMedia as $mediaPath) {
+            $normalizedPath = $this->normalizePublicDiskPath($mediaPath);
+
+            if (!in_array($normalizedPath, $incomingPaths, true)) {
+                $this->deleteBannerMediaFile($mediaPath);
+            }
+        }
+    }
+
+    private function deleteBannerMediaFile(?string $mediaPath): void
+    {
+        if (!$mediaPath) {
+            return;
+        }
+
+        $filePath = $this->normalizePublicDiskPath($mediaPath);
+
+        if (Storage::disk('public')->exists($filePath)) {
+            Storage::disk('public')->delete($filePath);
+        }
+    }
+
+    private function normalizeMediaArray(array $media): array
+    {
+        return array_values(array_unique(array_map(function (string $path) {
+            return $this->normalizePublicStorageUrl($path);
+        }, $media)));
+    }
+
+    private function normalizePublicDiskPath(string $mediaPath): string
+    {
+        $path = parse_url($mediaPath, PHP_URL_PATH) ?: $mediaPath;
         $path = ltrim($path, '/');
 
         if (str_starts_with($path, 'storage/')) {
@@ -168,12 +207,12 @@ class BannerController extends Controller
         return $path;
     }
 
-    private function normalizePublicStorageUrl(string $imagePath): string
+    private function normalizePublicStorageUrl(string $mediaPath): string
     {
-        if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-            return $imagePath;
+        if (filter_var($mediaPath, FILTER_VALIDATE_URL)) {
+            return $mediaPath;
         }
 
-        return Storage::disk('public')->url($this->normalizePublicDiskPath($imagePath));
+        return Storage::disk('public')->url($this->normalizePublicDiskPath($mediaPath));
     }
 }

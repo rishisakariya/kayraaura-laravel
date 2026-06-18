@@ -12,10 +12,12 @@ class Banner extends Model
 
     protected $appends = [
         'image_url',
+        'video_url',
     ];
 
     protected $fillable = [
         'image',
+        'video',
         'banner_title',
         'banner_description',
         'video_title',
@@ -24,17 +26,32 @@ class Banner extends Model
     ];
 
     protected $casts = [
+        'image' => 'array',
         'sort_order' => 'integer',
     ];
 
-    public function getImageUrlAttribute(): ?string
+    public function getImageUrlAttribute(): array
     {
-        if (!$this->image) {
+        return collect($this->image ?? [])
+            ->map(fn (string $path) => $this->resolveMediaUrl($path))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    public function getVideoUrlAttribute(): ?string
+    {
+        return $this->resolveMediaUrl($this->video);
+    }
+
+    private function resolveMediaUrl(?string $path): ?string
+    {
+        if (!$path || $path === '') {
             return null;
         }
 
-        return filter_var($this->image, FILTER_VALIDATE_URL)
-            ? $this->image
-            : Storage::disk('public')->url($this->image);
+        return filter_var($path, FILTER_VALIDATE_URL)
+            ? $path
+            : Storage::disk('public')->url($path);
     }
 }

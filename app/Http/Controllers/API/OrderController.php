@@ -12,16 +12,21 @@ use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ProductSize;
 use App\Models\UserAddress;
+use App\Models\WebSetting;
 use App\Services\CheckoutService;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use App\Services\OtpService;
 use App\Services\ScratchCardService;
 use App\Services\Shiprocket\ShiprocketShipmentService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OrderController extends Controller
 {
@@ -205,6 +210,57 @@ class OrderController extends Controller
     }
 
     /**
+     * Return a signed invoice download URL for a successful order.
+     */
+    public function invoice(string $id): JsonResponse
+    {
+        $order = $this->findCustomerOrderForInvoice($id);
+
+        if ($order instanceof JsonResponse) {
+            return $order;
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'invoice_download_url' => $this->invoiceDownloadUrl($order),
+            ],
+            'message' => 'Invoice download URL generated successfully',
+        ]);
+    }
+
+    /**
+     * Download the invoice PDF file.
+     */
+    public function downloadInvoice(string $id): BinaryFileResponse|JsonResponse
+    {
+        $order = Order::with(['user', 'orderItems.productSize'])->find($id);
+
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found.',
+            ], 404);
+        }
+
+        if (!$this->canDownloadInvoice($order)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Invoice is available only after the order is placed successfully.',
+            ], 409);
+        }
+
+        $path = $this->generateInvoiceFile($order);
+        $fileName = $this->invoiceFileName($order);
+
+        return response()->download(
+            Storage::disk('public')->path($path),
+            $fileName,
+            ['Content-Type' => 'application/pdf']
+        );
+    }
+
+    /**
      * Cancel the specified order.
      */
     public function cancel(OrderCancelRequest $request, string $id): JsonResponse
@@ -383,5 +439,70 @@ class OrderController extends Controller
                 $productSize->increment('quantity', $item->quantity);
             }
         }
+    }
+
+    private function findCustomerOrderForInvoice(string $id): Order|JsonResponse
+    {
+        $order = Order::where('user_id', Auth::id())->find($id);
+
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found for the authenticated customer.',
+            ], 404);
+        }
+
+        if (!$this->canDownloadInvoice($order)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Invoice is available only after the order is placed successfully.',
+            ], 409);
+        }
+
+        return $order;
+    }
+
+    private function invoiceDownloadUrl(Order $order): string
+    {
+        return URL::temporarySignedRoute(
+            'orders.invoice.download',
+            now()->addMinutes(30),
+            ['id' => $order->id]
+        );
+    }
+
+    private function invoiceFileName(Order $order): string
+    {
+        return preg_replace('/[^A-Za-z0-9_\-]/', '-', $order->order_number) . '-invoice.pdf';
+    }
+
+    private function generateInvoiceFile(Order $order): string
+    {
+        $path = 'invoices/' . $order->id . '/' . $this->invoiceFileName($order);
+
+        if (!Storage::disk('public')->exists($path)) {
+            $pdf = Pdf::loadView('orders.invoice', [
+                'order' => $order,
+                'webSetting' => WebSetting::current(),
+                'invoiceNumber' => 'INV-' . $order->order_number,
+            ])->setPaper('a4');
+
+            Storage::disk('public')->put($path, $pdf->output());
+        }
+
+        return $path;
+    }
+
+    private function canDownloadInvoice(Order $order): bool
+    {
+        if (in_array($order->status, ['cancelled'], true) || $order->payment_status === 'failed') {
+            return false;
+        }
+
+        if ($order->payment_method === 'cod') {
+            return (bool) $order->cod_verified_at;
+        }
+
+        return in_array($order->payment_status, ['paid', 'refunded'], true);
     }
 }

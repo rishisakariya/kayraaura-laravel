@@ -23,7 +23,13 @@ class BannerStoreRequest extends FormRequest
 
         return [
             'edit_value' => 'nullable|integer|min:0',
-            'image' => [$isCreateRequest ? 'required' : 'sometimes', 'string', 'max:2048', 'not_regex:/\.\./'],
+            'image' => array_filter([
+                $isCreateRequest ? 'required' : 'sometimes',
+                'array',
+                $isCreateRequest ? 'min:1' : null,
+            ]),
+            'image.*' => ['required', 'string', 'max:2048', 'not_regex:/\.\./'],
+            'video' => 'nullable|string|max:2048|not_regex:/\.\./',
             'banner_title' => 'nullable|string|max:255',
             'banner_description' => 'nullable|string',
             'video_title' => 'nullable|string|max:255',
@@ -39,8 +45,10 @@ class BannerStoreRequest extends FormRequest
     {
         return [
             'edit_value.integer' => 'Edit value must be a valid banner ID',
-            'image.required' => 'Banner image is required',
-            'image.not_regex' => 'Banner image must be a valid media path',
+            'image.required' => 'At least one banner media file is required',
+            'image.min' => 'At least one banner media file is required',
+            'image.*.not_regex' => 'Banner image must be a valid file path',
+            'video.not_regex' => 'Banner video must be a valid file path',
         ];
     }
 }

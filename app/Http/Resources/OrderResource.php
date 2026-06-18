@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Models\OrderShipment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\URL;
 
 class OrderResource extends JsonResource
 {
@@ -47,11 +48,33 @@ class OrderResource extends JsonResource
             'shipping_address' => $this->shipping_address,
             'billing_address' => $this->billing_address,
             'notes' => $this->notes,
+            'invoice_download_url' => $this->invoiceDownloadUrl(),
             'order_items' => OrderItemResource::collection($this->whenLoaded('orderItems')),
             'shipment' => $this->shipmentPayload($request),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];
+    }
+
+    private function invoiceDownloadUrl(): ?string
+    {
+        if (in_array($this->status, ['cancelled'], true) || $this->payment_status === 'failed') {
+            return null;
+        }
+
+        if ($this->payment_method === 'cod' && !$this->cod_verified_at) {
+            return null;
+        }
+
+        if ($this->payment_method !== 'cod' && !in_array($this->payment_status, ['paid', 'refunded'], true)) {
+            return null;
+        }
+
+        return URL::temporarySignedRoute(
+            'orders.invoice.download',
+            now()->addMinutes(30),
+            ['id' => $this->id]
+        );
     }
 
     private function shipmentPayload(Request $request): array
