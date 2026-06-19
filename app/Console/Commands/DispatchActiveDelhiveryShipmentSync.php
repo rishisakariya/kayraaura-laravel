@@ -16,7 +16,7 @@ class DispatchActiveDelhiveryShipmentSync extends Command
     {
         $count = 0;
 
-        OrderShipment::activeForSync()
+        OrderShipment::needsDelhiverySync()
             ->select('id')
             ->chunkById(100, function ($shipments) use (&$count) {
                 foreach ($shipments as $shipment) {

@@ -270,7 +270,7 @@ class OrderController extends Controller
         if (!$order->canBeCancelled()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Only pending orders can be cancelled',
+                'message' => 'Order cannot be cancelled after shipment pickup or while in transit',
             ], 400);
         }
 
@@ -300,7 +300,7 @@ class OrderController extends Controller
 
             // Add cancellation reason if provided
             if ($request->input('reason')) {
-                $order->notes = ($order->notes ? $order->notes . "\n\n" : '') . 
+                $order->notes = ($order->notes ? $order->notes . "\n\n" : '') .
                                "Cancellation reason: " . $request->input('reason');
             }
 
@@ -338,7 +338,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Return a delivered order and refund the online payment.
+     * Return a delivered order and schedule reverse pickup.
      */
     public function returnOrder(OrderReturnRequest $request, string $id): JsonResponse
     {
@@ -353,21 +353,21 @@ class OrderController extends Controller
             ], 400);
         }
 
-        if (!$order->shipment?->delivered_at) {
+        $deliveredAt = $order->delivered_at ?? $order->shipment?->delivered_at;
+
+        if (!$deliveredAt) {
             return response()->json([
                 'status' => false,
                 'message' => 'Delivery date is not available for this order',
             ], 400);
         }
 
-        if (now()->gt($order->shipment->delivered_at->copy()->addDays(7))) {
+        if (now()->gt($deliveredAt->copy()->addDays(7))) {
             return response()->json([
                 'status' => false,
                 'message' => 'Return window expired. Returns are allowed within 7 days from delivery',
             ], 400);
         }
-
-        $transactionStarted = false;
 
         try {
             $service = $order->shipment?->provider === OrderShipment::PROVIDER_SHIPROCKET
@@ -375,52 +375,21 @@ class OrderController extends Controller
                 : $this->shipmentService;
 
             $service->createReversePickup($order);
-
-            DB::beginTransaction();
-            $transactionStarted = true;
-
-            if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
-                $this->checkoutService->refundRazorpayPayment($order, 'order_returned');
-                $order->payment_status = 'refunded';
-            }
-
-            $this->restoreStockForOrder($order);
-
-            $order->markReturned();
-
-            if ($request->input('reason')) {
-                $order->notes = ($order->notes ? $order->notes . "\n\n" : '') .
-                               "Return reason: " . $request->input('reason');
-            }
-
-            $order->save();
-
-            DB::commit();
-            $transactionStarted = false;
+            $order->refresh()->markReturnRequested($request->input('reason'));
 
             return response()->json([
                 'status' => true,
                 'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
-                'message' => $order->payment_status === 'refunded'
-                    ? 'Return pickup created and payment refunded successfully'
-                    : 'Return pickup created successfully',
+                'message' => 'Return pickup scheduled successfully. Refund will be processed after the product is received.',
             ]);
 
         } catch (DomainException $e) {
-            if ($transactionStarted) {
-                DB::rollBack();
-            }
-
             return response()->json([
                 'status' => false,
                 'message' => $e->getMessage(),
             ], 400);
 
         } catch (\Exception $e) {
-            if ($transactionStarted) {
-                DB::rollBack();
-            }
-
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to return order. Please try again.',
@@ -431,14 +400,7 @@ class OrderController extends Controller
 
     private function restoreStockForOrder(Order $order): void
     {
-        foreach ($order->orderItems as $item) {
-            $product = $item->product;
-            $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
-
-            if ($product && $productSize && $product->track_stock) {
-                $productSize->increment('quantity', $item->quantity);
-            }
-        }
+        $this->checkoutService->restoreStockForOrder($order);
     }
 
     private function findCustomerOrderForInvoice(string $id): Order|JsonResponse

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OrderShipment extends Model
 {
@@ -49,6 +50,15 @@ class OrderShipment extends Model
         self::STATUS_RTO,
         self::STATUS_FAILED,
     ];
+
+    public const CANCELLABLE_STATUSES = [
+        self::STATUS_NOT_CREATED,
+        self::STATUS_MANIFESTED,
+        self::STATUS_PICKUP_PENDING,
+        self::STATUS_PICKUP_SCHEDULED,
+    ];
+
+    public ?string $auditSource = null;
 
     protected $fillable = [
         'order_id',
@@ -108,11 +118,46 @@ class OrderShipment extends Model
         return $this->belongsTo(Order::class);
     }
 
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(ShipmentStatusHistory::class, 'shipment_id');
+    }
+
+    public function withAuditSource(?string $source): self
+    {
+        $this->auditSource = $source;
+
+        return $this;
+    }
+
     public function scopeActiveForSync(Builder $query): Builder
     {
         return $query->where('provider', self::PROVIDER_DELHIVERY)
             ->whereNotNull('waybill')
             ->whereIn('shipment_status', self::ACTIVE_STATUSES);
+    }
+
+    public function scopeNeedsDelhiverySync(Builder $query): Builder
+    {
+        return $query->where('provider', self::PROVIDER_DELHIVERY)
+            ->where(function (Builder $query) {
+                $query->where(function (Builder $query) {
+                    $query->whereNotNull('waybill')
+                        ->whereIn('shipment_status', self::ACTIVE_STATUSES);
+                })->orWhere(function (Builder $query) {
+                    $query->whereNotNull('reverse_waybill')
+                        ->where(function (Builder $query) {
+                            $query->whereNull('reverse_status')
+                                ->orWhereIn('reverse_status', self::ACTIVE_STATUSES);
+                        });
+                });
+            });
+    }
+
+    public function reverseIsActive(): bool
+    {
+        return filled($this->reverse_waybill)
+            && (is_null($this->reverse_status) || in_array($this->reverse_status, self::ACTIVE_STATUSES, true));
     }
 
     public function scopeActiveForShiprocketSync(Builder $query): Builder

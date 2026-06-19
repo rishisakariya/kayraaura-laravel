@@ -58,19 +58,38 @@ class DelhiveryClient
         return $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
     }
 
-    public function packingSlip(string $waybill): array
+    public function shippingLabelPdf(string $waybill): array
     {
         if ($this->mockEnabled()) {
-            return $this->mockPackingSlipResponse($waybill);
+            return $this->mockShippingLabelPdfResponse($waybill);
         }
 
         $response = Http::withHeaders($this->headers())
             ->timeout(30)
             ->get($this->url('packing_slip'), [
                 'wbns' => $waybill,
+                'pdf' => 'true',
+                'pdf_size' => (string) config('delhivery.label_pdf_size', '4R'),
             ]);
 
-        return $this->decodeResponse($response, 'Delhivery packing slip generation failed');
+        return $this->decodeResponse($response, 'Delhivery shipping label generation failed');
+    }
+
+    public function downloadBinary(string $url): string
+    {
+        $response = Http::timeout(60)->get($url);
+
+        if (!$response->successful()) {
+            throw new DomainException('Failed to download Delhivery shipping label PDF');
+        }
+
+        $body = $response->body();
+
+        if ($body === '' || !str_starts_with($body, '%PDF')) {
+            throw new DomainException('Delhivery shipping label download did not return a valid PDF');
+        }
+
+        return $body;
     }
 
     private function mockEnabled(): bool
@@ -138,7 +157,7 @@ class DelhiveryClient
         ];
     }
 
-    private function mockPackingSlipResponse(string $waybill): array
+    private function mockShippingLabelPdfResponse(string $waybill): array
     {
         return [
             'mock' => true,
@@ -146,19 +165,10 @@ class DelhiveryClient
                 [
                     'wbn' => $waybill,
                     'waybill' => $waybill,
-                    'order' => 'MOCK-ORDER',
-                    'client' => 'Mock Client',
-                    'payment_mode' => 'Pre-paid',
-                    'sort_code' => 'MOCK/SC',
-                    'pin' => '000000',
-                    'name' => 'Mock Customer',
-                    'add' => 'Mock address for local label generation',
-                    'city' => 'Mock City',
-                    'state' => 'Mock State',
-                    'phone' => '9999999999',
-                    'products_desc' => 'Mock product',
+                    'pdf_download_link' => null,
                 ],
             ],
+            'packages_found' => 1,
         ];
     }
 

@@ -9,7 +9,12 @@ return [
     'pickup_location' => env('DELHIVERY_PICKUP_LOCATION'),
     'seller_gst_tin' => env('DELHIVERY_SELLER_GST_TIN'),
     'default_hsn_code' => env('DELHIVERY_DEFAULT_HSN_CODE'),
+    'default_length_cm' => (int) env('DELHIVERY_DEFAULT_LENGTH_CM', 10),
+    'default_width_cm' => (int) env('DELHIVERY_DEFAULT_WIDTH_CM', 10),
+    'default_height_cm' => (int) env('DELHIVERY_DEFAULT_HEIGHT_CM', 5),
     'sync_cache_minutes' => (int) env('DELHIVERY_SYNC_CACHE_MINUTES', 15),
+    'webhook_secret' => env('DELHIVERY_WEBHOOK_SECRET'),
+    'label_pdf_size' => env('DELHIVERY_LABEL_PDF_SIZE', '4R'),
 
     'urls' => [
         'staging' => [

@@ -5,7 +5,8 @@ namespace App\Services\Delhivery;
 use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\ShipmentStatusHistory;
+use App\Services\Shipping\OrderShipmentLifecycleService;
 use DomainException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,10 @@ class DelhiveryShipmentService
 {
     private ?DelhiverySetting $settings = null;
 
-    public function __construct(private readonly DelhiveryClient $client)
+    public function __construct(
+        private readonly DelhiveryClient $client,
+        private readonly OrderShipmentLifecycleService $lifecycle,
+    )
     {
     }
 
@@ -93,7 +97,7 @@ class DelhiveryShipmentService
                 throw new DomainException($this->missingWaybillMessage($responsePayload));
             }
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'waybill' => $waybill,
                 'provider_reference' => $this->extractProviderReference($responsePayload),
                 'delhivery_order_id' => $this->extractDelhiveryOrderId($responsePayload),
@@ -108,7 +112,7 @@ class DelhiveryShipmentService
             return $shipment;
         } catch (\Throwable $e) {
             if ($shipment) {
-                $shipment->fill([
+                $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                     'shipment_status' => OrderShipment::STATUS_FAILED,
                     'failed_reason' => $e->getMessage(),
                 ])->save();
@@ -138,7 +142,13 @@ class DelhiveryShipmentService
 
     public function syncShipment(OrderShipment $shipment): OrderShipment
     {
-        if (!$shipment->hasWaybill() || in_array($shipment->shipment_status, OrderShipment::TERMINAL_STATUSES, true)) {
+        if (!$shipment->hasWaybill()) {
+            return $shipment;
+        }
+
+        if (in_array($shipment->shipment_status, OrderShipment::TERMINAL_STATUSES, true)) {
+            $this->lifecycle->applyForwardStatus($shipment, $shipment->shipment_status);
+
             return $shipment;
         }
 
@@ -153,7 +163,7 @@ class DelhiveryShipmentService
 
             $normalizedStatus = $this->normalizeStatus($rawStatus);
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYNC)->fill([
                 'shipment_status' => $normalizedStatus,
                 'raw_status' => $rawStatus,
                 'status_location' => $this->extractStatusLocation($payload) ?? $scan['location'] ?? $scan['ScannedLocation'] ?? null,
@@ -162,19 +172,9 @@ class DelhiveryShipmentService
                 'last_synced_at' => now(),
             ]);
 
-            if ($normalizedStatus === OrderShipment::STATUS_DELIVERED && !$shipment->delivered_at) {
-                $shipment->delivered_at = now();
-            }
-
-            if ($normalizedStatus === OrderShipment::STATUS_RTO && !$shipment->rto_at) {
-                $shipment->rto_at = now();
-            }
-
-            if ($normalizedStatus === OrderShipment::STATUS_CANCELLED && !$shipment->cancelled_at) {
-                $shipment->cancelled_at = now();
-            }
-
+            $this->applyForwardShipmentTimestamps($shipment, $normalizedStatus);
             $shipment->save();
+            $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
             return $shipment;
         } catch (\Throwable $e) {
@@ -193,7 +193,65 @@ class DelhiveryShipmentService
         }
     }
 
-    public function cancelShipment(OrderShipment $shipment): OrderShipment
+    public function syncReverseShipment(OrderShipment $shipment): OrderShipment
+    {
+        if (!$shipment->reverse_waybill) {
+            return $shipment;
+        }
+
+        if ($shipment->reverse_status === OrderShipment::STATUS_DELIVERED) {
+            $this->lifecycle->completeReturnIfReceived($shipment, OrderShipment::STATUS_DELIVERED);
+
+            return $shipment;
+        }
+
+        if (in_array($shipment->reverse_status, [
+            OrderShipment::STATUS_CANCELLED,
+            OrderShipment::STATUS_FAILED,
+            OrderShipment::STATUS_RTO,
+        ], true)) {
+            return $shipment;
+        }
+
+        try {
+            $payload = $this->client->trackShipment($shipment->reverse_waybill);
+            $scan = $this->latestTrackingScan($payload);
+            $rawStatus = $this->extractRawStatus($payload) ?? $scan['status'] ?? $scan['Scan'] ?? null;
+
+            if (!$rawStatus) {
+                throw new DomainException('Delhivery reverse tracking response did not contain shipment status');
+            }
+
+            $normalizedStatus = $this->normalizeStatus($rawStatus);
+
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYNC)->fill([
+                'reverse_status' => $normalizedStatus,
+                'reverse_response_payload' => array_merge($shipment->reverse_response_payload ?? [], [
+                    'tracking' => $payload,
+                ]),
+                'last_synced_at' => now(),
+            ])->save();
+
+            $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
+
+            return $shipment;
+        } catch (\Throwable $e) {
+            $shipment->fill([
+                'reverse_failed_reason' => $e->getMessage(),
+                'last_synced_at' => now(),
+            ])->save();
+
+            Log::warning('Delhivery reverse tracking sync failed', [
+                'shipment_id' => $shipment->id,
+                'reverse_waybill' => $shipment->reverse_waybill,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    }
+
+    public function cancelShipment(OrderShipment $shipment, string $source = ShipmentStatusHistory::SOURCE_SYSTEM): OrderShipment
     {
         if (!$shipment->hasWaybill() || in_array($shipment->shipment_status, [
             OrderShipment::STATUS_DELIVERED,
@@ -210,7 +268,7 @@ class DelhiveryShipmentService
                 throw new DomainException($responseError);
             }
 
-            $shipment->fill([
+            $shipment->withAuditSource($source)->fill([
                 'shipment_status' => OrderShipment::STATUS_CANCELLED,
                 'raw_status' => $this->extractRawStatus($payload) ?? 'Cancelled',
                 'cancelled_at' => now(),
@@ -243,27 +301,24 @@ class DelhiveryShipmentService
         }
 
         try {
-            $shipment->loadMissing(['order.orderItems.product']);
+            $payload = $this->client->shippingLabelPdf($shipment->waybill);
+            $pdfUrl = $this->extractPdfDownloadLink($payload);
 
-            $payload = $this->client->packingSlip($shipment->waybill);
-            $package = $this->firstPackingSlipPackage($payload);
+            if (!$pdfUrl) {
+                throw new DomainException('Delhivery did not return a shipping label PDF link for this AWB');
+            }
+
+            $pdfBinary = $this->client->downloadBinary($pdfUrl);
             $fileName = preg_replace('/[^A-Za-z0-9_\-]/', '-', $shipment->waybill) . '.pdf';
             $path = "shipping-labels/delhivery/{$fileName}";
 
-            $pdf = Pdf::loadView('shipments.delhivery-label', [
-                'shipment' => $shipment,
-                'order' => $shipment->order,
-                'package' => $package,
-                'packingSlip' => $payload,
-                'generatedAt' => now(),
-            ])->setPaper('a4');
-
-            Storage::disk('public')->put($path, $pdf->output());
+            Storage::disk('public')->put($path, $pdfBinary);
 
             $shipment->fill([
                 'shipping_label_url' => $this->publicStorageUrl($path),
                 'response_payload' => array_merge($shipment->response_payload ?? [], [
-                    'packing_slip' => $payload,
+                    'delhivery_label' => $payload,
+                    'delhivery_label_pdf_url' => $pdfUrl,
                 ]),
                 'failed_reason' => null,
             ])->save();
@@ -280,53 +335,6 @@ class DelhiveryShipmentService
 
             throw $e;
         }
-    }
-
-    public function generateTestShippingLabel(Order $order): string
-    {
-        $order->loadMissing(['orderItems.product']);
-
-        $waybill = 'TEST-AWB-' . $order->id;
-        $shipment = new OrderShipment([
-            'provider' => OrderShipment::PROVIDER_DELHIVERY,
-            'waybill' => $waybill,
-            'shipment_status' => OrderShipment::STATUS_MANIFESTED,
-            'payment_mode' => $this->paymentMode($order),
-            'cod_amount' => $this->codAmount($order),
-            'weight_grams' => max(1, (int) $order->orderItems->sum(
-                fn ($item) => (int) ($item->product?->weight_grams ?? 0) * (int) $item->quantity
-            )),
-        ]);
-        $shipment->setRelation('order', $order);
-
-        $package = [
-            'wbn' => $waybill,
-            'waybill' => $waybill,
-            'order' => $order->order_number,
-            'client' => 'Test Client',
-            'payment_mode' => $shipment->payment_mode,
-            'sort_code' => 'TEST/SORT',
-            'name' => $order->shipping_address['name'] ?? $order->user?->name ?? 'Test Customer',
-            'add' => $this->formatAddress($order->shipping_address ?? []) ?: 'Test shipping address',
-            'city' => $order->shipping_address['city'] ?? 'Test City',
-            'state' => $order->shipping_address['state'] ?? 'Test State',
-            'pin' => $order->shipping_address['postal_code'] ?? '000000',
-            'phone' => $order->shipping_address['phone'] ?? '9999999999',
-            'products_desc' => $this->productDescription($order) ?: 'Test product',
-        ];
-
-        $path = "shipping-labels/test/{$waybill}.pdf";
-        $pdf = Pdf::loadView('shipments.delhivery-label', [
-            'shipment' => $shipment,
-            'order' => $order,
-            'package' => $package,
-            'packingSlip' => ['mock' => true, 'packages' => [$package]],
-            'generatedAt' => now(),
-        ])->setPaper('a4');
-
-        Storage::disk('public')->put($path, $pdf->output());
-
-        return $this->publicStorageUrl($path);
     }
 
     public function createReversePickup(Order $order): OrderShipment
@@ -348,7 +356,7 @@ class DelhiveryShipmentService
         try {
             $payload = $this->buildReversePickupPayload($order);
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'reverse_status' => OrderShipment::STATUS_NOT_CREATED,
                 'reverse_request_payload' => $payload,
                 'reverse_failed_reason' => null,
@@ -367,7 +375,7 @@ class DelhiveryShipmentService
                 throw new DomainException($this->missingWaybillMessage($responsePayload));
             }
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'reverse_waybill' => $waybill,
                 'reverse_provider_reference' => $this->extractProviderReference($responsePayload),
                 'reverse_status' => OrderShipment::STATUS_PICKUP_SCHEDULED,
@@ -379,7 +387,7 @@ class DelhiveryShipmentService
 
             return $shipment;
         } catch (\Throwable $e) {
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'reverse_status' => OrderShipment::STATUS_FAILED,
                 'reverse_failed_reason' => $e->getMessage(),
             ])->save();
@@ -428,30 +436,40 @@ class DelhiveryShipmentService
             ?? Arr::get($payload, 'Shipment.Status.Status')
             ?? null;
 
+        $normalizedStatus = $this->normalizeStatus($rawStatus);
+
         if ($shipment->reverse_waybill === $waybill) {
-            $shipment->fill([
-                'reverse_status' => $this->normalizeStatus($rawStatus),
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_WEBHOOK)->fill([
+                'reverse_status' => $normalizedStatus,
                 'reverse_response_payload' => array_merge($shipment->reverse_response_payload ?? [], ['webhook' => $payload]),
                 'last_synced_at' => now(),
             ])->save();
 
+            $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
+
             return $shipment;
         }
 
-        $shipment->fill([
-            'shipment_status' => $this->normalizeStatus($rawStatus),
+        $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_WEBHOOK)->fill([
+            'shipment_status' => $normalizedStatus,
             'raw_status' => $rawStatus,
             'status_location' => $payload['location'] ?? Arr::get($payload, 'Shipment.Status.StatusLocation'),
             'status_instructions' => $payload['instructions'] ?? Arr::get($payload, 'Shipment.Status.Instructions'),
             'tracking_payload' => array_merge($shipment->tracking_payload ?? [], ['webhook' => $payload]),
             'last_synced_at' => now(),
-        ])->save();
+        ]);
+
+        $this->applyForwardShipmentTimestamps($shipment, $normalizedStatus);
+        $shipment->save();
+        $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
         return $shipment;
     }
 
     public function trackingData(OrderShipment $shipment): array
     {
+        $shipment->loadMissing('statusHistories');
+
         return [
             'provider' => $shipment->provider,
             'waybill' => $shipment->waybill,
@@ -462,6 +480,7 @@ class DelhiveryShipmentService
             'courier_tracking_url' => $shipment->courier_tracking_url,
             'last_synced_at' => $shipment->last_synced_at?->format('Y-m-d H:i:s'),
             'tracking' => $this->trackingTimeline($shipment->tracking_payload ?? []),
+            'status_history' => ShipmentStatusHistory::formatForApi($shipment->statusHistories),
             'return' => [
                 'waybill' => $shipment->reverse_waybill,
                 'status' => $shipment->reverse_status,
@@ -723,16 +742,32 @@ class DelhiveryShipmentService
         return null;
     }
 
-    private function firstPackingSlipPackage(array $payload): array
+    private function extractPdfDownloadLink(array $payload): ?string
     {
-        $package = Arr::get($payload, 'packages.0')
-            ?? Arr::get($payload, 'Packages.0')
-            ?? Arr::get($payload, 'data.0')
-            ?? Arr::get($payload, 'package.0')
-            ?? Arr::get($payload, 'ShipmentData.0.Shipment')
-            ?? $payload;
+        $packages = Arr::get($payload, 'packages', []);
 
-        return is_array($package) ? $package : [];
+        if (!is_array($packages)) {
+            return null;
+        }
+
+        foreach ($packages as $package) {
+            if (!is_array($package)) {
+                continue;
+            }
+
+            $link = $package['pdf_download_link']
+                ?? $package['pdf_link']
+                ?? $package['label_url']
+                ?? null;
+
+            if (filled($link)) {
+                return (string) $link;
+            }
+        }
+
+        return Arr::get($payload, 'pdf_download_link')
+            ?? Arr::get($payload, 'pdf_link')
+            ?? null;
     }
 
     private function publicStorageUrl(string $path): string
@@ -837,5 +872,20 @@ class DelhiveryShipmentService
             str_contains($status, 'transit') => OrderShipment::STATUS_IN_TRANSIT,
             default => OrderShipment::STATUS_IN_TRANSIT,
         };
+    }
+
+    private function applyForwardShipmentTimestamps(OrderShipment $shipment, string $normalizedStatus): void
+    {
+        if ($normalizedStatus === OrderShipment::STATUS_DELIVERED && !$shipment->delivered_at) {
+            $shipment->delivered_at = now();
+        }
+
+        if ($normalizedStatus === OrderShipment::STATUS_RTO && !$shipment->rto_at) {
+            $shipment->rto_at = now();
+        }
+
+        if ($normalizedStatus === OrderShipment::STATUS_CANCELLED && !$shipment->cancelled_at) {
+            $shipment->cancelled_at = now();
+        }
     }
 }

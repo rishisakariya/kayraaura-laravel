@@ -26,7 +26,7 @@ class OrderShipmentController extends Controller
     public function show(string $id): JsonResponse
     {
         $order = Order::where('user_id', Auth::id())
-            ->with('shipment')
+            ->with('shipment.statusHistories')
             ->findOrFail($id);
 
         return response()->json([
@@ -44,7 +44,7 @@ class OrderShipmentController extends Controller
             'awb' => 'nullable|string|required_without:order_number',
         ]);
 
-        $query = Order::where('user_id', Auth::id())->with('shipment');
+        $query = Order::where('user_id', Auth::id())->with('shipment.statusHistories');
 
         if ($request->filled('order_number')) {
             $order = $query->where('order_number', $request->query('order_number'))->firstOrFail();
@@ -65,7 +65,7 @@ class OrderShipmentController extends Controller
     public function refresh(string $id): JsonResponse
     {
         $order = Order::where('user_id', Auth::id())
-            ->with('shipment')
+            ->with('shipment.statusHistories')
             ->findOrFail($id);
 
         $shipment = $order->shipment;

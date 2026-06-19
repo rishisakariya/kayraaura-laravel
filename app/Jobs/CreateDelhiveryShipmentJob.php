@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Order;
 use App\Models\OrderShipment;
+use App\Models\ShipmentStatusHistory;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use App\Services\Shipping\ShippingProviderResolver;
 use App\Services\Shiprocket\ShiprocketShipmentService;
@@ -71,14 +72,12 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
             $pickupLocation = $shipment?->pickup_location;
         }
 
-        OrderShipment::updateOrCreate(
-            ['order_id' => $this->orderId],
-            [
-                'provider' => $provider,
-                'shipment_status' => OrderShipment::STATUS_FAILED,
-                'failed_reason' => $exception->getMessage(),
-                'pickup_location' => $pickupLocation,
-            ]
-        );
+        $shipment = OrderShipment::firstOrNew(['order_id' => $this->orderId]);
+        $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+            'provider' => $provider,
+            'shipment_status' => OrderShipment::STATUS_FAILED,
+            'failed_reason' => $exception->getMessage(),
+            'pickup_location' => $pickupLocation,
+        ])->save();
     }
 }

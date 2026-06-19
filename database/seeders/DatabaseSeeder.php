@@ -17,7 +17,6 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             AdminSeeder::class,
-            DelhiverySettingSeeder::class,
             WebSettingSeeder::class,
         ]);
 

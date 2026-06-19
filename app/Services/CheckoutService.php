@@ -130,6 +130,20 @@ class CheckoutService
         }
     }
 
+    public function restoreStockForOrder(Order $order): void
+    {
+        $order->loadMissing('orderItems.product');
+
+        foreach ($order->orderItems as $item) {
+            $product = $item->product;
+            $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
+
+            if ($product && $productSize && $product->track_stock) {
+                $productSize->increment('quantity', $item->quantity);
+            }
+        }
+    }
+
     public function createRazorpayOrder(Order $order): array
     {
         $key = config('services.razorpay.key');

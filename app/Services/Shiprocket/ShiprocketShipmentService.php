@@ -5,6 +5,8 @@ namespace App\Services\Shiprocket;
 use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
+use App\Models\ShipmentStatusHistory;
+use App\Services\Shipping\OrderShipmentLifecycleService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use DomainException;
 use Illuminate\Support\Arr;
@@ -15,7 +17,10 @@ use Illuminate\Support\Facades\Storage;
 
 class ShiprocketShipmentService
 {
-    public function __construct(private readonly ShiprocketClient $client)
+    public function __construct(
+        private readonly ShiprocketClient $client,
+        private readonly OrderShipmentLifecycleService $lifecycle,
+    )
     {
     }
 
@@ -95,7 +100,7 @@ class ShiprocketShipmentService
             $this->client->generatePickup((int) $shiprocketShipmentId);
             $this->client->generateManifest([(int) $shiprocketShipmentId]);
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'waybill' => $awbCode,
                 'provider_reference' => (string) $shiprocketOrderId,
                 'delhivery_order_id' => (string) $shiprocketShipmentId,
@@ -113,7 +118,7 @@ class ShiprocketShipmentService
             return $shipment;
         } catch (\Throwable $e) {
             if ($shipment) {
-                $shipment->fill([
+                $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                     'shipment_status' => OrderShipment::STATUS_FAILED,
                     'failed_reason' => $e->getMessage(),
                 ])->save();
@@ -131,7 +136,13 @@ class ShiprocketShipmentService
 
     public function syncShipment(OrderShipment $shipment): OrderShipment
     {
-        if (!$shipment->hasWaybill() || in_array($shipment->shipment_status, OrderShipment::TERMINAL_STATUSES, true)) {
+        if (!$shipment->hasWaybill()) {
+            return $shipment;
+        }
+
+        if (in_array($shipment->shipment_status, OrderShipment::TERMINAL_STATUSES, true)) {
+            $this->lifecycle->applyForwardStatus($shipment, $shipment->shipment_status);
+
             return $shipment;
         }
 
@@ -146,7 +157,7 @@ class ShiprocketShipmentService
 
             $normalizedStatus = $this->normalizeStatusFromScan($latestScan);
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYNC)->fill([
                 'shipment_status' => $normalizedStatus,
                 'raw_status' => $rawStatus,
                 'status_location' => $latestScan['location'] ?? null,
@@ -168,6 +179,7 @@ class ShiprocketShipmentService
             }
 
             $shipment->save();
+            $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
             return $shipment;
         } catch (\Throwable $e) {
@@ -186,7 +198,7 @@ class ShiprocketShipmentService
         }
     }
 
-    public function cancelShipment(OrderShipment $shipment): OrderShipment
+    public function cancelShipment(OrderShipment $shipment, string $source = ShipmentStatusHistory::SOURCE_SYSTEM): OrderShipment
     {
         if (!$shipment->hasWaybill() || in_array($shipment->shipment_status, [
             OrderShipment::STATUS_DELIVERED,
@@ -199,7 +211,7 @@ class ShiprocketShipmentService
         try {
             $payload = $this->client->cancelOrder((string) $shipment->provider_reference);
 
-            $shipment->fill([
+            $shipment->withAuditSource($source)->fill([
                 'shipment_status' => OrderShipment::STATUS_CANCELLED,
                 'raw_status' => (string) ($payload['message'] ?? 'Cancelled'),
                 'cancelled_at' => now(),
@@ -331,7 +343,7 @@ class ShiprocketShipmentService
             $weight = $this->calculateWeight($order);
             $payload = $this->buildCreateReturnPayload($order, $weight);
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'reverse_status' => OrderShipment::STATUS_NOT_CREATED,
                 'reverse_request_payload' => $payload,
                 'reverse_failed_reason' => null,
@@ -356,7 +368,7 @@ class ShiprocketShipmentService
             $this->client->generatePickup((int) $shiprocketShipmentId);
             $this->client->generateManifest([(int) $shiprocketShipmentId]);
 
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'reverse_waybill' => $awbCode,
                 'reverse_provider_reference' => (string) $shiprocketOrderId,
                 'reverse_status' => OrderShipment::STATUS_PICKUP_SCHEDULED,
@@ -371,7 +383,7 @@ class ShiprocketShipmentService
 
             return $shipment;
         } catch (\Throwable $e) {
-            $shipment->fill([
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'reverse_status' => OrderShipment::STATUS_FAILED,
                 'reverse_failed_reason' => $e->getMessage(),
             ])->save();
@@ -390,6 +402,7 @@ class ShiprocketShipmentService
     {
         $trackingPayload = $shipment->tracking_payload ?? [];
         $latestScan = $this->latestShiprocketScan($trackingPayload);
+        $shipment->loadMissing('statusHistories');
 
         return [
             'provider' => $shipment->provider,
@@ -401,6 +414,7 @@ class ShiprocketShipmentService
             'courier_tracking_url' => $shipment->courier_tracking_url,
             'last_synced_at' => $shipment->last_synced_at?->format('Y-m-d H:i:s'),
             'tracking' => $this->trackingTimelineFromShiprocketPayload($trackingPayload),
+            'status_history' => ShipmentStatusHistory::formatForApi($shipment->statusHistories),
             'return' => [
                 'waybill' => $shipment->reverse_waybill,
                 'status' => $shipment->reverse_status,

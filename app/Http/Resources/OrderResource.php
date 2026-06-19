@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\OrderShipment;
+use App\Models\ShipmentStatusHistory;
 use App\Services\Shipping\ShippingProviderResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -35,6 +36,7 @@ class OrderResource extends JsonResource
             'razorpay_order_id' => $this->razorpay_order_id,
             'razorpay_payment_id' => $this->razorpay_payment_id,
             'paid_at' => $this->paid_at?->format('Y-m-d H:i:s'),
+            'delivered_at' => $this->delivered_at?->format('Y-m-d H:i:s'),
             'payment_failed_at' => $this->payment_failed_at?->format('Y-m-d H:i:s'),
             'subtotal' => (float) $this->subtotal,
             'tax_amount' => (float) $this->tax_amount,
@@ -121,6 +123,9 @@ class OrderResource extends JsonResource
                 'reverse_request_payload' => $shipment?->reverse_request_payload,
                 'reverse_response_payload' => $shipment?->reverse_response_payload,
                 'tracking' => $this->trackingTimeline($shipment?->tracking_payload ?? []),
+                'status_history' => $shipment && $shipment->relationLoaded('statusHistories')
+                    ? ShipmentStatusHistory::formatForApi($shipment->statusHistories)
+                    : [],
             ]);
         }
 

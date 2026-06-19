@@ -9,6 +9,7 @@ use App\Jobs\CreateDelhiveryShipmentJob;
 use App\Jobs\SyncDelhiveryShipmentStatusJob;
 use App\Models\Order;
 use App\Models\OrderShipment;
+use App\Models\ShipmentStatusHistory;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use App\Services\Shipping\ShippingProviderResolver;
 use App\Services\Shiprocket\ShiprocketShipmentService;
@@ -18,7 +19,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Throwable;
 
 class OrderShipmentController extends Controller
 {
@@ -130,11 +130,11 @@ class OrderShipmentController extends Controller
             ]);
         }
 
-        CancelDelhiveryShipmentJob::dispatch($order->shipment->id);
+        CancelDelhiveryShipmentJob::dispatch($order->shipment->id, ShipmentStatusHistory::SOURCE_ADMIN);
 
         return response()->json([
             'success' => true,
-            'data' => new OrderResource($order->refresh()->load(['shipment', 'orderItems.product.images', 'orderItems.productSize'])),
+            'data' => new OrderResource($order->refresh()->load(['shipment.statusHistories', 'orderItems.product.images', 'orderItems.productSize'])),
             'message' => 'Shipment cancellation queued',
         ]);
     }
@@ -191,56 +191,19 @@ class OrderShipmentController extends Controller
     private function labelPayload(Order $order): array
     {
         if (!$order->shipment?->waybill) {
-            if (!app()->isProduction()) {
-                return $this->testLabelPayload($order, 'Test shipment label generated because AWB is not available yet');
-            }
-
             throw new DomainException('Shipment AWB is not available yet', 409);
         }
 
         $shipment = $order->shipment;
         $shipmentService = $this->shipmentServiceForProvider($shipment);
-
-        try {
-            $shipment = $shipmentService->generateShippingLabel($shipment);
-        } catch (DomainException $e) {
-            if (!app()->isProduction()) {
-                return $this->testLabelPayload($order, 'Test shipment label generated because label API is not available');
-            }
-
-            throw $e;
-        } catch (Throwable $e) {
-            if (!app()->isProduction()) {
-                return $this->testLabelPayload($order, 'Test shipment label generated because label API is not reachable');
-            }
-
-            throw $e;
-        }
+        $shipment = $shipmentService->generateShippingLabel($shipment);
 
         return [
             'data' => [
                 'shipping_label_url' => $shipment->shipping_label_url,
                 'download_label_url' => $this->downloadLabelUrl($order),
+                'source' => $shipment->provider === OrderShipment::PROVIDER_DELHIVERY ? 'delhivery' : 'shiprocket',
             ],
-        ];
-    }
-
-    private function testLabelPayload(Order $order, string $message): array
-    {
-        $shipment = $order->shipment;
-        $shipmentService = $shipment
-            ? $this->shipmentServiceForProvider($shipment)
-            : ($this->shippingProviderResolver->activeProvider() === OrderShipment::PROVIDER_SHIPROCKET
-                ? $this->shiprocketShipmentService
-                : $this->delhiveryShipmentService);
-
-        return [
-            'data' => [
-                'shipping_label_url' => $shipmentService->generateTestShippingLabel($order),
-                'download_label_url' => $this->downloadLabelUrl($order),
-                'is_test_label' => true,
-            ],
-            'message' => $message,
         ];
     }
 

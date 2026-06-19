@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\OrderShipment;
+use App\Models\ShipmentStatusHistory;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use App\Services\Shiprocket\ShiprocketShipmentService;
 use Illuminate\Bus\Queueable;
@@ -20,7 +21,10 @@ class CancelDelhiveryShipmentJob implements ShouldQueue
 
     public int $tries = 3;
 
-    public function __construct(public readonly int $shipmentId)
+    public function __construct(
+        public readonly int $shipmentId,
+        public readonly string $auditSource = ShipmentStatusHistory::SOURCE_SYSTEM,
+    )
     {
     }
 
@@ -37,10 +41,10 @@ class CancelDelhiveryShipmentJob implements ShouldQueue
         $shipment = OrderShipment::findOrFail($this->shipmentId);
 
         if ($shipment->provider === OrderShipment::PROVIDER_SHIPROCKET) {
-            $shiprocketShipmentService->cancelShipment($shipment);
+            $shiprocketShipmentService->cancelShipment($shipment, $this->auditSource);
             return;
         }
 
-        $delhiveryShipmentService->cancelShipment($shipment);
+        $delhiveryShipmentService->cancelShipment($shipment, $this->auditSource);
     }
 }

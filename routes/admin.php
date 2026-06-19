@@ -22,16 +22,16 @@ Route::get('/cpanel/orders/{id}/shipment/label/download', [OrderShipmentControll
 // Admin Authentication Routes
 Route::prefix('cpanel')->group(function () {
     Route::post('login', [AdminAuthController::class, 'login']);
-    
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AdminAuthController::class, 'logout']);
         Route::get('profile', [AdminAuthController::class, 'profile']);
         Route::put('profile', [AdminAuthController::class, 'updateProfile']);
         Route::post('refresh-token', [AdminAuthController::class, 'refreshToken']);
-        
+
         // Categories Management
         Route::apiResource('categories', CategoryController::class);
-        
+
         // Products Management
         Route::apiResource('products', ProductController::class);
 
@@ -52,7 +52,6 @@ Route::prefix('cpanel')->group(function () {
 
         // Delhivery Settings
         Route::get('delhivery-settings', [DelhiverySettingController::class, 'show']);
-        Route::put('delhivery-settings', [DelhiverySettingController::class, 'update']);
 
         // Web Settings
         Route::get('web-settings', [WebSettingController::class, 'show']);

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use DomainException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,7 @@ class Order extends Model
         'razorpay_payment_id',
         'razorpay_signature',
         'paid_at',
+        'delivered_at',
         'payment_failed_at',
         'cod_verified_at',
         'shipping_address',
@@ -49,6 +51,7 @@ class Order extends Model
         'discount_percent' => 'integer',
         'total_amount' => 'decimal:2',
         'paid_at' => 'datetime',
+        'delivered_at' => 'datetime',
         'payment_failed_at' => 'datetime',
         'cod_verified_at' => 'datetime',
     ];
@@ -83,13 +86,21 @@ class Order extends Model
         $prefix = 'ORD';
         $timestamp = now()->format('Ymd');
         $random = mt_rand(1000, 9999);
-        
+
         return $prefix . $timestamp . $random;
     }
 
     public function canBeCancelled(): bool
     {
-        return in_array($this->status, ['pending', 'pending_admin_confirmation'], true);
+        if (in_array($this->status, ['cancelled', 'delivered', 'return_requested', 'returned'], true)) {
+            return false;
+        }
+
+        $shipmentStatus = $this->relationLoaded('shipment')
+            ? ($this->shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED)
+            : ($this->shipment()->value('shipment_status') ?? OrderShipment::STATUS_NOT_CREATED);
+
+        return in_array($shipmentStatus, OrderShipment::CANCELLABLE_STATUSES, true);
     }
 
     public function canBeReturned(): bool
@@ -105,11 +116,18 @@ class Order extends Model
         }
     }
 
-    public function markReturned(): void
+    public function markReturnRequested(?string $reason = null): void
     {
-        if ($this->canBeReturned()) {
-            $this->status = 'returned';
-            $this->save();
+        if (!$this->canBeReturned()) {
+            throw new DomainException('Only delivered orders can be returned');
         }
+
+        $this->status = 'return_requested';
+
+        if ($reason) {
+            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Return reason: ' . $reason;
+        }
+
+        $this->save();
     }
 }

@@ -38,9 +38,11 @@ class SyncDelhiveryShipmentStatusJob implements ShouldQueue
 
         if ($shipment->provider === OrderShipment::PROVIDER_SHIPROCKET) {
             $shiprocketShipmentService->syncShipment($shipment);
+
             return;
         }
 
         $delhiveryShipmentService->syncShipment($shipment);
+        $delhiveryShipmentService->syncReverseShipment($shipment->refresh());
     }
 }
