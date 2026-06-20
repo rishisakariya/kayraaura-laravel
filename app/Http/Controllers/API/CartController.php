@@ -71,6 +71,7 @@ class CartController extends Controller
                     'online_payment_discount_percent' => $summary['online_payment_discount_percent'] ?? null,
                     'online_payment_discount_amount' => $summary['online_payment_discount_amount'] ?? 0,
                     'cod_charge' => $summary['cod_charge'],
+                    'scratch_card_enabled' => $this->scratchCardService->isActive(),
                     'scratch_coupon_code' => $summary['coupon_code'] ?? null,
                     'discount_percent' => $summary['discount_percent'] ?? null,
                     'discount_amount' => $summary['discount_amount'] ?? 0,

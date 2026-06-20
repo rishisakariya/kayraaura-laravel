@@ -69,8 +69,21 @@ class ScratchCardService
 
     public function applyCouponToCheckout(User $user, array $checkout, ?string $code): array
     {
-        if (empty($code)) {
+        if (!$this->isActive()) {
             return $checkout;
+        }
+
+        if (empty($code)) {
+            $coupon = $this->findActiveCoupon($user);
+
+            if (!$coupon) {
+                return $checkout;
+            }
+
+            $discounted = $this->applyDiscount($checkout, $coupon);
+            $discounted['scratch_coupon'] = $coupon;
+
+            return $discounted;
         }
 
         $coupon = $this->findRedeemableCoupon($user, $code);
@@ -78,6 +91,15 @@ class ScratchCardService
         $discounted['scratch_coupon'] = $coupon;
 
         return $discounted;
+    }
+
+    public function findActiveCoupon(User $user): ?ScratchCardCoupon
+    {
+        return ScratchCardCoupon::query()
+            ->where('user_id', $user->id)
+            ->where('is_redeemed', false)
+            ->latest('id')
+            ->first();
     }
 
     public function applyDiscount(array $checkout, ScratchCardCoupon $coupon): array

@@ -49,6 +49,7 @@ class CheckoutController extends Controller
                     'tax_amount' => $checkout['tax_amount'],
                     'shipping_amount' => $checkout['shipping_amount'],
                     'cod_charge' => $checkout['cod_charge'],
+                    'scratch_card_enabled' => $this->scratchCardService->isActive(),
                     'scratch_coupon_code' => $checkout['coupon_code'] ?? null,
                     'discount_percent' => $checkout['discount_percent'] ?? null,
                     'discount_amount' => $checkout['discount_amount'] ?? 0,
