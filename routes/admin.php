@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\CustomerReviewController;
 use App\Http\Controllers\Admin\WebSettingController;
 use App\Http\Controllers\Admin\ScratchCardSettingController;
 use App\Http\Controllers\Admin\ScratchCardCouponController;
+use App\Http\Controllers\Admin\DashboardController;
 
 Route::get('/cpanel/orders/{id}/shipment/label/download', [OrderShipmentController::class, 'downloadLabel'])
     ->middleware('signed')
@@ -64,6 +65,14 @@ Route::prefix('cpanel')->group(function () {
         // Scratch Card Coupons
         Route::get('scratch-card-coupons', [ScratchCardCouponController::class, 'index']);
         Route::get('scratch-card-coupons/{id}', [ScratchCardCouponController::class, 'show']);
+
+        // Dashboard Analytics
+        Route::get('dashboard-payment-method-distribution', [DashboardController::class, 'paymentMethodDistribution']);
+        Route::get('dashboard-total-customers', [DashboardController::class, 'totalCustomers']);
+        Route::get('dashboard-monthly-sales', [DashboardController::class, 'monthlySales']);
+        Route::get('dashboard-top-products', [DashboardController::class, 'topProducts']);
+        Route::get('dashboard-gender-distribution', [DashboardController::class, 'genderDistribution']);
+        Route::get('dashboard-weekly-order-status', [DashboardController::class, 'weeklyOrderStatus']);
 
         // Orders Management
         Route::get('orders', [OrderController::class, 'index']);
