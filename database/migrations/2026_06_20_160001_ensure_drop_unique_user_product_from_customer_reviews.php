@@ -12,9 +12,26 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if ($this->indexExists('customer_reviews_user_id_product_id_unique')) {
+        if (! $this->indexExists('customer_reviews_user_id_product_id_unique')) {
+            return;
+        }
+
+        $this->dropForeignIfExists('customer_reviews_user_id_foreign');
+        $this->dropForeignIfExists('customer_reviews_product_id_foreign');
+
+        Schema::table('customer_reviews', function (Blueprint $table) {
+            $table->dropUnique(['user_id', 'product_id']);
+        });
+
+        if (! $this->foreignKeyExists('customer_reviews_user_id_foreign')) {
             Schema::table('customer_reviews', function (Blueprint $table) {
-                $table->dropUnique(['user_id', 'product_id']);
+                $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
+            });
+        }
+
+        if (! $this->foreignKeyExists('customer_reviews_product_id_foreign')) {
+            Schema::table('customer_reviews', function (Blueprint $table) {
+                $table->foreign('product_id')->references('id')->on('products')->cascadeOnDelete();
             });
         }
     }
@@ -24,25 +41,55 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (! $this->indexExists('customer_reviews_user_id_product_id_unique')) {
+        if ($this->indexExists('customer_reviews_user_id_product_id_unique')) {
+            return;
+        }
+
+        $this->dropForeignIfExists('customer_reviews_user_id_foreign');
+        $this->dropForeignIfExists('customer_reviews_product_id_foreign');
+
+        Schema::table('customer_reviews', function (Blueprint $table) {
+            $table->unique(['user_id', 'product_id']);
+        });
+
+        if (! $this->foreignKeyExists('customer_reviews_user_id_foreign')) {
             Schema::table('customer_reviews', function (Blueprint $table) {
-                $table->unique(['user_id', 'product_id']);
+                $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
+            });
+        }
+
+        if (! $this->foreignKeyExists('customer_reviews_product_id_foreign')) {
+            Schema::table('customer_reviews', function (Blueprint $table) {
+                $table->foreign('product_id')->references('id')->on('products')->cascadeOnDelete();
             });
         }
     }
 
     private function indexExists(string $indexName): bool
     {
-        return ! empty(DB::select(
-            "
-            SELECT 1
-            FROM information_schema.statistics
-            WHERE table_schema = DATABASE()
-                AND table_name = 'customer_reviews'
-                AND index_name = ?
-            LIMIT 1
-            ",
-            [$indexName]
-        ));
+        return DB::table('information_schema.STATISTICS')
+            ->where('TABLE_SCHEMA', DB::getDatabaseName())
+            ->where('TABLE_NAME', 'customer_reviews')
+            ->where('INDEX_NAME', $indexName)
+            ->exists();
+    }
+
+    private function foreignKeyExists(string $constraintName): bool
+    {
+        return DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('CONSTRAINT_SCHEMA', DB::getDatabaseName())
+            ->where('TABLE_NAME', 'customer_reviews')
+            ->where('CONSTRAINT_NAME', $constraintName)
+            ->where('CONSTRAINT_TYPE', 'FOREIGN KEY')
+            ->exists();
+    }
+
+    private function dropForeignIfExists(string $constraintName): void
+    {
+        if (! $this->foreignKeyExists($constraintName)) {
+            return;
+        }
+
+        DB::statement("ALTER TABLE `customer_reviews` DROP FOREIGN KEY `{$constraintName}`");
     }
 };

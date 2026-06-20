@@ -41,28 +41,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if ($this->indexExists('customer_reviews_user_id_product_id_unique')) {
-            return;
-        }
-
-        $this->dropForeignIfExists('customer_reviews_user_id_foreign');
-        $this->dropForeignIfExists('customer_reviews_product_id_foreign');
-
-        Schema::table('customer_reviews', function (Blueprint $table) {
-            $table->unique(['user_id', 'product_id']);
-        });
-
-        if (! $this->foreignKeyExists('customer_reviews_user_id_foreign')) {
-            Schema::table('customer_reviews', function (Blueprint $table) {
-                $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
-            });
-        }
-
-        if (! $this->foreignKeyExists('customer_reviews_product_id_foreign')) {
-            Schema::table('customer_reviews', function (Blueprint $table) {
-                $table->foreign('product_id')->references('id')->on('products')->cascadeOnDelete();
-            });
-        }
+        // No-op: handled by earlier migrations.
     }
 
     private function indexExists(string $indexName): bool
