@@ -34,7 +34,35 @@ class CheckoutService
             ? $this->cartItems($user, $lockProductSizes)
             : $this->buyNowItems($payload, $lockProductSizes);
 
-        $itemsSubtotal = round($items->sum('total'), 2);
+        $pricing = $this->calculatePricingSummary(
+            $user,
+            $items,
+            $payload['payment_method'] ?? null
+        );
+
+        return [
+            'address' => $address,
+            'items' => $items,
+            ...$pricing,
+        ];
+    }
+
+    public function buildCartSummary(User $user, Collection $cartItems, ?string $paymentMethod = null): array
+    {
+        return $this->calculatePricingSummary($user, $cartItems, $paymentMethod);
+    }
+
+    private function calculatePricingSummary(User $user, Collection $items, ?string $paymentMethod = null): array
+    {
+        $itemsSubtotal = round($items->sum(function ($item): float {
+            $total = data_get($item, 'total');
+
+            if ($total !== null) {
+                return (float) $total;
+            }
+
+            return (int) data_get($item, 'quantity', 0) * (float) (data_get($item, 'size_price') ?? data_get($item, 'price', 0));
+        }), 2);
         $buyTwoGetOneFreeEnabled = WebSetting::current()->buy_two_get_one_free_enabled;
         $buyTwoGetOneDiscountAmount = $buyTwoGetOneFreeEnabled
             ? $this->calculateBuyTwoGetOneDiscount($items)
@@ -48,8 +76,8 @@ class CheckoutService
             ? min(self::FIRST_ORDER_DISCOUNT_AMOUNT, $baseTotal)
             : 0.0;
         $baseTotalAfterFirstOrderDiscount = round(max($baseTotal - $firstOrderDiscountAmount, 0), 2);
-        $isCod = ($payload['payment_method'] ?? null) === 'cod';
-        $isOnline = ($payload['payment_method'] ?? null) === 'online';
+        $isCod = $paymentMethod === 'cod';
+        $isOnline = $paymentMethod === 'online';
         $onlinePaymentDiscountAmount = $isOnline
             ? round($baseTotalAfterFirstOrderDiscount * self::ONLINE_PAYMENT_DISCOUNT_RATE, 2)
             : 0.0;
@@ -60,8 +88,6 @@ class CheckoutService
             : $baseTotalAfterOnlineDiscount;
 
         return [
-            'address' => $address,
-            'items' => $items,
             'items_subtotal' => $itemsSubtotal,
             'buy_two_get_one_free_enabled' => $buyTwoGetOneFreeEnabled,
             'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,

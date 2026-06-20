@@ -8,18 +8,22 @@ use App\Http\Requests\CartUpdateQuantityRequest;
 use App\Http\Resources\CartResource;
 use App\Models\Cart;
 use App\Models\ProductSize;
-use App\Models\WebSetting;
 use App\Services\CheckoutService;
+use App\Services\ScratchCardService;
 
 use DomainException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class CartController extends Controller
 {
-    public function __construct(private readonly CheckoutService $checkoutService)
-    {
+    public function __construct(
+        private readonly CheckoutService $checkoutService,
+        private readonly ScratchCardService $scratchCardService,
+    ) {
     }
 
     /**
@@ -27,35 +31,68 @@ class CartController extends Controller
      *
      * @return JsonResponse
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $user = Auth::user();
-
-        $cartItems = Cart::forUser($user->id)
-            ->with(['product', 'product.category', 'product.images', 'productSize.size'])
-            ->get();
-
-        $subtotal = $cartItems->sum(function ($item) {
-            return $item->quantity * (float) ($item->size_price ?? 0);
-        });
-        $offerEnabled = WebSetting::current()->buy_two_get_one_free_enabled;
-        $buyTwoGetOneDiscountAmount = $offerEnabled
-            ? $this->checkoutService->calculateBuyTwoGetOneDiscount($cartItems)
-            : 0.0;
-        $total = round(max($subtotal - $buyTwoGetOneDiscountAmount, 0), 2);
-
-        return response()->json([
-            'status' => true,
-            'data' => [
-                'items' => CartResource::collection($cartItems),
-                'subtotal' => round($subtotal, 2),
-                'buy_two_get_one_free_enabled' => $offerEnabled,
-                'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,
-                'total' => $total,
-                'item_count' => $cartItems->sum('quantity')
-            ],
-            'message' => 'Cart retrieved successfully'
+        $request->validate([
+            'payment_method' => ['nullable', Rule::in(['cod', 'online'])],
+            'coupon_code' => ['nullable', 'string', 'size:6'],
         ]);
+
+        try {
+            $user = Auth::user();
+
+            $cartItems = Cart::forUser($user->id)
+                ->with(['product', 'product.category', 'product.images', 'productSize.size'])
+                ->get();
+
+            $summary = $this->checkoutService->buildCartSummary(
+                $user,
+                $cartItems,
+                $request->input('payment_method')
+            );
+            $summary = $this->scratchCardService->applyCouponToCheckout(
+                $user,
+                $summary,
+                $request->input('coupon_code')
+            );
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'items' => CartResource::collection($cartItems),
+                    'items_subtotal' => $summary['items_subtotal'],
+                    'subtotal' => $summary['subtotal'],
+                    'tax_amount' => $summary['tax_amount'],
+                    'shipping_amount' => $summary['shipping_amount'],
+                    'buy_two_get_one_free_enabled' => $summary['buy_two_get_one_free_enabled'],
+                    'buy_two_get_one_discount_amount' => $summary['buy_two_get_one_discount_amount'],
+                    'first_order_discount_eligible' => $summary['first_order_discount_eligible'],
+                    'first_order_discount_amount' => $summary['first_order_discount_amount'],
+                    'online_payment_discount_percent' => $summary['online_payment_discount_percent'] ?? null,
+                    'online_payment_discount_amount' => $summary['online_payment_discount_amount'] ?? 0,
+                    'cod_charge' => $summary['cod_charge'],
+                    'scratch_coupon_code' => $summary['coupon_code'] ?? null,
+                    'discount_percent' => $summary['discount_percent'] ?? null,
+                    'discount_amount' => $summary['discount_amount'] ?? 0,
+                    'total' => $summary['final_total_amount'] ?? $summary['total_amount'],
+                    'item_count' => $cartItems->sum('quantity'),
+                ],
+                'message' => 'Cart retrieved successfully',
+            ]);
+        } catch (DomainException $e) {
+            if (!empty($request->input('coupon_code')) && !$this->scratchCardService->isActive()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => $e->getMessage(),
+                    'error' => ['code' => 'SCRATCH_CARD_DISABLED'],
+                ], 403);
+            }
+
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
     }
 
     /**
