@@ -92,7 +92,7 @@ class OrderController extends Controller
 
                 $order = $this->checkoutService->createOrder($user, $payload, $checkout);
 
-                if ($coupon) {
+                if ($coupon && $payload['payment_method'] === 'cod') {
                     $this->scratchCardService->redeem(
                         $user,
                         $coupon->code,

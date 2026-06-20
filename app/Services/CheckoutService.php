@@ -16,6 +16,11 @@ use Illuminate\Support\Facades\Http;
 
 class CheckoutService
 {
+    public function __construct(
+        private readonly ScratchCardService $scratchCardService,
+    ) {
+    }
+
     private const COD_CHARGE_RATE = 0.10;
 
     private const FIRST_ORDER_DISCOUNT_AMOUNT = 50.0;
@@ -393,8 +398,29 @@ class CheckoutService
         ]);
 
         $this->clearCartIfNeeded($order);
+        $this->redeemScratchCouponForPaidOrder($order);
 
         return $order;
+    }
+
+    private function redeemScratchCouponForPaidOrder(Order $order): void
+    {
+        if (empty($order->scratch_coupon_code)) {
+            return;
+        }
+
+        $user = User::find($order->user_id);
+
+        if (!$user) {
+            return;
+        }
+
+        $this->scratchCardService->redeem(
+            $user,
+            $order->scratch_coupon_code,
+            $order->id,
+            $order->discount_amount !== null ? (float) $order->discount_amount : null
+        );
     }
 
     public function markOrderPaymentFailed(Order $order, ?string $paymentId = null): Order
