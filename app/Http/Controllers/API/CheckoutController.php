@@ -5,7 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckoutSummaryRequest;
 use App\Http\Resources\AddressResource;
-use App\Http\Resources\ProductResource;
+use App\Http\Resources\CheckoutItemResource;
 use App\Services\CheckoutService;
 use App\Services\ScratchCardService;
 use DomainException;
@@ -31,20 +31,13 @@ class CheckoutController extends Controller
                 $payload['coupon_code'] ?? null
             );
 
-            $items = $checkout['items']->map(function (array $item): array {
-                $product = $item['product'] ?? null;
-                unset($item['product']);
-
-                return [
-                    ...$item,
-                    'product' => $product ? new ProductResource($product) : null,
-                ];
-            });
+            $items = CheckoutItemResource::collection($checkout['items']->values())
+                ->resolve($request);
 
             return response()->json([
                 'status' => true,
                 'data' => [
-                    'items' => $items->values(),
+                    'items' => $items,
                     'items_subtotal' => $checkout['items_subtotal'],
                     'buy_two_get_one_free_enabled' => $checkout['buy_two_get_one_free_enabled'],
                     'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'],
