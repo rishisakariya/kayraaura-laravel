@@ -58,16 +58,21 @@ class DelhiveryClient
         return $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
     }
 
-    public function shippingLabelPdf(string $waybill): array
+    /**
+     * @param  string|list<string>  $waybills
+     */
+    public function shippingLabelPdf(string|array $waybills): array
     {
+        $wbns = is_array($waybills) ? implode(',', $waybills) : $waybills;
+
         if ($this->mockEnabled()) {
-            return $this->mockShippingLabelPdfResponse($waybill);
+            return $this->mockShippingLabelPdfResponse($wbns);
         }
 
         $response = Http::withHeaders($this->headers())
-            ->timeout(30)
+            ->timeout(60)
             ->get($this->url('packing_slip'), [
-                'wbns' => $waybill,
+                'wbns' => $wbns,
                 'pdf' => 'true',
                 'pdf_size' => (string) config('delhivery.label_pdf_size', '4R'),
             ]);

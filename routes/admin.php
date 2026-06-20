@@ -81,5 +81,6 @@ Route::prefix('cpanel')->group(function () {
         Route::post('orders/{id}/shipment/sync', [OrderShipmentController::class, 'sync']); //this is used to delivery ststus latest sync from delhivery api
         Route::post('orders/{id}/shipment/cancel', [OrderShipmentController::class, 'cancel']);
         Route::get('orders/{id}/shipment/label', [OrderShipmentController::class, 'label']); //this is used to get the shipment label
+        Route::post('orders/shipment/labels/bulk', [OrderShipmentController::class, 'bulkLabels']);
     });
 });

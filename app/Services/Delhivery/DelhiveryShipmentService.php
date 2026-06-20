@@ -6,9 +6,11 @@ use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ShipmentStatusHistory;
+use App\Services\PdfMerger;
 use App\Services\Shipping\OrderShipmentLifecycleService;
 use DomainException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +22,7 @@ class DelhiveryShipmentService
     public function __construct(
         private readonly DelhiveryClient $client,
         private readonly OrderShipmentLifecycleService $lifecycle,
+        private readonly PdfMerger $pdfMerger,
     )
     {
     }
@@ -335,6 +338,82 @@ class DelhiveryShipmentService
 
             throw $e;
         }
+    }
+
+    /**
+     * @param  iterable<int, OrderShipment>  $shipments
+     */
+    public function generateMergedShippingLabels(iterable $shipments): string
+    {
+        $shipments = collect($shipments)->values();
+
+        if ($shipments->isEmpty()) {
+            throw new DomainException('No shipments were provided');
+        }
+
+        foreach ($shipments as $shipment) {
+            if ($shipment->provider !== OrderShipment::PROVIDER_DELHIVERY) {
+                throw new DomainException("Shipment for order {$shipment->order_id} is not a Delhivery shipment");
+            }
+
+            if (!$shipment->hasWaybill()) {
+                throw new DomainException("Shipment for order {$shipment->order_id} does not have an AWB yet");
+            }
+        }
+
+        if ($shipments->count() > 30) {
+            throw new DomainException('Cannot generate labels for more than 30 shipments at once');
+        }
+
+        if ($shipments->count() === 1) {
+            $shipment = $this->generateShippingLabel($shipments->first());
+            $storagePath = $this->labelStoragePath($shipment->shipping_label_url);
+
+            if (!$storagePath || !Storage::disk('public')->exists($storagePath)) {
+                throw new DomainException("Label PDF file was not found for AWB {$shipment->waybill}");
+            }
+
+            return Storage::disk('public')->get($storagePath);
+        }
+
+        $waybills = $shipments->pluck('waybill')->all();
+
+        try {
+            $payload = $this->client->shippingLabelPdf($waybills);
+            $pdfUrl = $this->extractMergedPdfDownloadLink($payload);
+
+            if ($pdfUrl) {
+                return $this->client->downloadBinary($pdfUrl);
+            }
+        } catch (\Throwable $e) {
+            Log::info('Delhivery bulk label request failed, falling back to individual labels', [
+                'waybills' => $waybills,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $this->mergeIndividualShippingLabels($shipments);
+    }
+
+    /**
+     * @param  Collection<int, OrderShipment>  $shipments
+     */
+    private function mergeIndividualShippingLabels(Collection $shipments): string
+    {
+        $filePaths = [];
+
+        foreach ($shipments as $shipment) {
+            $shipment = $this->generateShippingLabel($shipment);
+            $storagePath = $this->labelStoragePath($shipment->shipping_label_url);
+
+            if (!$storagePath || !Storage::disk('public')->exists($storagePath)) {
+                throw new DomainException("Label PDF file was not found for AWB {$shipment->waybill}");
+            }
+
+            $filePaths[] = Storage::disk('public')->path($storagePath);
+        }
+
+        return $this->pdfMerger->merge($filePaths);
     }
 
     public function createReversePickup(Order $order): OrderShipment
@@ -740,6 +819,34 @@ class DelhiveryShipmentService
         }
 
         return null;
+    }
+
+    private function extractMergedPdfDownloadLink(array $payload): ?string
+    {
+        $rootLink = Arr::get($payload, 'pdf_download_link')
+            ?? Arr::get($payload, 'pdf_link')
+            ?? Arr::get($payload, 'label_url');
+
+        if (filled($rootLink)) {
+            return (string) $rootLink;
+        }
+
+        return $this->extractPdfDownloadLink($payload);
+    }
+
+    private function labelStoragePath(?string $labelUrl): ?string
+    {
+        if (!$labelUrl) {
+            return null;
+        }
+
+        $path = parse_url($labelUrl, PHP_URL_PATH);
+
+        if (!is_string($path) || !str_starts_with($path, '/storage/')) {
+            return null;
+        }
+
+        return urldecode(substr($path, strlen('/storage/')));
     }
 
     private function extractPdfDownloadLink(array $payload): ?string

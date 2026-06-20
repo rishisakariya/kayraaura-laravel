@@ -15,6 +15,7 @@ use App\Services\Shipping\ShippingProviderResolver;
 use App\Services\Shiprocket\ShiprocketShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -182,6 +183,85 @@ class OrderShipmentController extends Controller
             basename($path),
             ['Content-Type' => 'application/pdf']
         );
+    }
+
+    public function bulkLabels(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\Response
+    {
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1', 'max:30'],
+            'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
+        ]);
+
+        $orders = Order::with('shipment')
+            ->whereIn('id', $validated['order_ids'])
+            ->get()
+            ->keyBy('id');
+
+        $orderedOrders = collect($validated['order_ids'])
+            ->map(fn (int $orderId) => $orders->get($orderId))
+            ->filter();
+
+        $ordersWithoutShipment = $orderedOrders->filter(fn (Order $order) => !$order->shipment);
+
+        if ($ordersWithoutShipment->isNotEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Some selected orders do not have a shipment yet',
+                'data' => [
+                    'order_ids' => $ordersWithoutShipment->pluck('id')->values()->all(),
+                ],
+            ], 422);
+        }
+
+        $ordersWithoutAwb = $orderedOrders->filter(fn (Order $order) => !$order->shipment?->hasWaybill());
+
+        if ($ordersWithoutAwb->isNotEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Some selected orders do not have a shipment AWB yet',
+                'data' => [
+                    'order_ids' => $ordersWithoutAwb->pluck('id')->values()->all(),
+                ],
+            ], 422);
+        }
+
+        $nonDelhiveryOrders = $orderedOrders->filter(
+            fn (Order $order) => $order->shipment->provider !== OrderShipment::PROVIDER_DELHIVERY
+        );
+
+        if ($nonDelhiveryOrders->isNotEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bulk Delhivery labels can only be generated for Delhivery shipments',
+                'data' => [
+                    'order_ids' => $nonDelhiveryOrders->pluck('id')->values()->all(),
+                ],
+            ], 422);
+        }
+
+        try {
+            $pdfBinary = $this->delhiveryShipmentService->generateMergedShippingLabels(
+                $orderedOrders->pluck('shipment')
+            );
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate Delhivery labels. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+
+        $filename = 'delhivery-labels-' . now()->format('Ymd-His') . '.pdf';
+
+        return response($pdfBinary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     private function labelPayload(Order $order): array
