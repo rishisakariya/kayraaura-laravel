@@ -7,8 +7,6 @@ use App\Models\ShipmentStatusHistory;
 use App\Services\Shipping\ShippingProviderResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\URL;
-
 class OrderResource extends JsonResource
 {
     /**
@@ -78,11 +76,7 @@ class OrderResource extends JsonResource
             return null;
         }
 
-        return URL::temporarySignedRoute(
-            'orders.invoice.download',
-            now()->addMinutes(30),
-            ['id' => $this->id]
-        );
+        return route('orders.invoice.download', ['id' => $this->id]);
     }
 
     private function shipmentPayload(Request $request): array

@@ -27,7 +27,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OrderController extends Controller
@@ -217,7 +216,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Return a signed invoice download URL for a successful order.
+     * Return an invoice download URL for a successful order.
      */
     public function invoice(string $id): JsonResponse
     {
@@ -241,21 +240,13 @@ class OrderController extends Controller
      */
     public function downloadInvoice(string $id): BinaryFileResponse|JsonResponse
     {
-        $order = Order::with(['user', 'orderItems.productSize'])->find($id);
+        $order = $this->findCustomerOrderForInvoice($id);
 
-        if (!$order) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Order not found.',
-            ], 404);
+        if ($order instanceof JsonResponse) {
+            return $order;
         }
 
-        if (!$this->canDownloadInvoice($order)) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Invoice is available only after the order is placed successfully.',
-            ], 409);
-        }
+        $order->load(['user', 'orderItems.productSize']);
 
         $path = $this->generateInvoiceFile($order);
         $fileName = $this->invoiceFileName($order);
@@ -457,11 +448,7 @@ class OrderController extends Controller
 
     private function invoiceDownloadUrl(Order $order): string
     {
-        return URL::temporarySignedRoute(
-            'orders.invoice.download',
-            now()->addMinutes(30),
-            ['id' => $order->id]
-        );
+        return route('orders.invoice.download', ['id' => $order->id]);
     }
 
     private function invoiceFileName(Order $order): string
