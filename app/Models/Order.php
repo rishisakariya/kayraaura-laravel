@@ -41,11 +41,13 @@ class Order extends Model
         'shipping_address',
         'billing_address',
         'notes',
+        'return_request',
     ];
 
     protected $casts = [
         'shipping_address' => 'array',
         'billing_address' => 'array',
+        'return_request' => 'array',
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'shipping_amount' => 'decimal:2',
@@ -145,18 +147,14 @@ class Order extends Model
         }
     }
 
-    public function markReturnRequested(?string $reason = null): void
+    public function markReturnRequested(array $returnRequest): void
     {
         if (!$this->canBeReturned()) {
             throw new DomainException('Only delivered orders can be returned');
         }
 
         $this->status = 'return_requested';
-
-        if ($reason) {
-            $this->notes = ($this->notes ? $this->notes . "\n\n" : '') . 'Return reason: ' . $reason;
-        }
-
+        $this->return_request = $returnRequest;
         $this->save();
     }
 }

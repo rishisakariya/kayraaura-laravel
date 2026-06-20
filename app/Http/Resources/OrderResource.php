@@ -53,6 +53,8 @@ class OrderResource extends JsonResource
             'shipping_address' => $this->shipping_address,
             'billing_address' => $this->billing_address,
             'notes' => $this->notes,
+            'can_be_returned' => $this->canBeReturned(),
+            'return_request' => $this->returnRequestPayload(),
             'invoice_download_url' => $this->invoiceDownloadUrl(),
             'can_be_cancelled' => $this->canBeCancelled(),
             'order_items' => OrderItemResource::collection($this->whenLoaded('orderItems')),
@@ -94,12 +96,12 @@ class OrderResource extends JsonResource
             'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,
             'raw_status' => $shipment?->raw_status,
             'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
-            'return' => [
+            'return' => array_merge([
                 'waybill' => $shipment?->reverse_waybill,
                 'status' => $shipment?->reverse_status,
                 'tracking_url' => $shipment?->reverse_tracking_url,
                 'requested_at' => $shipment?->reverse_requested_at?->format('Y-m-d H:i:s'),
-            ],
+            ], $this->returnRequestSummary()),
         ];
 
         if ($request->is('cpanel/orders/*') || $request->is('api/cpanel/orders/*')) {
@@ -130,6 +132,36 @@ class OrderResource extends JsonResource
                     ? ShipmentStatusHistory::formatForApi($shipment->statusHistories)
                     : [],
             ]);
+        }
+
+        return $payload;
+    }
+
+    private function returnRequestPayload(): ?array
+    {
+        if (!in_array($this->status, ['return_requested', 'returned'], true) || !$this->return_request) {
+            return null;
+        }
+
+        return $this->returnRequestSummary();
+    }
+
+    private function returnRequestSummary(): array
+    {
+        $returnRequest = $this->return_request ?? [];
+
+        if ($returnRequest === []) {
+            return [];
+        }
+
+        $payload = [
+            'reason' => $returnRequest['reason'] ?? null,
+            'product_images' => $returnRequest['product_images'] ?? [],
+            'requested_at' => $returnRequest['requested_at'] ?? null,
+        ];
+
+        if (isset($returnRequest['refund_details']) && is_array($returnRequest['refund_details'])) {
+            $payload['refund_details'] = $returnRequest['refund_details'];
         }
 
         return $payload;

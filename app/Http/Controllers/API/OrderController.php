@@ -16,6 +16,7 @@ use App\Models\UserAddress;
 use App\Models\WebSetting;
 use App\Services\CheckoutService;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\OrderReturnService;
 use App\Services\OtpService;
 use App\Services\ScratchCardService;
 use App\Services\Shiprocket\ShiprocketShipmentService;
@@ -37,6 +38,7 @@ class OrderController extends Controller
         private readonly ShiprocketShipmentService $shiprocketShipmentService,
         private readonly OtpService $otpService,
         private readonly ScratchCardService $scratchCardService,
+        private readonly OrderReturnService $orderReturnService,
     )
     {
     }
@@ -382,13 +384,34 @@ class OrderController extends Controller
                 ? $this->shiprocketShipmentService
                 : $this->shipmentService;
 
-            $service->createReversePickup($order);
-            $order->refresh()->markReturnRequested($request->input('reason'));
+            $validated = $request->validated();
+            $imageUrls = $this->orderReturnService->storeProductImages(
+                $order,
+                $request->file('product_images', [])
+            );
+
+            try {
+                $service->createReversePickup($order);
+                $returnRequest = $this->orderReturnService->buildReturnRequestPayload(
+                    $order,
+                    $validated,
+                    $imageUrls
+                );
+                $order->refresh()->markReturnRequested($returnRequest);
+            } catch (\Throwable $e) {
+                $this->orderReturnService->deleteProductImages($imageUrls);
+
+                throw $e;
+            }
+
+            $message = $order->payment_method === 'cod'
+                ? 'Return pickup scheduled successfully. Refund will be processed to your UPI after the product is received.'
+                : 'Return pickup scheduled successfully. Refund will be processed after the product is received.';
 
             return response()->json([
                 'status' => true,
                 'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
-                'message' => 'Return pickup scheduled successfully. Refund will be processed after the product is received.',
+                'message' => $message,
             ]);
 
         } catch (DomainException $e) {
