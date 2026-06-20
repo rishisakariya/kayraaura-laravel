@@ -19,6 +19,7 @@ class CustomerResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,
+            'gender' => $this->gender,
             'mobile_number' => $this->phone,
             'role' => $this->role,
             'email_verified_at' => $this->email_verified_at?->format('Y-m-d H:i:s'),

@@ -28,7 +28,8 @@ class FrontendAuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255',
             'password' => 'required|string|min:8|confirmed',
-            'phone' => 'required|string|max:12|unique:users,phone'
+            'phone' => 'required|string|max:12|unique:users,phone',
+            'gender' => 'required|in:male,female',
         ]);
 
         if ($validator->fails()) {
@@ -47,6 +48,7 @@ class FrontendAuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
+            'gender' => $request->gender,
             'role' => 'customer'
         ]);
 
