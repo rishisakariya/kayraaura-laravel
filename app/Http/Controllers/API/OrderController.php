@@ -8,6 +8,7 @@ use App\Http\Requests\OrderCancelRequest;
 use App\Http\Requests\OrderReturnRequest;
 use App\Http\Resources\OrderResource;
 use App\Jobs\CancelDelhiveryShipmentJob;
+use App\Jobs\CreateDelhiveryShipmentJob;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ProductSize;
@@ -115,6 +116,10 @@ class OrderController extends Controller
 
             $order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment']);
 
+            if ($order->payment_method === 'cod') {
+                CreateDelhiveryShipmentJob::dispatch($order->id);
+            }
+
             return response()->json([
                 'status' => true,
                 'data' => [
@@ -122,7 +127,7 @@ class OrderController extends Controller
                     'razorpay' => $razorpayCheckout,
                 ],
                 'message' => $order->payment_method === 'cod'
-                    ? 'Order placed successfully. Your COD order is pending confirmation.'
+                    ? 'Order placed successfully'
                     : 'Order created successfully',
             ], 201);
 
@@ -270,7 +275,8 @@ class OrderController extends Controller
         if (!$order->canBeCancelled()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Order cannot be cancelled after shipment pickup or while in transit',
+                'message' => $order->cancellationBlockReason()
+                    ?? 'Order cannot be cancelled after shipment pickup or while in transit',
             ], 400);
         }
 

@@ -54,6 +54,7 @@ class OrderResource extends JsonResource
             'billing_address' => $this->billing_address,
             'notes' => $this->notes,
             'invoice_download_url' => $this->invoiceDownloadUrl(),
+            'can_be_cancelled' => $this->canBeCancelled(),
             'order_items' => OrderItemResource::collection($this->whenLoaded('orderItems')),
             'shipment' => $this->shipmentPayload($request),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),

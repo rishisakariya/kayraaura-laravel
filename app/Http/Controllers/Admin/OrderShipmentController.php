@@ -45,10 +45,6 @@ class OrderShipmentController extends Controller
         $shipment = DB::transaction(function () use ($order) {
             $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
 
-            if ($order->payment_method === 'cod' && $order->status === 'pending_admin_confirmation') {
-                $order->forceFill(['status' => 'processing'])->save();
-            }
-
             $provider = $this->shippingProviderResolver->activeProvider();
 
             $shipment = OrderShipment::firstOrCreate(

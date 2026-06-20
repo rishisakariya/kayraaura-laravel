@@ -96,15 +96,38 @@ class Order extends Model
 
     public function canBeCancelled(): bool
     {
+        return $this->cancellationBlockReason() === null;
+    }
+
+    public function cancellationBlockReason(): ?string
+    {
         if (in_array($this->status, ['cancelled', 'delivered', 'return_requested', 'returned'], true)) {
-            return false;
+            return match ($this->status) {
+                'cancelled' => 'Order is already cancelled',
+                'delivered' => 'Delivered orders cannot be cancelled',
+                'return_requested' => 'Order with an active return request cannot be cancelled',
+                'returned' => 'Returned orders cannot be cancelled',
+                default => 'Order cannot be cancelled',
+            };
+        }
+
+        if ($this->payment_method === 'cod' && !$this->cod_verified_at) {
+            return 'Order cannot be cancelled until COD verification is completed';
+        }
+
+        if ($this->payment_method === 'online' && $this->payment_status !== 'paid') {
+            return 'Online order cannot be cancelled until payment is completed';
         }
 
         $shipmentStatus = $this->relationLoaded('shipment')
             ? ($this->shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED)
             : ($this->shipment()->value('shipment_status') ?? OrderShipment::STATUS_NOT_CREATED);
 
-        return in_array($shipmentStatus, OrderShipment::CANCELLABLE_STATUSES, true);
+        if (!in_array($shipmentStatus, OrderShipment::CANCELLABLE_STATUSES, true)) {
+            return 'Order cannot be cancelled after shipment pickup or while in transit';
+        }
+
+        return null;
     }
 
     public function canBeReturned(): bool

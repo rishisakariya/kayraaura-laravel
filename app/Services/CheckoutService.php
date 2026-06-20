@@ -123,7 +123,7 @@ class CheckoutService
             'address_id' => $checkout['address']->id,
             'order_number' => Order::generateOrderNumber(),
             'checkout_type' => $payload['checkout_type'],
-            'status' => $payload['payment_method'] === 'cod' ? 'pending_admin_confirmation' : 'pending',
+            'status' => 'pending',
             'subtotal' => $checkout['subtotal'],
             'tax_amount' => $checkout['tax_amount'],
             'shipping_amount' => $checkout['shipping_amount'],
