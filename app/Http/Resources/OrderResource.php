@@ -44,6 +44,7 @@ class OrderResource extends JsonResource
             'cod_charge' => (float) ($this->cod_charge ?? 0),
             'buy_two_get_one_discount_amount' => (float) ($this->buy_two_get_one_discount_amount ?? 0),
             'first_order_discount_amount' => (float) ($this->first_order_discount_amount ?? 0),
+            'online_payment_discount_amount' => (float) ($this->online_payment_discount_amount ?? 0),
             'scratch_coupon_code' => $this->scratch_coupon_code,
             'discount_percent' => $this->discount_percent,
             'discount_amount' => (float) ($this->discount_amount ?? 0),

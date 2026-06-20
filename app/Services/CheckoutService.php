@@ -20,6 +20,8 @@ class CheckoutService
 
     private const FIRST_ORDER_DISCOUNT_AMOUNT = 50.0;
 
+    private const ONLINE_PAYMENT_DISCOUNT_RATE = 0.10;
+
     public function buildCheckout(User $user, array $payload, bool $lockProductSizes = false): array
     {
         $address = UserAddress::where('user_id', $user->id)->find($payload['address_id']);
@@ -47,8 +49,15 @@ class CheckoutService
             : 0.0;
         $baseTotalAfterFirstOrderDiscount = round(max($baseTotal - $firstOrderDiscountAmount, 0), 2);
         $isCod = ($payload['payment_method'] ?? null) === 'cod';
+        $isOnline = ($payload['payment_method'] ?? null) === 'online';
+        $onlinePaymentDiscountAmount = $isOnline
+            ? round($baseTotalAfterFirstOrderDiscount * self::ONLINE_PAYMENT_DISCOUNT_RATE, 2)
+            : 0.0;
+        $baseTotalAfterOnlineDiscount = round(max($baseTotalAfterFirstOrderDiscount - $onlinePaymentDiscountAmount, 0), 2);
         $codCharge = $isCod ? round($baseTotalAfterFirstOrderDiscount * self::COD_CHARGE_RATE, 2) : 0.0;
-        $totalAmount = round($baseTotalAfterFirstOrderDiscount + $codCharge, 2);
+        $totalAmount = $isCod
+            ? round($baseTotalAfterFirstOrderDiscount + $codCharge, 2)
+            : $baseTotalAfterOnlineDiscount;
 
         return [
             'address' => $address,
@@ -58,6 +67,8 @@ class CheckoutService
             'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,
             'first_order_discount_eligible' => $firstOrderDiscountEligible,
             'first_order_discount_amount' => $firstOrderDiscountAmount,
+            'online_payment_discount_percent' => $isOnline ? (int) (self::ONLINE_PAYMENT_DISCOUNT_RATE * 100) : null,
+            'online_payment_discount_amount' => $onlinePaymentDiscountAmount,
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
             'shipping_amount' => $shippingAmount,
@@ -88,6 +99,7 @@ class CheckoutService
             'cod_charge' => $checkout['cod_charge'],
             'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'] ?? 0,
             'first_order_discount_amount' => $firstOrderDiscountAmount,
+            'online_payment_discount_amount' => $checkout['online_payment_discount_amount'] ?? 0,
             'scratch_coupon_code' => $checkout['coupon_code'] ?? null,
             'discount_percent' => $checkout['discount_percent'] ?? null,
             'discount_amount' => $checkout['discount_amount'] ?? 0,

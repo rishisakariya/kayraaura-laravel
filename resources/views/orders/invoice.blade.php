@@ -102,6 +102,7 @@
     $itemsSubtotal = $order->orderItems->sum(fn ($item) => (float) $item->total);
     $buyTwoGetOneDiscount = (float) ($order->buy_two_get_one_discount_amount ?? 0);
     $firstOrderDiscount = (float) ($order->first_order_discount_amount ?? 0);
+    $onlinePaymentDiscount = (float) ($order->online_payment_discount_amount ?? 0);
     $couponDiscount = (float) ($order->discount_amount ?? 0);
 @endphp
 
@@ -198,6 +199,12 @@
                 <tr>
                     <td>First Order Discount</td>
                     <td class="text-right">-{{ $formatMoney($firstOrderDiscount) }}</td>
+                </tr>
+            @endif
+            @if($onlinePaymentDiscount > 0)
+                <tr>
+                    <td>Online Payment Discount (10%)</td>
+                    <td class="text-right">-{{ $formatMoney($onlinePaymentDiscount) }}</td>
                 </tr>
             @endif
             @if((float) ($order->cod_charge ?? 0) > 0)

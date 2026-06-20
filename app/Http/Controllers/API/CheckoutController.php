@@ -50,6 +50,8 @@ class CheckoutController extends Controller
                     'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'],
                     'first_order_discount_eligible' => $checkout['first_order_discount_eligible'],
                     'first_order_discount_amount' => $checkout['first_order_discount_amount'],
+                    'online_payment_discount_percent' => $checkout['online_payment_discount_percent'] ?? null,
+                    'online_payment_discount_amount' => $checkout['online_payment_discount_amount'] ?? 0,
                     'subtotal' => $checkout['subtotal'],
                     'tax_amount' => $checkout['tax_amount'],
                     'shipping_amount' => $checkout['shipping_amount'],
