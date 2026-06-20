@@ -236,17 +236,25 @@ class OrderController extends Controller
     }
 
     /**
-     * Download the invoice PDF file.
+     * Download the invoice PDF file (public — no auth required).
      */
     public function downloadInvoice(string $id): BinaryFileResponse|JsonResponse
     {
-        $order = $this->findCustomerOrderForInvoice($id);
+        $order = Order::with(['user', 'orderItems.productSize'])->find($id);
 
-        if ($order instanceof JsonResponse) {
-            return $order;
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found.',
+            ], 404);
         }
 
-        $order->load(['user', 'orderItems.productSize']);
+        if (!$this->canDownloadInvoice($order)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Invoice is available only after the order is placed successfully.',
+            ], 409);
+        }
 
         $path = $this->generateInvoiceFile($order);
         $fileName = $this->invoiceFileName($order);
@@ -254,7 +262,10 @@ class OrderController extends Controller
         return response()->download(
             Storage::disk('public')->path($path),
             $fileName,
-            ['Content-Type' => 'application/pdf']
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            ]
         );
     }
 

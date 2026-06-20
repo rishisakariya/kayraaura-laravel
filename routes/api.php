@@ -98,13 +98,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/scratch-card/scratch', [ScratchCardController::class, 'scratch']);
 });
 
+Route::get('/orders/{id}/invoice/download', [OrderController::class, 'downloadInvoice'])
+    ->name('orders.invoice.download');
+
 // Frontend Order Routes (Protected)
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::get('/orders/{id}/invoice', [OrderController::class, 'invoice']);
-    Route::get('/orders/{id}/invoice/download', [OrderController::class, 'downloadInvoice'])
-        ->name('orders.invoice.download');
     Route::get('/orders/{id}/shipment', [OrderShipmentController::class, 'show']);
     Route::post('/orders/cod/send-otp', [OrderController::class, 'sendCodOtp']);
     Route::post('/orders/create', [OrderController::class, 'store']);
