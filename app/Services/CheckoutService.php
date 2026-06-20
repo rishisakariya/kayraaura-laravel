@@ -23,6 +23,8 @@ class CheckoutService
 
     private const COD_CHARGE_RATE = 0.10;
 
+    private const GST_RATE = 0.03;
+
     private const FIRST_ORDER_DISCOUNT_AMOUNT = 50.0;
 
     private const ONLINE_PAYMENT_DISCOUNT_RATE = 0.10;
@@ -73,7 +75,7 @@ class CheckoutService
             ? $this->calculateBuyTwoGetOneDiscount($items)
             : 0.0;
         $subtotal = round(max($itemsSubtotal - $buyTwoGetOneDiscountAmount, 0), 2);
-        $taxAmount = round($subtotal * 0.18, 2);
+        $taxAmount = round($subtotal * self::GST_RATE, 2);
         $shippingAmount = $subtotal > 1000 ? 0.0 : 50.0;
         $baseTotal = round($subtotal + $taxAmount + $shippingAmount, 2);
         $firstOrderDiscountEligible = $this->userQualifiesForFirstOrderDiscount($user);

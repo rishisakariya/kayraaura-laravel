@@ -368,10 +368,12 @@ class OrderController extends Controller
             ], 400);
         }
 
-        if (now()->gt($deliveredAt->copy()->addDays(7))) {
+        if (now()->gt($deliveredAt->copy()->addDays(Order::RETURN_WINDOW_DAYS))) {
             return response()->json([
                 'status' => false,
-                'message' => 'Return window expired. Returns are allowed within 7 days from delivery',
+                'message' => 'Return window expired. Returns are allowed within '
+                    . Order::RETURN_WINDOW_DAYS
+                    . ' days from delivery',
             ], 400);
         }
 

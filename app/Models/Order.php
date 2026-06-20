@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
+    public const RETURN_WINDOW_DAYS = 3;
+
     protected $fillable = [
         'user_id',
         'address_id',
