@@ -26,6 +26,8 @@ class CustomerReviewController extends Controller
             ],
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'review' => ['nullable', 'string', 'max:5000'],
+        ], [
+            'product_id.unique' => 'You have already submitted a review for this product.',
         ]);
 
         $review = CustomerReview::create([

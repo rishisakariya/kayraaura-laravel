@@ -23,6 +23,9 @@ class OrderController extends Controller
 
         $orders = Order::with(['user', 'orderItems.product.images', 'orderItems.productSize', 'shipment'])
             ->where('payment_method', $validated['type'])
+            ->when($validated['type'] === 'online', function ($query) {
+                $query->where('payment_status', '!=', 'pending');
+            })
             ->when($request->input('search'), function ($query, $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('order_number', 'like', "%{$search}%")
