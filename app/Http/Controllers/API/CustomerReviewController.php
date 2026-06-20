@@ -8,7 +8,6 @@ use App\Models\CustomerReview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 
 class CustomerReviewController extends Controller
 {
@@ -18,16 +17,9 @@ class CustomerReviewController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'product_id' => [
-                'required',
-                'integer',
-                'exists:products,id',
-                Rule::unique('customer_reviews')->where(fn ($query) => $query->where('user_id', Auth::id())),
-            ],
+            'product_id' => ['required', 'integer', 'exists:products,id'],
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'review' => ['nullable', 'string', 'max:5000'],
-        ], [
-            'product_id.unique' => 'You have already submitted a review for this product.',
         ]);
 
         $review = CustomerReview::create([
