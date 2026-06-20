@@ -101,6 +101,7 @@
     $billingAddress = $order->billing_address ?: $order->shipping_address;
     $itemsSubtotal = $order->orderItems->sum(fn ($item) => (float) $item->total);
     $buyTwoGetOneDiscount = (float) ($order->buy_two_get_one_discount_amount ?? 0);
+    $firstOrderDiscount = (float) ($order->first_order_discount_amount ?? 0);
     $couponDiscount = (float) ($order->discount_amount ?? 0);
 @endphp
 
@@ -193,6 +194,12 @@
                 <td>Shipping</td>
                 <td class="text-right">{{ $formatMoney($order->shipping_amount) }}</td>
             </tr>
+            @if($firstOrderDiscount > 0)
+                <tr>
+                    <td>First Order Discount</td>
+                    <td class="text-right">-{{ $formatMoney($firstOrderDiscount) }}</td>
+                </tr>
+            @endif
             @if((float) ($order->cod_charge ?? 0) > 0)
                 <tr>
                     <td>COD Charge</td>

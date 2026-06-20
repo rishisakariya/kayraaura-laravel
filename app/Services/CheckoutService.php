@@ -18,6 +18,8 @@ class CheckoutService
 {
     private const COD_CHARGE_RATE = 0.10;
 
+    private const FIRST_ORDER_DISCOUNT_AMOUNT = 50.0;
+
     public function buildCheckout(User $user, array $payload, bool $lockProductSizes = false): array
     {
         $address = UserAddress::where('user_id', $user->id)->find($payload['address_id']);
@@ -39,9 +41,14 @@ class CheckoutService
         $taxAmount = round($subtotal * 0.18, 2);
         $shippingAmount = $subtotal > 1000 ? 0.0 : 50.0;
         $baseTotal = round($subtotal + $taxAmount + $shippingAmount, 2);
+        $firstOrderDiscountEligible = $this->userQualifiesForFirstOrderDiscount($user);
+        $firstOrderDiscountAmount = $firstOrderDiscountEligible
+            ? min(self::FIRST_ORDER_DISCOUNT_AMOUNT, $baseTotal)
+            : 0.0;
+        $baseTotalAfterFirstOrderDiscount = round(max($baseTotal - $firstOrderDiscountAmount, 0), 2);
         $isCod = ($payload['payment_method'] ?? null) === 'cod';
-        $codCharge = $isCod ? round($baseTotal * self::COD_CHARGE_RATE, 2) : 0.0;
-        $totalAmount = round($baseTotal + $codCharge, 2);
+        $codCharge = $isCod ? round($baseTotalAfterFirstOrderDiscount * self::COD_CHARGE_RATE, 2) : 0.0;
+        $totalAmount = round($baseTotalAfterFirstOrderDiscount + $codCharge, 2);
 
         return [
             'address' => $address,
@@ -49,6 +56,8 @@ class CheckoutService
             'items_subtotal' => $itemsSubtotal,
             'buy_two_get_one_free_enabled' => $buyTwoGetOneFreeEnabled,
             'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,
+            'first_order_discount_eligible' => $firstOrderDiscountEligible,
+            'first_order_discount_amount' => $firstOrderDiscountAmount,
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
             'shipping_amount' => $shippingAmount,
@@ -59,6 +68,12 @@ class CheckoutService
 
     public function createOrder(User $user, array $payload, array $checkout): Order
     {
+        $firstOrderDiscountAmount = (float) ($checkout['first_order_discount_amount'] ?? 0);
+
+        if ($firstOrderDiscountAmount > 0 && !$this->userQualifiesForFirstOrderDiscount($user)) {
+            throw new DomainException('First order discount is no longer available');
+        }
+
         $addressSnapshot = $checkout['address']->toSnapshot();
 
         $order = Order::create([
@@ -72,6 +87,7 @@ class CheckoutService
             'shipping_amount' => $checkout['shipping_amount'],
             'cod_charge' => $checkout['cod_charge'],
             'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'] ?? 0,
+            'first_order_discount_amount' => $firstOrderDiscountAmount,
             'scratch_coupon_code' => $checkout['coupon_code'] ?? null,
             'discount_percent' => $checkout['discount_percent'] ?? null,
             'discount_amount' => $checkout['discount_amount'] ?? 0,
@@ -425,6 +441,14 @@ class CheckoutService
             'price' => $price,
             'total' => round($price * $quantity, 2),
         ];
+    }
+
+    public function userQualifiesForFirstOrderDiscount(User $user): bool
+    {
+        return !Order::where('user_id', $user->id)
+            ->where('status', '!=', 'cancelled')
+            ->where('payment_status', '!=', 'failed')
+            ->exists();
     }
 
     public function calculateBuyTwoGetOneDiscount(Collection $items): float
