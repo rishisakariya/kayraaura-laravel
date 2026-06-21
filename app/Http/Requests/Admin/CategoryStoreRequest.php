@@ -15,6 +15,13 @@ class CategoryStoreRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('image_url') && ! $this->filled('image')) {
+            $this->merge(['image' => $this->input('image_url')]);
+        }
+    }
+
     /**
      * Get the validation rules that apply to the request.
      */
@@ -33,6 +40,7 @@ class CategoryStoreRequest extends FormRequest
         ],
             'description' => 'nullable|string|max:1000',
             'image' => ['nullable', 'string', 'max:2048', 'not_regex:/\.\./'],
+            'image_url' => ['nullable', 'string', 'max:2048', 'not_regex:/\.\./'],
             'parent_id' => 'nullable|integer|exists:categories,id',
             'sort_order' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',

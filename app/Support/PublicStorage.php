@@ -34,8 +34,10 @@ class PublicStorage
         $path = parse_url($path, PHP_URL_PATH) ?: $path;
         $path = ltrim(str_replace('\\', '/', $path), '/');
 
-        if (str_starts_with($path, 'storage/')) {
-            return substr($path, strlen('storage/'));
+        foreach (['public/storage/uploads/', 'public/storage/', 'storage/uploads/', 'storage/'] as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                return substr($path, strlen($prefix));
+            }
         }
 
         return $path;
