@@ -7,9 +7,18 @@ use App\Support\PublicStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class MediaController extends Controller
 {
+    private const UPLOAD_FOLDERS = [
+        'products',
+        'categories',
+        'banners',
+        'web-settings',
+        'media',
+    ];
+
     /**
      * Upload a reusable media asset into the public storage disk.
      */
@@ -17,7 +26,7 @@ class MediaController extends Controller
     {
         $validated = $request->validate([
             'file' => 'required|file|mimes:jpg,jpeg,png,webp,mp4,mov,avi,webm|max:51200',
-            'folder' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'folder' => ['required', 'string', Rule::in(self::UPLOAD_FOLDERS)],
             'alt_text' => 'nullable|string|max:255',
         ]);
 
@@ -27,7 +36,7 @@ class MediaController extends Controller
         $mimeType = $file->getMimeType();
         $mediaType = str_starts_with((string) $mimeType, 'video/') ? 'video' : 'image';
         $fileName = now()->timestamp . '_' . Str::random(16) . '.' . $extension;
-        $filePath = $file->storeAs($folder, $fileName, 'public');
+        $filePath = PublicStorage::storeUploadedFile($file, $folder, $fileName);
         $fileUrl = PublicStorage::url($filePath);
 
         return response()->json([

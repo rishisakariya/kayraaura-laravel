@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Support\PublicStorage;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 
 class OrderReturnService
 {
@@ -21,8 +21,8 @@ class OrderReturnService
                 continue;
             }
 
-            $path = $image->store("order-returns/{$order->id}", 'public');
-            $stored[] = Storage::disk('public')->url($path);
+            $path = PublicStorage::storeUploadedFile($image, "order-returns/{$order->id}");
+            $stored[] = PublicStorage::url($path);
         }
 
         return $stored;
@@ -34,16 +34,7 @@ class OrderReturnService
     public function deleteProductImages(array $imageUrls): void
     {
         foreach ($imageUrls as $url) {
-            $path = parse_url($url, PHP_URL_PATH) ?: $url;
-            $path = ltrim($path, '/');
-
-            if (str_starts_with($path, 'storage/')) {
-                $path = substr($path, strlen('storage/'));
-            }
-
-            if ($path && Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
-            }
+            PublicStorage::delete($url);
         }
     }
 
