@@ -385,7 +385,7 @@
                     @endif
                     @if($onlinePaymentDiscount > 0)
                         <tr class="discount">
-                            <td>Online Payment Discount (10%)</td>
+                            <td>Online Payment Discount ({{ (int) ($webSetting->online_payment_discount_percent ?? 0) }}%)</td>
                             <td class="text-right">-{{ $formatMoney($onlinePaymentDiscount) }}</td>
                         </tr>
                     @endif

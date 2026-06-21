@@ -22,10 +22,14 @@ class WebSetting extends Model
         'whatsapp_url',
         'linkedin_url',
         'buy_two_get_one_free_enabled',
+        'first_order_discount_amount',
+        'online_payment_discount_percent',
     ];
 
     protected $casts = [
         'buy_two_get_one_free_enabled' => 'boolean',
+        'first_order_discount_amount' => 'decimal:2',
+        'online_payment_discount_percent' => 'integer',
     ];
 
     public static function current(): self
@@ -43,6 +47,8 @@ class WebSetting extends Model
                 'whatsapp_url' => null,
                 'linkedin_url' => null,
                 'buy_two_get_one_free_enabled' => false,
+                'first_order_discount_amount' => 50,
+                'online_payment_discount_percent' => 10,
             ]
         );
     }

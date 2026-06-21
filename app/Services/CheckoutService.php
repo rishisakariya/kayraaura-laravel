@@ -25,10 +25,6 @@ class CheckoutService
 
     private const GST_RATE = 0.03;
 
-    private const FIRST_ORDER_DISCOUNT_AMOUNT = 50.0;
-
-    private const ONLINE_PAYMENT_DISCOUNT_RATE = 0.10;
-
     public function buildCheckout(User $user, array $payload, bool $lockProductSizes = false): array
     {
         $address = UserAddress::where('user_id', $user->id)->find($payload['address_id']);
@@ -70,7 +66,8 @@ class CheckoutService
 
             return (int) data_get($item, 'quantity', 0) * (float) (data_get($item, 'size_price') ?? data_get($item, 'price', 0));
         }), 2);
-        $buyTwoGetOneFreeEnabled = WebSetting::current()->buy_two_get_one_free_enabled;
+        $webSetting = WebSetting::current();
+        $buyTwoGetOneFreeEnabled = $webSetting->buy_two_get_one_free_enabled;
         $buyTwoGetOneDiscountAmount = $buyTwoGetOneFreeEnabled
             ? $this->calculateBuyTwoGetOneDiscount($items)
             : 0.0;
@@ -78,15 +75,17 @@ class CheckoutService
         $taxAmount = round($subtotal * self::GST_RATE, 2);
         $shippingAmount = $subtotal > 1000 ? 0.0 : 50.0;
         $baseTotal = round($subtotal + $taxAmount + $shippingAmount, 2);
+        $configuredFirstOrderDiscount = max((float) ($webSetting->first_order_discount_amount ?? 0), 0);
+        $configuredOnlinePaymentDiscountPercent = max((int) ($webSetting->online_payment_discount_percent ?? 0), 0);
         $firstOrderDiscountEligible = $this->userQualifiesForFirstOrderDiscount($user);
         $firstOrderDiscountAmount = $firstOrderDiscountEligible
-            ? min(self::FIRST_ORDER_DISCOUNT_AMOUNT, $baseTotal)
+            ? min($configuredFirstOrderDiscount, $baseTotal)
             : 0.0;
         $baseTotalAfterFirstOrderDiscount = round(max($baseTotal - $firstOrderDiscountAmount, 0), 2);
         $isCod = $paymentMethod === 'cod';
         $isOnline = $paymentMethod === 'online';
         $onlinePaymentDiscountAmount = $isOnline
-            ? round($baseTotalAfterFirstOrderDiscount * self::ONLINE_PAYMENT_DISCOUNT_RATE, 2)
+            ? round($baseTotalAfterFirstOrderDiscount * ($configuredOnlinePaymentDiscountPercent / 100), 2)
             : 0.0;
         $baseTotalAfterOnlineDiscount = round(max($baseTotalAfterFirstOrderDiscount - $onlinePaymentDiscountAmount, 0), 2);
         $codCharge = $isCod ? round($baseTotalAfterFirstOrderDiscount * self::COD_CHARGE_RATE, 2) : 0.0;
@@ -100,7 +99,7 @@ class CheckoutService
             'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,
             'first_order_discount_eligible' => $firstOrderDiscountEligible,
             'first_order_discount_amount' => $firstOrderDiscountAmount,
-            'online_payment_discount_percent' => $isOnline ? (int) (self::ONLINE_PAYMENT_DISCOUNT_RATE * 100) : null,
+            'online_payment_discount_percent' => $isOnline ? $configuredOnlinePaymentDiscountPercent : null,
             'online_payment_discount_amount' => $onlinePaymentDiscountAmount,
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
