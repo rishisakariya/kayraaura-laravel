@@ -12,13 +12,30 @@ class PublicStorage
      */
     public static function storeUploadedFile(UploadedFile $file, string $folder, ?string $fileName = null): string
     {
-        $folder = trim(str_replace('\\', '/', $folder), '/');
+        $folder = self::normalizeFolder($folder);
+        self::ensureDirectory($folder);
 
         if ($fileName !== null) {
             return $file->storeAs($folder, $fileName, 'public');
         }
 
         return $file->store($folder, 'public');
+    }
+
+    public static function ensureDirectory(string $folder): void
+    {
+        $folder = self::normalizeFolder($folder);
+
+        if ($folder === '') {
+            return;
+        }
+
+        Storage::disk('public')->makeDirectory($folder);
+    }
+
+    public static function normalizeFolder(string $folder): string
+    {
+        return trim(str_replace('\\', '/', $folder), '/');
     }
 
     /**
