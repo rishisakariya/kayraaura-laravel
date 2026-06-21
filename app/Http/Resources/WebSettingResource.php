@@ -13,6 +13,7 @@ class WebSettingResource extends JsonResource
             'id' => $this->id,
             'email' => $this->email,
             'address' => $this->address,
+            'footer_description' => $this->footer_description,
             'mobile_number' => $this->mobile_number,
             'logo' => $this->logo,
             'logo_url' => $this->logo_url,

@@ -39,21 +39,7 @@ class Banner extends Model
 
     public static function current(): self
     {
-        return static::query()->firstOrCreate(
-            ['id' => 1],
-            [
-                'image1' => null,
-                'image2' => null,
-                'image3' => null,
-                'image4' => null,
-                'video' => null,
-                'banner_title' => null,
-                'banner_description' => null,
-                'video_title' => null,
-                'video_description' => null,
-                'sort_order' => 1,
-            ]
-        );
+        return static::query()->findOrFail(1);
     }
 
     public static function imageFields(): array

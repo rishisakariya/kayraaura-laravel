@@ -14,6 +14,7 @@ class WebSetting extends Model
     protected $fillable = [
         'email',
         'address',
+        'footer_description',
         'mobile_number',
         'logo',
         'instagram_url',
@@ -39,6 +40,7 @@ class WebSetting extends Model
             [
                 'email' => 'info@kayraaura.com',
                 'address' => 'Kayraaura',
+                'footer_description' => null,
                 'mobile_number' => '+919999999999',
                 'logo' => null,
                 'instagram_url' => null,

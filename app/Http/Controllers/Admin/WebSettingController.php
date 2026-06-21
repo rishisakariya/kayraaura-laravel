@@ -36,6 +36,7 @@ class WebSettingController extends Controller
         $payload = $request->validate([
             'email' => ['required', 'email', 'max:255'],
             'address' => ['required', 'string', 'max:5000'],
+            'footer_description' => ['nullable', 'string', 'max:5000'],
             'mobile_number' => ['required', 'string', 'max:20'],
             'logo' => ['nullable', 'string', 'max:2048', 'not_regex:/\.\./'],
             'instagram_url' => ['nullable', 'url', 'max:2048'],

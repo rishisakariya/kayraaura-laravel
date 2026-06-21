@@ -14,6 +14,7 @@ class WebSettingSeeder extends Seeder
             [
                 'email' => 'info@kayraaura.com',
                 'address' => 'Kayraaura',
+                'footer_description' => null,
                 'mobile_number' => '+919999999999',
                 'logo' => null,
                 'buy_two_get_one_free_enabled' => false,

@@ -14,11 +14,9 @@ class BannerController extends Controller
      */
     public function index(): JsonResponse
     {
-        $banner = Banner::current();
-
         return response()->json([
             'status' => true,
-            'data' => $banner ? new BannerResource($banner) : null,
+            'data' => new BannerResource(Banner::current()),
             'message' => 'Banner retrieved successfully',
         ]);
     }
