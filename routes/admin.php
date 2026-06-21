@@ -40,7 +40,8 @@ Route::prefix('cpanel')->group(function () {
         Route::apiResource('sizes', SizeController::class)->except(['update']);
 
         // Banners Management
-        Route::apiResource('banners', BannerController::class)->except(['update']);
+        Route::get('banners', [BannerController::class, 'show']);
+        Route::put('banners', [BannerController::class, 'update']);
 
         // Customers Management
         Route::get('users', [CustomerController::class, 'index']);
