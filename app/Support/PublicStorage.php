@@ -8,38 +8,22 @@ use Illuminate\Support\Facades\Storage;
 class PublicStorage
 {
     /**
-     * Build the storage directory for a media type (products, categories, banners, …).
-     * Uses "uploads/{folder}" unless the public disk root already ends with /uploads.
-     */
-    public static function uploadFolder(string $folder): string
-    {
-        $folder = trim(str_replace('\\', '/', $folder), '/');
-        $root = str_replace('\\', '/', (string) config('filesystems.disks.public.root'));
-
-        if (preg_match('#/uploads/?$#', $root)) {
-            return $folder;
-        }
-
-        return 'uploads/' . $folder;
-    }
-
-    /**
-     * Store an uploaded file on the public disk under uploads/{folder}/….
+     * Store an uploaded file on the public disk, e.g. products/, categories/.
      */
     public static function storeUploadedFile(UploadedFile $file, string $folder, ?string $fileName = null): string
     {
-        $directory = self::uploadFolder($folder);
+        $folder = trim(str_replace('\\', '/', $folder), '/');
 
         if ($fileName !== null) {
-            return $file->storeAs($directory, $fileName, 'public');
+            return $file->storeAs($folder, $fileName, 'public');
         }
 
-        return $file->store($directory, 'public');
+        return $file->store($folder, 'public');
     }
 
     /**
      * Convert a stored value or URL to the relative path on the public disk.
-     * e.g. "https://domain.com/storage/uploads/categories/a.jpg" → "uploads/categories/a.jpg"
+     * e.g. "https://domain.com/storage/products/a.jpg" → "products/a.jpg"
      */
     public static function diskPath(?string $path): ?string
     {
@@ -51,13 +35,7 @@ class PublicStorage
         $path = ltrim(str_replace('\\', '/', $path), '/');
 
         if (str_starts_with($path, 'storage/')) {
-            $path = substr($path, strlen('storage/'));
-        }
-
-        $root = str_replace('\\', '/', (string) config('filesystems.disks.public.root'));
-
-        if (preg_match('#/uploads/?$#', $root) && str_starts_with($path, 'uploads/')) {
-            $path = substr($path, strlen('uploads/'));
+            return substr($path, strlen('storage/'));
         }
 
         return $path;
@@ -93,13 +71,7 @@ class PublicStorage
             return false;
         }
 
-        if (Storage::disk('public')->exists($diskPath)) {
-            return true;
-        }
-
-        $legacyPath = self::legacyAbsolutePath($diskPath);
-
-        return $legacyPath !== null && is_file($legacyPath);
+        return Storage::disk('public')->exists($diskPath);
     }
 
     public static function delete(?string $path): bool
@@ -110,29 +82,6 @@ class PublicStorage
             return false;
         }
 
-        if (Storage::disk('public')->exists($diskPath)) {
-            return Storage::disk('public')->delete($diskPath);
-        }
-
-        $legacyPath = self::legacyAbsolutePath($diskPath);
-
-        if ($legacyPath !== null && is_file($legacyPath)) {
-            return unlink($legacyPath);
-        }
-
-        return false;
-    }
-
-    private static function legacyAbsolutePath(string $diskPath): ?string
-    {
-        $relative = str_starts_with($diskPath, 'uploads/')
-            ? substr($diskPath, strlen('uploads/'))
-            : $diskPath;
-
-        if ($relative === '') {
-            return null;
-        }
-
-        return storage_path('uploads/' . $relative);
+        return Storage::disk('public')->delete($diskPath);
     }
 }
