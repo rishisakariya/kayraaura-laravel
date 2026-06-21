@@ -30,11 +30,20 @@ class Banner extends Model
         'sort_order' => 'integer',
     ];
 
-    public static function current(): ?self
+    public static function current(): self
     {
-        return static::orderBy('sort_order')
-            ->orderBy('created_at', 'desc')
-            ->first();
+        return static::query()->firstOrCreate(
+            ['id' => 1],
+            [
+                'image' => [],
+                'video' => null,
+                'banner_title' => null,
+                'banner_description' => null,
+                'video_title' => null,
+                'video_description' => null,
+                'sort_order' => 1,
+            ]
+        );
     }
 
     public function getImageUrlAttribute(): array
@@ -53,12 +62,6 @@ class Banner extends Model
 
     private function resolveMediaUrl(?string $path): ?string
     {
-        if (!$path || $path === '') {
-            return null;
-        }
-
-        return filter_var($path, FILTER_VALIDATE_URL)
-            ? $path
-            : Storage::disk('public')->url($path);
+        return PublicStorage::url($path);
     }
 }

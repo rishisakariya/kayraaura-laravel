@@ -55,7 +55,7 @@ class BannerController extends Controller
         $banner = Banner::create([
             'image' => $this->normalizeMediaArray($request->input('image', [])),
             'video' => $request->filled('video')
-                ? $this->normalizePublicStorageUrl($request->input('video'))
+                ? PublicStorage::storePath($request->input('video'))
                 : null,
             'banner_title' => $request->input('banner_title'),
             'banner_description' => $request->input('banner_description'),

@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Support\PublicStorage;
-use App\Support\PublicStorage;
 use Illuminate\Support\Str;
 
 class Category extends Model
