@@ -8,7 +8,6 @@ use App\Http\Resources\BannerResource;
 use App\Models\Banner;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -17,21 +16,13 @@ class BannerController extends Controller
     /**
      * Display a listing of banners for the admin panel.
      */
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
-        $banners = Banner::orderBy('sort_order')
-            ->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 15));
+        $banner = Banner::current();
 
         return response()->json([
             'success' => true,
-            'data' => BannerResource::collection($banners),
-            'meta' => [
-                'current_page' => $banners->currentPage(),
-                'last_page' => $banners->lastPage(),
-                'per_page' => $banners->perPage(),
-                'total' => $banners->total(),
-            ],
+            'data' => $banner ? new BannerResource($banner) : null,
         ]);
     }
 
@@ -40,9 +31,11 @@ class BannerController extends Controller
      */
     public function store(BannerStoreRequest $request): JsonResponse
     {
-        if ((int) $request->input('edit_value', 0) > 0) {
+        $editValue = (int) $request->input('edit_value', 0);
+
+        if ($editValue > 0) {
             try {
-                $banner = Banner::findOrFail($request->input('edit_value'));
+                $banner = Banner::findOrFail($editValue);
             } catch (ModelNotFoundException $e) {
                 return response()->json([
                     'success' => false,
@@ -51,6 +44,12 @@ class BannerController extends Controller
             }
 
             return $this->updateBanner($request, $banner);
+        }
+
+        $existingBanner = Banner::current();
+
+        if ($existingBanner) {
+            return $this->updateBanner($request, $existingBanner);
         }
 
         $banner = Banner::create([

@@ -30,6 +30,22 @@ class Banner extends Model
         'sort_order' => 'integer',
     ];
 
+    public static function current(): self
+    {
+        return static::query()->firstOrCreate(
+            ['id' => 1],
+            [
+                'image' => [],
+                'video' => null,
+                'banner_title' => null,
+                'banner_description' => null,
+                'video_title' => null,
+                'video_description' => null,
+                'sort_order' => 1,
+            ]
+        );
+    }
+
     public function getImageUrlAttribute(): array
     {
         return collect($this->image ?? [])
