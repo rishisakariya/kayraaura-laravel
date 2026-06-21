@@ -25,7 +25,12 @@ class BannerController extends Controller
         DB::beginTransaction();
 
         $banner = Banner::current();
-        $newImages = $this->normalizeMediaArray($request->input('image', []));
+        $newImages = $this->normalizeMediaArray([
+            $request->input('image1'),
+            $request->input('image2'),
+            $request->input('image3'),
+            $request->input('image4'),
+        ]);
 
         $this->deleteRemovedBannerMedia($banner->image ?? [], $newImages);
         $banner->image = $newImages;
