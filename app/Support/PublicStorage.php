@@ -2,13 +2,16 @@
 
 namespace App\Support;
 
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 class PublicStorage
 {
+    public const DISK = 'uploads';
+
     /**
-     * Store an uploaded file on the public disk, e.g. products/, categories/.
+     * Store an uploaded file under public uploads, e.g. products/, categories/.
      */
     public static function storeUploadedFile(UploadedFile $file, string $folder, ?string $fileName = null): string
     {
@@ -16,10 +19,10 @@ class PublicStorage
         self::ensureDirectory($folder);
 
         if ($fileName !== null) {
-            return $file->storeAs($folder, $fileName, 'public');
+            return $file->storeAs($folder, $fileName, self::DISK);
         }
 
-        return $file->store($folder, 'public');
+        return $file->store($folder, self::DISK);
     }
 
     public static function ensureDirectory(string $folder): void
@@ -30,17 +33,22 @@ class PublicStorage
             return;
         }
 
-        Storage::disk('public')->makeDirectory($folder);
+        self::disk()->makeDirectory($folder);
     }
 
     public static function normalizeFolder(string $folder): string
     {
-        return trim(str_replace('\\', '/', $folder), '/');
+        $folder = trim(str_replace('\\', '/', $folder), '/');
+
+        return match ($folder) {
+            'web-settings' => 'settings',
+            default => $folder,
+        };
     }
 
     /**
-     * Convert a stored value or URL to the relative path on the public disk.
-     * e.g. "https://domain.com/storage/products/a.jpg" → "products/a.jpg"
+     * Convert a stored value or URL to the relative path on the uploads disk.
+     * e.g. "https://domain.com/uploads/products/a.jpg" → "products/a.jpg"
      */
     public static function diskPath(?string $path): ?string
     {
@@ -51,7 +59,14 @@ class PublicStorage
         $path = parse_url($path, PHP_URL_PATH) ?: $path;
         $path = ltrim(str_replace('\\', '/', $path), '/');
 
-        foreach (['public/storage/uploads/', 'public/storage/', 'storage/uploads/', 'storage/'] as $prefix) {
+        foreach ([
+            'public/uploads/',
+            'uploads/',
+            'public/storage/uploads/',
+            'public/storage/',
+            'storage/uploads/',
+            'storage/',
+        ] as $prefix) {
             if (str_starts_with($path, $prefix)) {
                 return substr($path, strlen($prefix));
             }
@@ -71,7 +86,7 @@ class PublicStorage
             return null;
         }
 
-        return Storage::disk('public')->url($diskPath);
+        return self::disk()->url($diskPath);
     }
 
     /**
@@ -90,7 +105,7 @@ class PublicStorage
             return false;
         }
 
-        return Storage::disk('public')->exists($diskPath);
+        return self::disk()->exists($diskPath);
     }
 
     public static function delete(?string $path): bool
@@ -101,6 +116,37 @@ class PublicStorage
             return false;
         }
 
-        return Storage::disk('public')->delete($diskPath);
+        return self::disk()->delete($diskPath);
+    }
+
+    public static function put(string $path, mixed $contents): bool
+    {
+        $diskPath = self::diskPath($path) ?? self::normalizeFolder($path);
+        self::ensureDirectory(dirname($diskPath) === '.' ? '' : dirname($diskPath));
+
+        return self::disk()->put($diskPath, $contents);
+    }
+
+    public static function get(string $path): ?string
+    {
+        $diskPath = self::diskPath($path);
+
+        if ($diskPath === null || !self::disk()->exists($diskPath)) {
+            return null;
+        }
+
+        return self::disk()->get($diskPath);
+    }
+
+    public static function absolutePath(string $path): string
+    {
+        $diskPath = self::diskPath($path) ?? self::normalizeFolder($path);
+
+        return self::disk()->path($diskPath);
+    }
+
+    public static function disk(): Filesystem
+    {
+        return Storage::disk(self::DISK);
     }
 }

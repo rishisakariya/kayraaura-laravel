@@ -225,7 +225,7 @@
     $onlinePaymentDiscount = (float) ($order->online_payment_discount_amount ?? 0);
     $couponDiscount = (float) ($order->discount_amount ?? 0);
 
-    $logoPath = public_path('storage/kayraauralogo.png');
+    $logoPath = public_path('uploads/kayraauralogo.png');
     $paymentStatusClass = match ($order->payment_status) {
         'paid' => '',
         'pending' => 'pending',

@@ -26,7 +26,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PublicStorage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OrderController extends Controller
@@ -260,7 +260,7 @@ class OrderController extends Controller
         $fileName = $this->invoiceFileName($order);
 
         return response()->download(
-            Storage::disk('public')->path($path),
+            PublicStorage::absolutePath($path),
             $fileName,
             [
                 'Content-Type' => 'application/pdf',
@@ -471,14 +471,14 @@ class OrderController extends Controller
     {
         $path = 'invoices/' . $order->id . '/' . $this->invoiceFileName($order);
 
-        if (!Storage::disk('public')->exists($path)) {
+        if (!PublicStorage::exists($path)) {
             $pdf = Pdf::loadView('orders.invoice', [
                 'order' => $order,
                 'webSetting' => WebSetting::current(),
                 'invoiceNumber' => 'INV-' . $order->order_number,
             ])->setPaper('a4');
 
-            Storage::disk('public')->put($path, $pdf->output());
+            PublicStorage::put($path, $pdf->output());
         }
 
         return $path;

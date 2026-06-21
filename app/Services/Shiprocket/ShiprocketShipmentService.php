@@ -7,13 +7,13 @@ use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ShipmentStatusHistory;
 use App\Services\Shipping\OrderShipmentLifecycleService;
+use App\Support\PublicStorage;
 use Barryvdh\DomPDF\Facade\Pdf;
 use DomainException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class ShiprocketShipmentService
 {
@@ -264,10 +264,10 @@ class ShiprocketShipmentService
             $fileName = preg_replace('/[^A-Za-z0-9_\-]/', '-', (string) $shipment->waybill) . '.pdf';
             $path = "shipping-labels/shiprocket/{$fileName}";
 
-            Storage::disk('public')->put($path, $pdfResponse->body());
+            PublicStorage::put($path, $pdfResponse->body());
 
             $shipment->fill([
-                'shipping_label_url' => url('/storage/' . ltrim($path, '/')),
+                'shipping_label_url' => PublicStorage::url($path),
                 'response_payload' => array_merge($shipment->response_payload ?? [], [
                     'label' => $labelResponse,
                 ]),
@@ -322,9 +322,9 @@ class ShiprocketShipmentService
             'generatedAt' => now(),
         ])->setPaper('a4');
 
-        Storage::disk('public')->put($path, $pdf->output());
+        PublicStorage::put($path, $pdf->output());
 
-        return url('/storage/' . ltrim($path, '/'));
+        return PublicStorage::url($path);
     }
 
     public function createReversePickup(Order $order): OrderShipment

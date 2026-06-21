@@ -8,12 +8,12 @@ use App\Models\OrderShipment;
 use App\Models\ShipmentStatusHistory;
 use App\Services\PdfMerger;
 use App\Services\Shipping\OrderShipmentLifecycleService;
+use App\Support\PublicStorage;
 use DomainException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class DelhiveryShipmentService
 {
@@ -315,10 +315,10 @@ class DelhiveryShipmentService
             $fileName = preg_replace('/[^A-Za-z0-9_\-]/', '-', $shipment->waybill) . '.pdf';
             $path = "shipping-labels/delhivery/{$fileName}";
 
-            Storage::disk('public')->put($path, $pdfBinary);
+            PublicStorage::put($path, $pdfBinary);
 
             $shipment->fill([
-                'shipping_label_url' => $this->publicStorageUrl($path),
+                'shipping_label_url' => PublicStorage::url($path),
                 'response_payload' => array_merge($shipment->response_payload ?? [], [
                     'delhivery_label' => $payload,
                     'delhivery_label_pdf_url' => $pdfUrl,
@@ -367,13 +367,13 @@ class DelhiveryShipmentService
 
         if ($shipments->count() === 1) {
             $shipment = $this->generateShippingLabel($shipments->first());
-            $storagePath = $this->labelStoragePath($shipment->shipping_label_url);
+            $storagePath = PublicStorage::diskPath($shipment->shipping_label_url);
 
-            if (!$storagePath || !Storage::disk('public')->exists($storagePath)) {
+            if (!$storagePath || !PublicStorage::exists($storagePath)) {
                 throw new DomainException("Label PDF file was not found for AWB {$shipment->waybill}");
             }
 
-            return Storage::disk('public')->get($storagePath);
+            return PublicStorage::get($storagePath);
         }
 
         $waybills = $shipments->pluck('waybill')->all();
@@ -404,13 +404,13 @@ class DelhiveryShipmentService
 
         foreach ($shipments as $shipment) {
             $shipment = $this->generateShippingLabel($shipment);
-            $storagePath = $this->labelStoragePath($shipment->shipping_label_url);
+            $storagePath = PublicStorage::diskPath($shipment->shipping_label_url);
 
-            if (!$storagePath || !Storage::disk('public')->exists($storagePath)) {
+            if (!$storagePath || !PublicStorage::exists($storagePath)) {
                 throw new DomainException("Label PDF file was not found for AWB {$shipment->waybill}");
             }
 
-            $filePaths[] = Storage::disk('public')->path($storagePath);
+            $filePaths[] = PublicStorage::absolutePath($storagePath);
         }
 
         return $this->pdfMerger->merge($filePaths);
@@ -836,17 +836,7 @@ class DelhiveryShipmentService
 
     private function labelStoragePath(?string $labelUrl): ?string
     {
-        if (!$labelUrl) {
-            return null;
-        }
-
-        $path = parse_url($labelUrl, PHP_URL_PATH);
-
-        if (!is_string($path) || !str_starts_with($path, '/storage/')) {
-            return null;
-        }
-
-        return urldecode(substr($path, strlen('/storage/')));
+        return PublicStorage::diskPath($labelUrl);
     }
 
     private function extractPdfDownloadLink(array $payload): ?string
@@ -875,11 +865,6 @@ class DelhiveryShipmentService
         return Arr::get($payload, 'pdf_download_link')
             ?? Arr::get($payload, 'pdf_link')
             ?? null;
-    }
-
-    private function publicStorageUrl(string $path): string
-    {
-        return url('/storage/' . ltrim($path, '/'));
     }
 
     private function extractWaybill(array $payload): ?string

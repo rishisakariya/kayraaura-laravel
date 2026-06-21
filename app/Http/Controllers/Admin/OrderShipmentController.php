@@ -17,7 +17,7 @@ use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PublicStorage;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -169,9 +169,9 @@ class OrderShipmentController extends Controller
             ], $e->getCode() === 409 ? 409 : 422);
         }
 
-        $path = $this->publicStoragePathFromUrl($label['data']['shipping_label_url']);
+        $path = PublicStorage::diskPath($label['data']['shipping_label_url']);
 
-        if (!$path || !Storage::disk('public')->exists($path)) {
+        if (!$path || !PublicStorage::exists($path)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Shipment label PDF file was not found',
@@ -179,7 +179,7 @@ class OrderShipmentController extends Controller
         }
 
         return response()->download(
-            Storage::disk('public')->path($path),
+            PublicStorage::absolutePath($path),
             basename($path),
             ['Content-Type' => 'application/pdf']
         );
@@ -301,12 +301,6 @@ class OrderShipmentController extends Controller
 
     private function publicStoragePathFromUrl(string $url): ?string
     {
-        $path = parse_url($url, PHP_URL_PATH);
-
-        if (!is_string($path) || !str_starts_with($path, '/storage/')) {
-            return null;
-        }
-
-        return urldecode(substr($path, strlen('/storage/')));
+        return PublicStorage::diskPath($url);
     }
 }

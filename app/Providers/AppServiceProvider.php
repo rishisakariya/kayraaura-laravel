@@ -22,6 +22,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Hostinger: Laravel root is public_html (no separate public/ folder).
+        $this->app->usePublicPath(base_path());
+
         OrderShipment::observe(OrderShipmentObserver::class);
 
         Route::prefix('api')
