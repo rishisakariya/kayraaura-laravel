@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PublicStorage;
 
 class WebSetting extends Model
 {
@@ -49,12 +49,6 @@ class WebSetting extends Model
 
     public function getLogoUrlAttribute(): ?string
     {
-        if (!$this->logo) {
-            return null;
-        }
-
-        return filter_var($this->logo, FILTER_VALIDATE_URL)
-            ? $this->logo
-            : Storage::disk('public')->url($this->logo);
+        return PublicStorage::url($this->logo);
     }
 }

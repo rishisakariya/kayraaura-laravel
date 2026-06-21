@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Support\PublicStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WebSettingResource;
 use App\Models\WebSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class WebSettingController extends Controller
 {
@@ -47,7 +47,7 @@ class WebSettingController extends Controller
         ]);
 
         if (!empty($payload['logo'])) {
-            $payload['logo'] = $this->normalizePublicStorageUrl($payload['logo']);
+            $payload['logo'] = PublicStorage::storePath($payload['logo']);
         }
 
         $setting = WebSetting::current();
@@ -58,26 +58,5 @@ class WebSettingController extends Controller
             'message' => 'Web settings updated successfully',
             'data' => new WebSettingResource($setting->refresh()),
         ]);
-    }
-
-    private function normalizePublicDiskPath(string $filePath): string
-    {
-        $path = parse_url($filePath, PHP_URL_PATH) ?: $filePath;
-        $path = ltrim($path, '/');
-
-        if (str_starts_with($path, 'storage/')) {
-            return substr($path, strlen('storage/'));
-        }
-
-        return $path;
-    }
-
-    private function normalizePublicStorageUrl(string $filePath): string
-    {
-        if (filter_var($filePath, FILTER_VALIDATE_URL)) {
-            return $filePath;
-        }
-
-        return Storage::disk('public')->url($this->normalizePublicDiskPath($filePath));
     }
 }

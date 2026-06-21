@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Support\PublicStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ProductStoreRequest;
 use App\Http\Resources\ProductResource;
@@ -13,7 +14,6 @@ use Illuminate\Http\JsonResponse;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\ValidationException;
 
@@ -256,25 +256,25 @@ class ProductController extends Controller
     private function syncProductImages(Product $product, array $images): void
     {
         $incomingImages = array_values(array_unique(array_map(function ($image) {
-            return $this->normalizePublicStorageUrl($image);
+            return PublicStorage::storePath($image);
         }, $images)));
 
         $existingImages = ProductImage::where('product_id', $product->id)->get();
         $existingImagesByUrl = $existingImages->keyBy(function (ProductImage $image) {
-            return $this->normalizePublicStorageUrl($image->image_path);
+            return PublicStorage::diskPath($image->image_path);
         });
 
         foreach ($existingImages as $existingImage) {
-            $existingImageUrl = $this->normalizePublicStorageUrl($existingImage->image_path);
+            $existingImagePath = PublicStorage::diskPath($existingImage->image_path);
 
-            if (!in_array($existingImageUrl, $incomingImages, true)) {
-                $this->deleteProductImageFile($existingImage->image_path);
+            if (!in_array($existingImagePath, array_map(fn ($img) => PublicStorage::diskPath($img), $incomingImages), true)) {
+                PublicStorage::delete($existingImage->image_path);
                 $existingImage->delete();
             }
         }
 
         foreach ($incomingImages as $index => $image) {
-            $existingImage = $existingImagesByUrl->get($image);
+            $existingImage = $existingImagesByUrl->get(PublicStorage::diskPath($image));
 
             if ($existingImage) {
                 $existingImage->image_path = $image;
@@ -293,35 +293,5 @@ class ProductController extends Controller
                 'is_primary' => $index === 0,
             ]);
         }
-    }
-
-    private function deleteProductImageFile(string $imagePath): void
-    {
-        $filePath = $this->normalizePublicDiskPath($imagePath);
-
-        if (Storage::disk('public')->exists($filePath)) {
-            Storage::disk('public')->delete($filePath);
-        }
-    }
-
-    private function normalizePublicDiskPath(string $imagePath): string
-    {
-        $path = parse_url($imagePath, PHP_URL_PATH) ?: $imagePath;
-        $path = ltrim($path, '/');
-
-        if (str_starts_with($path, 'storage/')) {
-            return substr($path, strlen('storage/'));
-        }
-
-        return $path;
-    }
-
-    private function normalizePublicStorageUrl(string $imagePath): string
-    {
-        if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-            return $imagePath;
-        }
-
-        return Storage::disk('public')->url($this->normalizePublicDiskPath($imagePath));
     }
 }

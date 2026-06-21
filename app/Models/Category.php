@@ -5,7 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PublicStorage;
+use App\Support\PublicStorage;
 use Illuminate\Support\Str;
 
 class Category extends Model
@@ -46,13 +47,7 @@ class Category extends Model
 
     public function getImageUrlAttribute(): ?string
     {
-        if (!$this->image) {
-            return null;
-        }
-
-        return filter_var($this->image, FILTER_VALIDATE_URL)
-            ? $this->image
-            : Storage::disk('public')->url($this->image);
+        return PublicStorage::url($this->image);
     }
 
     protected static function boot()

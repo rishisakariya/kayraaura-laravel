@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Support\PublicStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CategoryStoreRequest;
 use App\Http\Resources\CategoryResource;
@@ -9,7 +10,6 @@ use App\Models\Category;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class CategoryController extends Controller
@@ -57,7 +57,7 @@ class CategoryController extends Controller
             $category->slug = $request->input('slug') ?: null;
             $category->description = $request->input('description');
             $category->image = $request->filled('image')
-                ? $this->normalizePublicStorageUrl($request->input('image'))
+                ? PublicStorage::storePath($request->input('image'))
                 : null;
             $category->parent_id = $request->input('parent_id');
             $category->sort_order = $request->input('sort_order', 0);
@@ -89,11 +89,11 @@ class CategoryController extends Controller
 
         if ($request->has('image')) {
             $newImage = $request->filled('image')
-                ? $this->normalizePublicStorageUrl($request->input('image'))
+                ? PublicStorage::storePath($request->input('image'))
                 : null;
 
-            if ($category->image && (!$newImage || $this->normalizePublicDiskPath($category->image) !== $this->normalizePublicDiskPath($newImage))) {
-                $this->deleteCategoryImageFile($category->image);
+            if ($category->image && (!$newImage || PublicStorage::diskPath($category->image) !== PublicStorage::diskPath($newImage))) {
+                PublicStorage::delete($category->image);
             }
 
             $category->image = $newImage;
@@ -167,7 +167,7 @@ class CategoryController extends Controller
 
         DB::beginTransaction();
         if ($category->image) {
-            $this->deleteCategoryImageFile($category->image);
+            PublicStorage::delete($category->image);
         }
 
         $category->delete();
@@ -177,35 +177,5 @@ class CategoryController extends Controller
             'success' => true,
             'message' => 'Category deleted successfully'
         ]);
-    }
-
-    private function deleteCategoryImageFile(string $imagePath): void
-    {
-        $filePath = $this->normalizePublicDiskPath($imagePath);
-
-        if (Storage::disk('public')->exists($filePath)) {
-            Storage::disk('public')->delete($filePath);
-        }
-    }
-
-    private function normalizePublicDiskPath(string $imagePath): string
-    {
-        $path = parse_url($imagePath, PHP_URL_PATH) ?: $imagePath;
-        $path = ltrim($path, '/');
-
-        if (str_starts_with($path, 'storage/')) {
-            return substr($path, strlen('storage/'));
-        }
-
-        return $path;
-    }
-
-    private function normalizePublicStorageUrl(string $imagePath): string
-    {
-        if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-            return $imagePath;
-        }
-
-        return Storage::disk('public')->url($this->normalizePublicDiskPath($imagePath));
     }
 }

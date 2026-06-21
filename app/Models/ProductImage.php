@@ -4,7 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PublicStorage;
+use App\Support\PublicStorage;
 
 class ProductImage extends Model
 {
@@ -32,13 +33,7 @@ class ProductImage extends Model
 
     public function getImageUrlAttribute(): ?string
     {
-        if (!$this->image_path) {
-            return null;
-        }
-
-        return filter_var($this->image_path, FILTER_VALIDATE_URL)
-            ? $this->image_path
-            : Storage::disk('public')->url($this->image_path);
+        return PublicStorage::url($this->image_path);
     }
 
     protected static function boot()

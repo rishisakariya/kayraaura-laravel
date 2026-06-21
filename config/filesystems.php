@@ -40,7 +40,8 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => storage_path('uploads'),
+            // Web-accessible folder: public_html/storage/uploads on shared hosting
+            'root' => env('FILESYSTEM_PUBLIC_ROOT', public_path('storage/uploads')),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage/uploads',
             'visibility' => 'public',
             'throw' => false,

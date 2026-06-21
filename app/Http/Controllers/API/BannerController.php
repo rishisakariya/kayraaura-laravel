@@ -14,14 +14,12 @@ class BannerController extends Controller
      */
     public function index(): JsonResponse
     {
-        $banners = Banner::orderBy('sort_order')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $banner = Banner::current();
 
         return response()->json([
             'status' => true,
-            'data' => BannerResource::collection($banners),
-            'message' => 'Banners retrieved successfully',
+            'data' => $banner ? new BannerResource($banner) : null,
+            'message' => 'Banner retrieved successfully',
         ]);
     }
 }

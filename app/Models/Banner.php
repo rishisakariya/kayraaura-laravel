@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PublicStorage;
 
 class Banner extends Model
 {
@@ -29,6 +29,13 @@ class Banner extends Model
         'image' => 'array',
         'sort_order' => 'integer',
     ];
+
+    public static function current(): ?self
+    {
+        return static::orderBy('sort_order')
+            ->orderBy('created_at', 'desc')
+            ->first();
+    }
 
     public function getImageUrlAttribute(): array
     {
