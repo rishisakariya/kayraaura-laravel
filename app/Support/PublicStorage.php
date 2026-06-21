@@ -27,6 +27,11 @@ class PublicStorage
 
     public static function ensureDirectory(string $folder): void
     {
+        $root = self::disk()->path('');
+
+        if (!is_dir($root)) {
+            mkdir($root, 0755, true);
+        }
         $folder = self::normalizeFolder($folder);
 
         if ($folder === '') {
