@@ -10,13 +10,21 @@ class Banner extends Model
 {
     use HasFactory;
 
+    private const IMAGE_FIELDS = ['image1', 'image2', 'image3', 'image4'];
+
     protected $appends = [
-        'image_url',
+        'image1_url',
+        'image2_url',
+        'image3_url',
+        'image4_url',
         'video_url',
     ];
 
     protected $fillable = [
-        'image',
+        'image1',
+        'image2',
+        'image3',
+        'image4',
         'video',
         'banner_title',
         'banner_description',
@@ -26,7 +34,6 @@ class Banner extends Model
     ];
 
     protected $casts = [
-        'image' => 'array',
         'sort_order' => 'integer',
     ];
 
@@ -35,7 +42,10 @@ class Banner extends Model
         return static::query()->firstOrCreate(
             ['id' => 1],
             [
-                'image' => [],
+                'image1' => null,
+                'image2' => null,
+                'image3' => null,
+                'image4' => null,
                 'video' => null,
                 'banner_title' => null,
                 'banner_description' => null,
@@ -46,13 +56,29 @@ class Banner extends Model
         );
     }
 
-    public function getImageUrlAttribute(): array
+    public static function imageFields(): array
     {
-        return collect($this->image ?? [])
-            ->map(fn (string $path) => $this->resolveMediaUrl($path))
-            ->filter()
-            ->values()
-            ->all();
+        return self::IMAGE_FIELDS;
+    }
+
+    public function getImage1UrlAttribute(): ?string
+    {
+        return $this->resolveMediaUrl($this->image1);
+    }
+
+    public function getImage2UrlAttribute(): ?string
+    {
+        return $this->resolveMediaUrl($this->image2);
+    }
+
+    public function getImage3UrlAttribute(): ?string
+    {
+        return $this->resolveMediaUrl($this->image3);
+    }
+
+    public function getImage4UrlAttribute(): ?string
+    {
+        return $this->resolveMediaUrl($this->image4);
     }
 
     public function getVideoUrlAttribute(): ?string

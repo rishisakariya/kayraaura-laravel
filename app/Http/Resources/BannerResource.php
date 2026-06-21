@@ -12,13 +12,11 @@ class BannerResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $imageUrls = $this->image_url;
-
         return [
-            'image1' => $imageUrls[0] ?? null,
-            'image2' => $imageUrls[1] ?? null,
-            'image3' => $imageUrls[2] ?? null,
-            'image4' => $imageUrls[3] ?? null,
+            'image1' => $this->image1_url,
+            'image2' => $this->image2_url,
+            'image3' => $this->image3_url,
+            'image4' => $this->image4_url,
             'video' => $this->video_url,
             'video_url' => $this->video_url,
             'banner_title' => $this->banner_title,

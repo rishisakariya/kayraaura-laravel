@@ -25,15 +25,17 @@ class BannerController extends Controller
         DB::beginTransaction();
 
         $banner = Banner::current();
-        $newImages = $this->normalizeMediaArray([
-            $request->input('image1'),
-            $request->input('image2'),
-            $request->input('image3'),
-            $request->input('image4'),
-        ]);
 
-        $this->deleteRemovedBannerMedia($banner->image ?? [], $newImages);
-        $banner->image = $newImages;
+        foreach (Banner::imageFields() as $field) {
+            $newPath = PublicStorage::storePath($request->input($field));
+            $oldPath = $banner->{$field};
+
+            if ($oldPath && (!$newPath || PublicStorage::diskPath($oldPath) !== PublicStorage::diskPath($newPath))) {
+                PublicStorage::delete($oldPath);
+            }
+
+            $banner->{$field} = $newPath;
+        }
 
         $newVideo = $request->filled('video')
             ? PublicStorage::storePath($request->input('video'))
@@ -58,29 +60,5 @@ class BannerController extends Controller
             'message' => 'Banner updated successfully',
             'data' => new BannerResource($banner->refresh()),
         ]);
-    }
-
-    private function deleteRemovedBannerMedia(array $existingMedia, array $incomingMedia): void
-    {
-        $incomingPaths = array_map(
-            fn (string $path) => PublicStorage::diskPath($path),
-            $incomingMedia
-        );
-
-        foreach ($existingMedia as $mediaPath) {
-            $normalizedPath = PublicStorage::diskPath($mediaPath);
-
-            if (!in_array($normalizedPath, $incomingPaths, true)) {
-                PublicStorage::delete($mediaPath);
-            }
-        }
-    }
-
-    private function normalizeMediaArray(array $media): array
-    {
-        return array_values(array_filter(array_map(
-            fn (string $path) => PublicStorage::storePath($path),
-            $media
-        )));
     }
 }
