@@ -55,10 +55,9 @@ class AdminAuthController extends Controller
             ], 403);
         }
 
-        // Revoke previous tokens
-        $user->tokens()->delete();
+        // Allow concurrent sessions (prod + QA, multiple tabs). Only prune very old tokens.
+        $this->pruneStaleAdminTokens($user);
 
-        // Create new token
         $token = $user->createToken('admin-token', ['admin'])->plainTextToken;
 
         return response()->json([
@@ -131,11 +130,11 @@ class AdminAuthController extends Controller
     {
         $user = $request->user();
 
-        // Revoke current token
-        $request->user()->currentAccessToken()->delete();
-
-        // Create new token
+        // Issue a new token without revoking the current one so other tabs/environments
+        // (prod + QA) keep working until they pick up the new token.
         $token = $user->createToken('admin-token', ['admin'])->plainTextToken;
+
+        $this->pruneStaleAdminTokens($user);
 
         return response()->json([
             'success' => true,
@@ -145,5 +144,16 @@ class AdminAuthController extends Controller
             ],
             'message' => 'Token refreshed successfully'
         ]);
+    }
+
+    /**
+     * Remove admin tokens older than 30 days. Logout still revokes the active token.
+     */
+    private function pruneStaleAdminTokens(User $user): void
+    {
+        $user->tokens()
+            ->where('name', 'admin-token')
+            ->where('created_at', '<', now()->subDays(30))
+            ->delete();
     }
 }
