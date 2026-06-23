@@ -101,6 +101,23 @@ class OrderReturnService
     }
 
     /**
+     * Process a return refund for online (Razorpay) or COD (UPI) orders.
+     *
+     * @return array<string, mixed>
+     */
+    public function processReturnRefund(
+        Order $order,
+        ?string $returnRequestId = null,
+        ?string $upiTransactionReference = null,
+    ): array {
+        return match ($order->payment_method) {
+            'online' => $this->processOnlineReturnRefund($order, $returnRequestId),
+            'cod' => $this->processCodReturnRefund($order, $returnRequestId, $upiTransactionReference),
+            default => throw new DomainException('This order payment method is not supported for return refunds'),
+        };
+    }
+
+    /**
      * Process a manual Razorpay refund for a return received at the warehouse.
      *
      * @return array{refund_amount: float, return_request_id: string|null, razorpay_refund: array<string, mixed>}
@@ -140,59 +157,182 @@ class OrderReturnService
                 $refundAmount
             );
 
-            $returnRequest = $order->return_request ?? ['requests' => [], 'total_refunded_amount' => 0.0];
-
-            if (!isset($returnRequest['requests']) || !is_array($returnRequest['requests'])) {
-                $returnRequest['requests'] = [];
-            }
-
-            $refundedAt = now()->toDateTimeString();
-            $razorpayRefundId = $razorpayRefund['id'] ?? null;
-
-            $returnRequest['requests'] = collect($returnRequest['requests'])
-                ->map(function (array $request) use ($requestId, $refundedAt, $razorpayRefundId) {
-                    if (($request['id'] ?? null) !== $requestId) {
-                        return $request;
-                    }
-
-                    $request['status'] = 'completed';
-                    $request['refunded_at'] = $refundedAt;
-                    $request['completed_at'] = $request['completed_at'] ?? $refundedAt;
-
-                    if ($razorpayRefundId) {
+            $this->finalizeReturnRefund(
+                $order,
+                $requestId,
+                $refundAmount,
+                function (array $request) use ($razorpayRefund) {
+                    if ($razorpayRefundId = ($razorpayRefund['id'] ?? null)) {
                         $request['razorpay_refund_id'] = $razorpayRefundId;
                     }
 
                     return $request;
-                })
-                ->all();
-
-            $returnRequest['total_refunded_amount'] = round(
-                (float) ($returnRequest['total_refunded_amount'] ?? 0) + $refundAmount,
-                2
+                }
             );
-
-            $order->return_request = $returnRequest;
-
-            if ($returnRequest['total_refunded_amount'] >= (float) $order->total_amount) {
-                $order->payment_status = 'refunded';
-            }
-
-            $order->save();
 
             return [
                 'refund_amount' => $refundAmount,
                 'return_request_id' => $requestId,
+                'payment_method' => 'online',
                 'razorpay_refund' => $razorpayRefund,
+            ];
+        });
+    }
+
+    /**
+     * Process a COD return refund to the customer's UPI ID.
+     *
+     * @return array{refund_amount: float, return_request_id: string|null, upi_id: string, payout: array<string, mixed>|null}
+     */
+    public function processCodReturnRefund(
+        Order $order,
+        ?string $returnRequestId = null,
+        ?string $upiTransactionReference = null,
+    ): array {
+        if ($order->payment_method !== 'cod') {
+            throw new DomainException('Only COD orders can be refunded through UPI');
+        }
+
+        return DB::transaction(function () use ($order, $returnRequestId, $upiTransactionReference) {
+            $order = Order::query()
+                ->whereKey($order->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $awaitingRequest = $this->findAwaitingRefundRequest($order, $returnRequestId);
+
+            if (!$awaitingRequest) {
+                throw new DomainException('No return refund is available to process');
+            }
+
+            $refundDetails = $awaitingRequest['refund_details'] ?? [];
+            $upiId = trim((string) ($refundDetails['upi_id'] ?? ''));
+
+            if ($upiId === '') {
+                throw new DomainException('UPI ID is missing for this COD return request');
+            }
+
+            $requestId = $awaitingRequest['id'] ?? null;
+            $refundAmount = round((float) ($awaitingRequest['refund_amount'] ?? 0), 2);
+
+            if ($refundAmount <= 0) {
+                throw new DomainException('Refund amount must be greater than zero');
+            }
+
+            $payout = null;
+            $refundMethod = 'manual_upi';
+
+            if (config('services.razorpay.x_account_number')) {
+                $payout = $this->checkoutService->payoutToUpi(
+                    $order,
+                    $upiId,
+                    (string) ($refundDetails['full_name'] ?? 'Customer'),
+                    (string) ($refundDetails['email'] ?? 'customer@example.com'),
+                    (string) ($refundDetails['mobile'] ?? '9999999999'),
+                    $refundAmount,
+                    'return_' . ($requestId ?? $order->id),
+                    ['reason' => 'order_returned']
+                );
+                $refundMethod = 'razorpay_payout';
+            } elseif (!$upiTransactionReference) {
+                throw new DomainException(
+                    'Send the UPI payment first, then provide upi_transaction_reference to confirm the refund'
+                );
+            }
+
+            $this->finalizeReturnRefund(
+                $order,
+                $requestId,
+                $refundAmount,
+                function (array $request) use ($payout, $upiTransactionReference, $refundMethod, $upiId) {
+                    $request['refund_method'] = $refundMethod;
+                    $request['upi_id'] = $upiId;
+
+                    if ($payoutId = ($payout['id'] ?? null)) {
+                        $request['razorpay_payout_id'] = $payoutId;
+                    }
+
+                    if ($upiTransactionReference) {
+                        $request['upi_transaction_reference'] = $upiTransactionReference;
+                    }
+
+                    return $request;
+                }
+            );
+
+            return [
+                'refund_amount' => $refundAmount,
+                'return_request_id' => $requestId,
+                'payment_method' => 'cod',
+                'upi_id' => $upiId,
+                'payout' => $payout,
             ];
         });
     }
 
     public function canPayReturnRefund(Order $order): bool
     {
-        return $order->payment_method === 'online'
-            && $order->payment_status === 'paid'
-            && $this->refundCalculator->hasAwaitingRefundReturnRequest($order);
+        if (!$this->refundCalculator->hasAwaitingRefundReturnRequest($order)) {
+            return false;
+        }
+
+        if ($order->payment_method === 'online') {
+            return $order->payment_status === 'paid';
+        }
+
+        if ($order->payment_method === 'cod') {
+            $request = $this->refundCalculator->latestAwaitingRefundReturnRequest($order);
+
+            return !empty($request['refund_details']['upi_id']);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  callable(array<string, mixed>): array<string, mixed>  $requestMutator
+     */
+    private function finalizeReturnRefund(
+        Order $order,
+        ?string $requestId,
+        float $refundAmount,
+        callable $requestMutator,
+    ): void {
+        $returnRequest = $order->return_request ?? ['requests' => [], 'total_refunded_amount' => 0.0];
+
+        if (!isset($returnRequest['requests']) || !is_array($returnRequest['requests'])) {
+            $returnRequest['requests'] = [];
+        }
+
+        $refundedAt = now()->toDateTimeString();
+
+        $returnRequest['requests'] = collect($returnRequest['requests'])
+            ->map(function (array $request) use ($requestId, $refundedAt, $requestMutator) {
+                if (($request['id'] ?? null) !== $requestId) {
+                    return $request;
+                }
+
+                $request['status'] = 'completed';
+                $request['refunded_at'] = $refundedAt;
+                $request['completed_at'] = $request['completed_at'] ?? $refundedAt;
+
+                return $requestMutator($request);
+            })
+            ->all();
+
+        $returnRequest['total_refunded_amount'] = round(
+            (float) ($returnRequest['total_refunded_amount'] ?? 0) + $refundAmount,
+            2
+        );
+
+        $order->return_request = $returnRequest;
+
+        if ($order->payment_method === 'online'
+            && $returnRequest['total_refunded_amount'] >= (float) $order->total_amount) {
+            $order->payment_status = 'refunded';
+        }
+
+        $order->save();
     }
 
     /**

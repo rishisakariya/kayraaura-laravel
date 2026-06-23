@@ -19,6 +19,7 @@ class OrderReturnRefundRequest extends FormRequest
     {
         return [
             'return_request_id' => ['nullable', 'string', 'uuid'],
+            'upi_transaction_reference' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

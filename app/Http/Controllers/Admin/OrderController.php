@@ -99,7 +99,8 @@ class OrderController extends Controller
     }
 
     /**
-     * Process Razorpay refund for a return received at the warehouse (online orders only).
+     * Process a return refund after the returned products are received at the warehouse.
+     * Online orders are refunded via Razorpay; COD orders are paid to the customer's UPI ID.
      */
     public function payReturnRefund(OrderReturnRefundRequest $request, string $id): JsonResponse
     {
@@ -113,22 +114,32 @@ class OrderController extends Controller
                 ], 400);
             }
 
-            $result = $this->orderReturnService->processOnlineReturnRefund(
+            $result = $this->orderReturnService->processReturnRefund(
                 $order,
-                $request->validated('return_request_id')
+                $request->validated('return_request_id'),
+                $request->validated('upi_transaction_reference'),
             );
 
             $order->refresh()->load(['user', 'orderItems.product.images', 'orderItems.productSize', 'shipment.statusHistories']);
 
+            $message = ($result['payment_method'] ?? null) === 'cod'
+                ? 'Refund of ₹'
+                    . number_format($result['refund_amount'], 2)
+                    . ' has been sent to UPI ID '
+                    . ($result['upi_id'] ?? '')
+                : 'Refund of ₹'
+                    . number_format($result['refund_amount'], 2)
+                    . ' has been processed successfully';
+
             return response()->json([
                 'success' => true,
-                'message' => 'Refund of ₹'
-                    . number_format($result['refund_amount'], 2)
-                    . ' has been processed successfully',
+                'message' => $message,
                 'data' => [
                     'order' => new OrderResource($order),
                     'refund_amount' => $result['refund_amount'],
                     'return_request_id' => $result['return_request_id'],
+                    'payment_method' => $result['payment_method'] ?? $order->payment_method,
+                    'upi_id' => $result['upi_id'] ?? null,
                 ],
             ]);
         } catch (ModelNotFoundException $e) {

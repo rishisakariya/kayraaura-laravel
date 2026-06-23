@@ -107,7 +107,12 @@ class OrderShipmentLifecycleService
                 $isOnlineRefundDue = $order->payment_method === 'online'
                     && $refundAmount > 0
                     && $order->payment_status === 'paid';
-                $receivedStatus = $isOnlineRefundDue ? 'awaiting_refund' : 'completed';
+                $isCodUpiRefundDue = $order->payment_method === 'cod'
+                    && $refundAmount > 0
+                    && !empty($pendingRequest['refund_details']['upi_id']);
+                $receivedStatus = ($isOnlineRefundDue || $isCodUpiRefundDue)
+                    ? 'awaiting_refund'
+                    : 'completed';
 
                 $returnRequest = $order->return_request ?? ['requests' => [], 'total_refunded_amount' => 0];
 

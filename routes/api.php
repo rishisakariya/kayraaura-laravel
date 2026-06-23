@@ -112,7 +112,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{id}/return/preview', [OrderController::class, 'previewReturn']);
     Route::post('/orders/{id}/return', [OrderController::class, 'returnOrder']);
-    Route::post('/orders/{id}/return/refund', [OrderController::class, 'payReturnRefund']);
     Route::get('/shipments/track', [OrderShipmentController::class, 'track']);
     Route::post('/orders/{id}/shipment/refresh', [OrderShipmentController::class, 'refresh'])->middleware('throttle:6,1');
     Route::post('/razorpay/payment/verify', [RazorpayController::class, 'verifyPayment']);

@@ -388,6 +388,89 @@ class CheckoutService
         return $responsePayload;
     }
 
+    /**
+     * Send a RazorpayX UPI payout for COD return refunds.
+     *
+     * @param  array<string, string>  $notes
+     * @return array<string, mixed>
+     */
+    public function payoutToUpi(
+        Order $order,
+        string $upiId,
+        string $name,
+        string $email,
+        string $mobile,
+        float $amount,
+        string $referenceId,
+        array $notes = [],
+    ): array {
+        $key = config('services.razorpay.key');
+        $secret = config('services.razorpay.secret');
+        $accountNumber = config('services.razorpay.x_account_number');
+
+        if (!$key || !$secret) {
+            throw new DomainException('Razorpay credentials are not configured');
+        }
+
+        if (!$accountNumber) {
+            throw new DomainException('RazorpayX account number is not configured for UPI payouts');
+        }
+
+        if ($amount <= 0) {
+            throw new DomainException('Payout amount must be greater than zero');
+        }
+
+        $requestPayload = [
+            'account_number' => $accountNumber,
+            'fund_account' => [
+                'account_type' => 'vpa',
+                'vpa' => [
+                    'address' => $upiId,
+                ],
+                'contact' => [
+                    'name' => $name,
+                    'email' => $email,
+                    'contact' => $mobile,
+                    'type' => 'customer',
+                ],
+            ],
+            'amount' => (int) round($amount * 100),
+            'currency' => 'INR',
+            'mode' => 'UPI',
+            'purpose' => 'refund',
+            'queue_if_low_balance' => true,
+            'reference_id' => $referenceId,
+            'notes' => array_merge([
+                'local_order_id' => (string) $order->id,
+                'order_number' => $order->order_number,
+            ], $notes),
+        ];
+
+        $response = Http::withBasicAuth($key, $secret)
+            ->post('https://api.razorpay.com/v1/payouts', $requestPayload);
+
+        $responsePayload = $response->json() ?? [];
+
+        RazorpayPaymentLog::create([
+            'order_id' => $order->id,
+            'user_id' => $order->user_id,
+            'razorpay_order_id' => $order->razorpay_order_id,
+            'razorpay_payment_id' => $responsePayload['id'] ?? null,
+            'event_type' => 'payout.create',
+            'status' => $response->successful() ? ($responsePayload['status'] ?? 'processing') : 'failed',
+            'request_payload' => $requestPayload,
+            'response_payload' => $responsePayload,
+            'error_code' => $responsePayload['error']['code'] ?? null,
+            'error_description' => $responsePayload['error']['description'] ?? null,
+        ]);
+
+        if (!$response->successful()) {
+            throw new DomainException($responsePayload['error']['description'] ?? 'Failed to process UPI payout');
+        }
+
+        return $responsePayload;
+    }
+
     public function assertPaymentAmountMatches(Order $order, array $paymentPayload): void
     {
         $expectedAmount = (int) round(((float) $order->total_amount) * 100);

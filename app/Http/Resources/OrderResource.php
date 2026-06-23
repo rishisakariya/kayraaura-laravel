@@ -53,7 +53,7 @@ class OrderResource extends JsonResource
             'billing_address' => $this->billing_address,
             'notes' => $this->notes,
             'can_be_returned' => $this->canBeReturned(),
-            'can_pay_return_refund' => app(OrderReturnService::class)->canPayReturnRefund($this->resource),
+            'can_pay_return_refund' => $this->canPayReturnRefundForAdmin(),
             'return_request' => $this->returnRequestPayload(),
             'return_summary' => $this->returnSummaryPayload(),
             'invoice_download_url' => $this->invoiceDownloadUrl(),
@@ -173,9 +173,7 @@ class OrderResource extends JsonResource
                     'received_at' => $request['received_at'] ?? null,
                     'refunded_at' => $request['refunded_at'] ?? null,
                     'completed_at' => $request['completed_at'] ?? null,
-                    'can_pay_refund' => ($request['status'] ?? '') === 'awaiting_refund'
-                        && $this->payment_method === 'online'
-                        && $this->payment_status === 'paid',
+                    'can_pay_refund' => $this->isAdminRefundContext($request),
                 ];
 
                 if (isset($request['refund_details']) && is_array($request['refund_details'])) {
@@ -212,6 +210,31 @@ class OrderResource extends JsonResource
             'requested_at' => $latest['requested_at'] ?? null,
             'refund_details' => $latest['refund_details'] ?? null,
         ];
+    }
+
+    private function canPayReturnRefundForAdmin(): bool
+    {
+        if (!request()->is('cpanel/*')) {
+            return false;
+        }
+
+        return app(OrderReturnService::class)->canPayReturnRefund($this->resource);
+    }
+
+    /**
+     * @param  array<string, mixed>  $request
+     */
+    private function isAdminRefundContext(array $request): bool
+    {
+        if (!request()->is('cpanel/*')) {
+            return false;
+        }
+
+        return ($request['status'] ?? '') === 'awaiting_refund'
+            && (
+                ($this->payment_method === 'online' && $this->payment_status === 'paid')
+                || ($this->payment_method === 'cod' && !empty($request['refund_details']['upi_id']))
+            );
     }
 
     private function trackingTimeline(array $trackingPayload): array

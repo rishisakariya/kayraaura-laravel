@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderStoreRequest;
 use App\Http\Requests\OrderCancelRequest;
 use App\Http\Requests\OrderReturnPreviewRequest;
-use App\Http\Requests\OrderReturnRefundRequest;
 use App\Http\Requests\OrderReturnRequest;
 use App\Http\Resources\OrderResource;
 use App\Jobs\CancelDelhiveryShipmentJob;
@@ -449,9 +448,9 @@ class OrderController extends Controller
                 ? 'Return pickup scheduled successfully. A refund of ₹'
                     . number_format($refundCalculation['refund_amount'], 2)
                     . ' will be processed to your UPI after the returned products are received.'
-                : 'Return pickup scheduled successfully. After the returned products are received, use the Pay button to receive your refund of ₹'
+                : 'Return pickup scheduled successfully. A refund of ₹'
                     . number_format($refundCalculation['refund_amount'], 2)
-                    . '.';
+                    . ' will be processed after the returned products are received.';
 
             return response()->json([
                 'status' => true,
@@ -469,53 +468,6 @@ class OrderController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to return order. Please try again.',
-                'error' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
-        }
-    }
-
-    /**
-     * Process Razorpay refund for a return received at the warehouse (online orders only).
-     */
-    public function payReturnRefund(OrderReturnRefundRequest $request, string $id): JsonResponse
-    {
-        $order = Order::where('user_id', Auth::id())->findOrFail($id);
-
-        if (!$this->orderReturnService->canPayReturnRefund($order)) {
-            return response()->json([
-                'status' => false,
-                'message' => 'This order does not have a return refund ready to process',
-            ], 400);
-        }
-
-        try {
-            $result = $this->orderReturnService->processOnlineReturnRefund(
-                $order,
-                $request->validated('return_request_id')
-            );
-
-            $order->refresh()->load(['orderItems.product.images', 'orderItems.productSize', 'shipment']);
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Refund of ₹'
-                    . number_format($result['refund_amount'], 2)
-                    . ' has been processed successfully',
-                'data' => [
-                    'order' => new OrderResource($order),
-                    'refund_amount' => $result['refund_amount'],
-                    'return_request_id' => $result['return_request_id'],
-                ],
-            ]);
-        } catch (DomainException $e) {
-            return response()->json([
-                'status' => false,
-                'message' => $e->getMessage(),
-            ], 400);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Failed to process return refund. Please try again.',
                 'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
