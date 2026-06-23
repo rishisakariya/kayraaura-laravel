@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Order;
+use App\Services\OrderRefundCalculator;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +28,9 @@ class OrderReturnRequest extends FormRequest
     {
         $rules = [
             'reason' => ['required', 'string', 'max:500'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.order_item_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
             'product_images' => ['required', 'array', 'min:1', 'max:3'],
             'product_images.0' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
             'product_images.1' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
@@ -46,11 +50,13 @@ class OrderReturnRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if (!$this->order()) {
+            $order = $this->order();
+
+            if (!$order) {
                 return;
             }
 
-            if ($this->order()->payment_method !== 'cod') {
+            if ($order->payment_method !== 'cod') {
                 foreach (['full_name', 'email', 'mobile', 'upi_id'] as $field) {
                     if ($this->filled($field)) {
                         $validator->errors()->add(
@@ -60,6 +66,18 @@ class OrderReturnRequest extends FormRequest
                     }
                 }
             }
+
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            try {
+                $calculator = app(OrderRefundCalculator::class);
+                $quantities = $calculator->mapReturnItemsToQuantities($this->input('items', []));
+                $calculator->assertValidReturnQuantities($order, $quantities);
+            } catch (\DomainException $e) {
+                $validator->errors()->add('items', $e->getMessage());
+            }
         });
     }
 
@@ -68,6 +86,11 @@ class OrderReturnRequest extends FormRequest
         return [
             'reason.required' => 'Return reason is required',
             'reason.max' => 'Return reason must not exceed 500 characters',
+            'items.required' => 'At least one product must be selected for return',
+            'items.min' => 'At least one product must be selected for return',
+            'items.*.order_item_id.required' => 'Each return item must include an order item id',
+            'items.*.quantity.required' => 'Return quantity is required for each selected product',
+            'items.*.quantity.min' => 'Return quantity must be at least 1',
             'product_images.required' => 'At least one product image is required',
             'product_images.min' => 'At least one product image is required',
             'product_images.max' => 'You can upload a maximum of 3 product images',
@@ -91,6 +114,8 @@ class OrderReturnRequest extends FormRequest
 
     private function order(): ?Order
     {
-        return Order::where('user_id', Auth::id())->find($this->route('id'));
+        return Order::where('user_id', Auth::id())
+            ->with('orderItems')
+            ->find($this->route('id'));
     }
 }

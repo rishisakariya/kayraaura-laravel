@@ -23,6 +23,8 @@ class OrderItemResource extends JsonResource
             'size_text' => $this->size_text,
             'size_price' => (float) $this->size_price,
             'quantity' => $this->quantity,
+            'returned_quantity' => (int) $this->returned_quantity,
+            'returnable_quantity' => $this->returnableQuantity(),
             'price' => (float) $this->price,
             'total' => (float) $this->total,
             'product' => $this->whenLoaded('product', function () {

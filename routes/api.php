@@ -110,6 +110,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/cod/send-otp', [OrderController::class, 'sendCodOtp']);
     Route::post('/orders/create', [OrderController::class, 'store']);
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+    Route::post('/orders/{id}/return/preview', [OrderController::class, 'previewReturn']);
     Route::post('/orders/{id}/return', [OrderController::class, 'returnOrder']);
     Route::get('/shipments/track', [OrderShipmentController::class, 'track']);
     Route::post('/orders/{id}/shipment/refresh', [OrderShipmentController::class, 'refresh'])->middleware('throttle:6,1');

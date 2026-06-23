@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderStoreRequest;
 use App\Http\Requests\OrderCancelRequest;
+use App\Http\Requests\OrderReturnPreviewRequest;
 use App\Http\Requests\OrderReturnRequest;
 use App\Http\Resources\OrderResource;
 use App\Jobs\CancelDelhiveryShipmentJob;
@@ -348,6 +349,38 @@ class OrderController extends Controller
     }
 
     /**
+     * Preview refundable amount for a selected item-level return.
+     */
+    public function previewReturn(OrderReturnPreviewRequest $request, string $id): JsonResponse
+    {
+        $order = Order::where('user_id', Auth::id())
+            ->with('orderItems')
+            ->findOrFail($id);
+
+        if (!$order->canBeReturned()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'This order is not eligible for return',
+            ], 400);
+        }
+
+        $refundCalculation = $this->orderReturnService->calculateRefund(
+            $order,
+            $request->validated('items')
+        );
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'items' => $refundCalculation['items'],
+                'refund_amount' => $refundCalculation['refund_amount'],
+                'is_partial' => $refundCalculation['is_partial'],
+                'return_summary' => $this->orderReturnService->buildOrderReturnSummary($order),
+            ],
+        ]);
+    }
+
+    /**
      * Return a delivered order and schedule reverse pickup.
      */
     public function returnOrder(OrderReturnRequest $request, string $id): JsonResponse
@@ -359,7 +392,7 @@ class OrderController extends Controller
         if (!$order->canBeReturned()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Only delivered orders can be returned',
+                'message' => 'Only delivered orders with returnable items can be returned',
             ], 400);
         }
 
@@ -387,6 +420,10 @@ class OrderController extends Controller
                 : $this->shipmentService;
 
             $validated = $request->validated();
+            $refundCalculation = $this->orderReturnService->calculateRefund(
+                $order,
+                $validated['items']
+            );
             $imageUrls = $this->orderReturnService->storeProductImages(
                 $order,
                 $request->file('product_images', [])
@@ -397,7 +434,8 @@ class OrderController extends Controller
                 $returnRequest = $this->orderReturnService->buildReturnRequestPayload(
                     $order,
                     $validated,
-                    $imageUrls
+                    $imageUrls,
+                    $refundCalculation
                 );
                 $order->refresh()->markReturnRequested($returnRequest);
             } catch (\Throwable $e) {
@@ -407,8 +445,12 @@ class OrderController extends Controller
             }
 
             $message = $order->payment_method === 'cod'
-                ? 'Return pickup scheduled successfully. Refund will be processed to your UPI after the product is received.'
-                : 'Return pickup scheduled successfully. Refund will be processed after the product is received.';
+                ? 'Return pickup scheduled successfully. A refund of ₹'
+                    . number_format($refundCalculation['refund_amount'], 2)
+                    . ' will be processed to your UPI after the returned products are received.'
+                : 'Return pickup scheduled successfully. A refund of ₹'
+                    . number_format($refundCalculation['refund_amount'], 2)
+                    . ' will be processed after the returned products are received.';
 
             return response()->json([
                 'status' => true,

@@ -136,7 +136,24 @@ class Order extends Model
 
     public function canBeReturned(): bool
     {
-        return $this->status === 'delivered';
+        if ($this->status !== 'delivered') {
+            return false;
+        }
+
+        return $this->hasReturnableItems();
+    }
+
+    public function hasReturnableItems(): bool
+    {
+        if (!$this->relationLoaded('orderItems')) {
+            return $this->orderItems()
+                ->whereColumn('returned_quantity', '<', 'quantity')
+                ->exists();
+        }
+
+        return $this->orderItems->contains(
+            fn (OrderItem $item) => $item->returnableQuantity() > 0
+        );
     }
 
     public function cancel(): void

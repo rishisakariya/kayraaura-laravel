@@ -16,12 +16,14 @@ class OrderItem extends Model
         'size_text',
         'size_price',
         'quantity',
+        'returned_quantity',
         'price',
         'total',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
+        'returned_quantity' => 'integer',
         'size_price' => 'decimal:2',
         'price' => 'decimal:2',
         'total' => 'decimal:2',
@@ -40,5 +42,10 @@ class OrderItem extends Model
     public function productSize(): BelongsTo
     {
         return $this->belongsTo(ProductSize::class);
+    }
+
+    public function returnableQuantity(): int
+    {
+        return max($this->quantity - (int) $this->returned_quantity, 0);
     }
 }

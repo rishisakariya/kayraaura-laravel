@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\OrderShipment;
 use App\Models\ShipmentStatusHistory;
+use App\Services\OrderReturnService;
 use App\Services\Shipping\ShippingProviderResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -53,6 +54,7 @@ class OrderResource extends JsonResource
             'notes' => $this->notes,
             'can_be_returned' => $this->canBeReturned(),
             'return_request' => $this->returnRequestPayload(),
+            'return_summary' => $this->returnSummaryPayload(),
             'invoice_download_url' => $this->invoiceDownloadUrl(),
             'can_be_cancelled' => $this->canBeCancelled(),
             'order_items' => OrderItemResource::collection($this->whenLoaded('orderItems')),
@@ -133,32 +135,77 @@ class OrderResource extends JsonResource
 
     private function returnRequestPayload(): ?array
     {
-        if (!in_array($this->status, ['return_requested', 'returned'], true) || !$this->return_request) {
+        if (!$this->return_request) {
             return null;
         }
 
-        return $this->returnRequestSummary();
+        if (!in_array($this->status, ['return_requested', 'returned'], true)
+            && (float) ($this->return_request['total_refunded_amount'] ?? 0) <= 0) {
+            return null;
+        }
+
+        return $this->returnRequestsPayload();
+    }
+
+    private function returnSummaryPayload(): array
+    {
+        return app(OrderReturnService::class)->buildOrderReturnSummary($this->resource);
+    }
+
+    private function returnRequestsPayload(): array
+    {
+        $returnRequest = $this->return_request ?? [];
+        $calculator = app(\App\Services\OrderRefundCalculator::class);
+        $requests = $calculator->normalizeReturnRequests($this->resource)
+            ->map(function (array $request) {
+                $payload = [
+                    'id' => $request['id'] ?? null,
+                    'status' => $request['status'] ?? 'pending',
+                    'reason' => $request['reason'] ?? null,
+                    'items' => $request['items'] ?? [],
+                    'refund_amount' => isset($request['refund_amount'])
+                        ? (float) $request['refund_amount']
+                        : null,
+                    'is_partial' => (bool) ($request['is_partial'] ?? false),
+                    'product_images' => $request['product_images'] ?? [],
+                    'requested_at' => $request['requested_at'] ?? null,
+                    'completed_at' => $request['completed_at'] ?? null,
+                ];
+
+                if (isset($request['refund_details']) && is_array($request['refund_details'])) {
+                    $payload['refund_details'] = $request['refund_details'];
+                }
+
+                return $payload;
+            })
+            ->values()
+            ->all();
+
+        return [
+            'requests' => $requests,
+            'total_refunded_amount' => (float) ($returnRequest['total_refunded_amount'] ?? 0),
+            'latest' => $requests !== [] ? $requests[array_key_last($requests)] : null,
+        ];
     }
 
     private function returnRequestSummary(): array
     {
-        $returnRequest = $this->return_request ?? [];
+        $requestsPayload = $this->returnRequestsPayload();
+        $latest = $requestsPayload['latest'] ?? [];
 
-        if ($returnRequest === []) {
+        if ($latest === []) {
             return [];
         }
 
-        $payload = [
-            'reason' => $returnRequest['reason'] ?? null,
-            'product_images' => $returnRequest['product_images'] ?? [],
-            'requested_at' => $returnRequest['requested_at'] ?? null,
+        return [
+            'reason' => $latest['reason'] ?? null,
+            'items' => $latest['items'] ?? [],
+            'refund_amount' => $latest['refund_amount'] ?? null,
+            'is_partial' => $latest['is_partial'] ?? false,
+            'product_images' => $latest['product_images'] ?? [],
+            'requested_at' => $latest['requested_at'] ?? null,
+            'refund_details' => $latest['refund_details'] ?? null,
         ];
-
-        if (isset($returnRequest['refund_details']) && is_array($returnRequest['refund_details'])) {
-            $payload['refund_details'] = $returnRequest['refund_details'];
-        }
-
-        return $payload;
     }
 
     private function trackingTimeline(array $trackingPayload): array

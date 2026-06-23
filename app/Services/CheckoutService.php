@@ -195,12 +195,40 @@ class CheckoutService
         $order->loadMissing('orderItems.product');
 
         foreach ($order->orderItems as $item) {
-            $product = $item->product;
-            $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
+            $this->restoreStockForOrderItem($item, $item->quantity);
+        }
+    }
 
-            if ($product && $productSize && $product->track_stock) {
-                $productSize->increment('quantity', $item->quantity);
+    /**
+     * @param  array<int, array{order_item_id: int, quantity: int}>  $returnItems
+     */
+    public function restoreStockForReturnedItems(Order $order, array $returnItems): void
+    {
+        $order->loadMissing('orderItems.product');
+        $itemsById = $order->orderItems->keyBy('id');
+
+        foreach ($returnItems as $returnItem) {
+            $orderItem = $itemsById->get($returnItem['order_item_id'] ?? null);
+
+            if (!$orderItem) {
+                continue;
             }
+
+            $this->restoreStockForOrderItem($orderItem, (int) ($returnItem['quantity'] ?? 0));
+        }
+    }
+
+    private function restoreStockForOrderItem(OrderItem $item, int $quantity): void
+    {
+        if ($quantity < 1) {
+            return;
+        }
+
+        $product = $item->product;
+        $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
+
+        if ($product && $productSize && $product->track_stock) {
+            $productSize->increment('quantity', $quantity);
         }
     }
 
@@ -306,7 +334,7 @@ class CheckoutService
         return $payload;
     }
 
-    public function refundRazorpayPayment(Order $order, string $reason = 'order_cancelled'): array
+    public function refundRazorpayPayment(Order $order, string $reason = 'order_cancelled', ?float $amount = null): array
     {
         $key = config('services.razorpay.key');
         $secret = config('services.razorpay.secret');
@@ -319,8 +347,14 @@ class CheckoutService
             throw new DomainException('Razorpay payment id is missing for this order');
         }
 
+        $refundAmount = $amount ?? (float) $order->total_amount;
+
+        if ($refundAmount <= 0) {
+            throw new DomainException('Refund amount must be greater than zero');
+        }
+
         $requestPayload = [
-            'amount' => (int) round(((float) $order->total_amount) * 100),
+            'amount' => (int) round($refundAmount * 100),
             'speed' => 'normal',
             'notes' => [
                 'local_order_id' => (string) $order->id,

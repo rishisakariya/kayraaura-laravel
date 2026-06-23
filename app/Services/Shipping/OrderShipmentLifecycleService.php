@@ -3,16 +3,20 @@
 namespace App\Services\Shipping;
 
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\OrderShipment;
 use App\Services\CheckoutService;
+use App\Services\OrderRefundCalculator;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class OrderShipmentLifecycleService
 {
-    public function __construct(private readonly CheckoutService $checkoutService)
-    {
+    public function __construct(
+        private readonly CheckoutService $checkoutService,
+        private readonly OrderRefundCalculator $refundCalculator,
+    ) {
     }
 
     public function applyForwardStatus(OrderShipment $shipment, string $normalizedStatus): void
@@ -66,6 +70,7 @@ class OrderShipmentLifecycleService
         try {
             DB::transaction(function () use ($order) {
                 $order = Order::query()
+                    ->with('orderItems')
                     ->whereKey($order->id)
                     ->lockForUpdate()
                     ->first();
@@ -74,15 +79,65 @@ class OrderShipmentLifecycleService
                     return;
                 }
 
-                if ($order->payment_method === 'online' && $order->payment_status !== 'refunded') {
+                $pendingRequest = $this->refundCalculator->latestPendingReturnRequest($order);
+
+                if (!$pendingRequest) {
+                    return;
+                }
+
+                $returnItems = $pendingRequest['items'] ?? [];
+                $refundAmount = round((float) ($pendingRequest['refund_amount'] ?? 0), 2);
+
+                foreach ($returnItems as $returnItem) {
+                    $orderItemId = (int) ($returnItem['order_item_id'] ?? 0);
+                    $quantity = (int) ($returnItem['quantity'] ?? 0);
+
+                    if ($orderItemId < 1 || $quantity < 1) {
+                        continue;
+                    }
+
+                    OrderItem::query()
+                        ->where('order_id', $order->id)
+                        ->whereKey($orderItemId)
+                        ->increment('returned_quantity', $quantity);
+                }
+
+                $this->checkoutService->restoreStockForReturnedItems($order, $returnItems);
+
+                if ($order->payment_method === 'online' && $refundAmount > 0 && $order->payment_status !== 'refunded') {
                     if ($order->payment_status === 'paid') {
-                        $this->checkoutService->refundRazorpayPayment($order, 'order_returned');
-                        $order->payment_status = 'refunded';
+                        $this->checkoutService->refundRazorpayPayment($order, 'order_returned', $refundAmount);
                     }
                 }
 
-                $this->checkoutService->restoreStockForOrder($order);
-                $order->status = 'returned';
+                $returnRequest = $order->return_request ?? ['requests' => [], 'total_refunded_amount' => 0];
+
+                if (!isset($returnRequest['requests'])) {
+                    $returnRequest = [
+                        'requests' => [$pendingRequest],
+                        'total_refunded_amount' => 0.0,
+                    ];
+                }
+
+                $returnRequest['requests'] = collect($returnRequest['requests'])
+                    ->map(function (array $request) use ($pendingRequest) {
+                        if (($request['id'] ?? null) === ($pendingRequest['id'] ?? null)) {
+                            $request['status'] = 'completed';
+                            $request['completed_at'] = now()->toDateTimeString();
+                        }
+
+                        return $request;
+                    })
+                    ->all();
+
+                $returnRequest['total_refunded_amount'] = round(
+                    (float) ($returnRequest['total_refunded_amount'] ?? 0) + $refundAmount,
+                    2
+                );
+
+                $order->return_request = $returnRequest;
+                $order->load('orderItems');
+                $order->status = $this->allItemsReturned($order) ? 'returned' : 'delivered';
                 $order->save();
             });
         } catch (DomainException $e) {
@@ -94,5 +149,12 @@ class OrderShipmentLifecycleService
 
             throw $e;
         }
+    }
+
+    private function allItemsReturned(Order $order): bool
+    {
+        return $order->orderItems->every(
+            fn (OrderItem $item) => (int) $item->returned_quantity >= (int) $item->quantity
+        );
     }
 }
