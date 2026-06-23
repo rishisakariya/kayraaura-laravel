@@ -53,6 +53,7 @@ class OrderResource extends JsonResource
             'billing_address' => $this->billing_address,
             'notes' => $this->notes,
             'can_be_returned' => $this->canBeReturned(),
+            'can_pay_return_refund' => app(OrderReturnService::class)->canPayReturnRefund($this->resource),
             'return_request' => $this->returnRequestPayload(),
             'return_summary' => $this->returnSummaryPayload(),
             'invoice_download_url' => $this->invoiceDownloadUrl(),
@@ -169,7 +170,12 @@ class OrderResource extends JsonResource
                     'is_partial' => (bool) ($request['is_partial'] ?? false),
                     'product_images' => $request['product_images'] ?? [],
                     'requested_at' => $request['requested_at'] ?? null,
+                    'received_at' => $request['received_at'] ?? null,
+                    'refunded_at' => $request['refunded_at'] ?? null,
                     'completed_at' => $request['completed_at'] ?? null,
+                    'can_pay_refund' => ($request['status'] ?? '') === 'awaiting_refund'
+                        && $this->payment_method === 'online'
+                        && $this->payment_status === 'paid',
                 ];
 
                 if (isset($request['refund_details']) && is_array($request['refund_details'])) {

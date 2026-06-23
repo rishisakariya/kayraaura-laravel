@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\OrderReturnRefundRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
+use App\Services\OrderReturnService;
+use DomainException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,6 +15,11 @@ use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
+    public function __construct(
+        private readonly OrderReturnService $orderReturnService,
+    ) {
+    }
+
     /**
      * Display a listing of orders for the admin panel.
      */
@@ -87,6 +95,58 @@ class OrderController extends Controller
                 'success' => false,
                 'message' => 'Order not found',
             ], 404);
+        }
+    }
+
+    /**
+     * Process Razorpay refund for a return received at the warehouse (online orders only).
+     */
+    public function payReturnRefund(OrderReturnRefundRequest $request, string $id): JsonResponse
+    {
+        try {
+            $order = Order::findOrFail($id);
+
+            if (!$this->orderReturnService->canPayReturnRefund($order)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This order does not have a return refund ready to process',
+                ], 400);
+            }
+
+            $result = $this->orderReturnService->processOnlineReturnRefund(
+                $order,
+                $request->validated('return_request_id')
+            );
+
+            $order->refresh()->load(['user', 'orderItems.product.images', 'orderItems.productSize', 'shipment.statusHistories']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Refund of ₹'
+                    . number_format($result['refund_amount'], 2)
+                    . ' has been processed successfully',
+                'data' => [
+                    'order' => new OrderResource($order),
+                    'refund_amount' => $result['refund_amount'],
+                    'return_request_id' => $result['return_request_id'],
+                ],
+            ]);
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order not found',
+            ], 404);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process return refund. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
         }
     }
 }

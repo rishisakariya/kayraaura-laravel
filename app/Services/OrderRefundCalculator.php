@@ -122,12 +122,17 @@ class OrderRefundCalculator
         $pendingRefund = $pendingRequest
             ? round((float) ($pendingRequest['refund_amount'] ?? 0), 2)
             : 0.0;
+        $awaitingRefundRequest = $this->latestAwaitingRefundReturnRequest($order);
+        $awaitingRefund = $awaitingRefundRequest
+            ? round((float) ($awaitingRefundRequest['refund_amount'] ?? 0), 2)
+            : 0.0;
 
         return [
             'returned_items' => $returnedItems,
             'remaining_items' => $remainingItems,
             'total_refunded_amount' => $totalRefunded,
             'pending_refund_amount' => $pendingRefund,
+            'awaiting_refund_amount' => $awaitingRefund,
             'item_eligibility' => $this->buildItemReturnSummary($order),
         ];
     }
@@ -137,6 +142,18 @@ class OrderRefundCalculator
         return $this->normalizeReturnRequests($order)->first(
             fn ($request) => ($request['status'] ?? 'pending') === 'pending'
         );
+    }
+
+    public function latestAwaitingRefundReturnRequest(Order $order): ?array
+    {
+        return $this->normalizeReturnRequests($order)->first(
+            fn ($request) => ($request['status'] ?? '') === 'awaiting_refund'
+        );
+    }
+
+    public function hasAwaitingRefundReturnRequest(Order $order): bool
+    {
+        return $this->latestAwaitingRefundReturnRequest($order) !== null;
     }
 
     public function normalizeReturnRequests(Order $order): Collection

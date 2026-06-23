@@ -52,7 +52,7 @@ class OrderShipmentLifecycleService
     }
 
     /**
-     * Reverse delivered → auto QC pass → refund (prepaid) → restore stock → returned.
+     * Reverse delivered → restore stock → mark return received (online refunds are manual).
      */
     public function completeReturnIfReceived(OrderShipment $shipment, string $normalizedStatus): void
     {
@@ -104,11 +104,10 @@ class OrderShipmentLifecycleService
 
                 $this->checkoutService->restoreStockForReturnedItems($order, $returnItems);
 
-                if ($order->payment_method === 'online' && $refundAmount > 0 && $order->payment_status !== 'refunded') {
-                    if ($order->payment_status === 'paid') {
-                        $this->checkoutService->refundRazorpayPayment($order, 'order_returned', $refundAmount);
-                    }
-                }
+                $isOnlineRefundDue = $order->payment_method === 'online'
+                    && $refundAmount > 0
+                    && $order->payment_status === 'paid';
+                $receivedStatus = $isOnlineRefundDue ? 'awaiting_refund' : 'completed';
 
                 $returnRequest = $order->return_request ?? ['requests' => [], 'total_refunded_amount' => 0];
 
@@ -120,20 +119,26 @@ class OrderShipmentLifecycleService
                 }
 
                 $returnRequest['requests'] = collect($returnRequest['requests'])
-                    ->map(function (array $request) use ($pendingRequest) {
+                    ->map(function (array $request) use ($pendingRequest, $receivedStatus) {
                         if (($request['id'] ?? null) === ($pendingRequest['id'] ?? null)) {
-                            $request['status'] = 'completed';
-                            $request['completed_at'] = now()->toDateTimeString();
+                            $request['status'] = $receivedStatus;
+                            $request['received_at'] = now()->toDateTimeString();
+
+                            if ($receivedStatus === 'completed') {
+                                $request['completed_at'] = $request['received_at'];
+                            }
                         }
 
                         return $request;
                     })
                     ->all();
 
-                $returnRequest['total_refunded_amount'] = round(
-                    (float) ($returnRequest['total_refunded_amount'] ?? 0) + $refundAmount,
-                    2
-                );
+                if ($receivedStatus === 'completed') {
+                    $returnRequest['total_refunded_amount'] = round(
+                        (float) ($returnRequest['total_refunded_amount'] ?? 0) + $refundAmount,
+                        2
+                    );
+                }
 
                 $order->return_request = $returnRequest;
                 $order->load('orderItems');
