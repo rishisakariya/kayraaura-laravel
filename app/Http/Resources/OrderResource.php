@@ -230,11 +230,7 @@ class OrderResource extends JsonResource
             return false;
         }
 
-        return ($request['status'] ?? '') === 'awaiting_refund'
-            && (
-                ($this->payment_method === 'online' && $this->payment_status === 'paid')
-                || ($this->payment_method === 'cod' && !empty($request['refund_details']['upi_id']))
-            );
+        return app(OrderReturnService::class)->canPayReturnRefundForRequest($this->resource, $request);
     }
 
     private function trackingTimeline(array $trackingPayload): array

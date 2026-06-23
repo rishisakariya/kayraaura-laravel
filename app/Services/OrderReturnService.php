@@ -276,17 +276,34 @@ class OrderReturnService
             return false;
         }
 
+        $request = $this->refundCalculator->latestAwaitingRefundReturnRequest($order);
+
+        return $request && $this->canPayReturnRefundForRequest($order, $request);
+    }
+
+    /**
+     * @param  array<string, mixed>  $returnRequest
+     */
+    public function canPayReturnRefundForRequest(Order $order, array $returnRequest): bool
+    {
+        if (($returnRequest['status'] ?? '') !== 'awaiting_refund') {
+            return false;
+        }
+
         if ($order->payment_method === 'online') {
             return $order->payment_status === 'paid';
         }
 
         if ($order->payment_method === 'cod') {
-            $request = $this->refundCalculator->latestAwaitingRefundReturnRequest($order);
-
-            return !empty($request['refund_details']['upi_id']);
+            return !empty($returnRequest['refund_details']['upi_id']);
         }
 
         return false;
+    }
+
+    public function requiresUpiTransactionReferenceForCodRefund(): bool
+    {
+        return !config('services.razorpay.x_account_number');
     }
 
     /**

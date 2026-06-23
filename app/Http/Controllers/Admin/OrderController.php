@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderReturnRefundRequest;
+use App\Http\Resources\Admin\OrderReturnEntryResource;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
+use App\Services\OrderReturnListingService;
 use App\Services\OrderReturnService;
 use DomainException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -17,6 +19,7 @@ class OrderController extends Controller
 {
     public function __construct(
         private readonly OrderReturnService $orderReturnService,
+        private readonly OrderReturnListingService $orderReturnListingService,
     ) {
     }
 
@@ -73,6 +76,39 @@ class OrderController extends Controller
                 'last_page' => $orders->lastPage(),
                 'per_page' => $orders->perPage(),
                 'total' => $orders->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * List submitted return entries for online or COD orders.
+     */
+    public function returnEntries(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'type' => ['required', Rule::in(['cod', 'online'])],
+            'status' => ['nullable', Rule::in(['pending', 'awaiting_refund', 'completed'])],
+            'search' => ['nullable', 'string', 'max:255'],
+            'requested_from' => ['nullable', 'date'],
+            'requested_to' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $entries = $this->orderReturnListingService->paginate(
+            $validated['type'],
+            $validated
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => OrderReturnEntryResource::collection($entries),
+            'meta' => [
+                'current_page' => $entries->currentPage(),
+                'last_page' => $entries->lastPage(),
+                'per_page' => $entries->perPage(),
+                'total' => $entries->total(),
+                'payment_method' => $validated['type'],
             ],
         ]);
     }

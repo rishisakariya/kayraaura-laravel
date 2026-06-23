@@ -76,6 +76,7 @@ Route::prefix('cpanel')->group(function () {
         Route::get('dashboard-weekly-order-status', [DashboardController::class, 'weeklyOrderStatus']);
 
         // Orders Management
+        Route::get('order-returns', [OrderController::class, 'returnEntries']);
         Route::get('orders', [OrderController::class, 'index']);
         Route::get('orders/{id}', [OrderController::class, 'show']);
         Route::post('orders/{id}/return/refund', [OrderController::class, 'payReturnRefund']);
