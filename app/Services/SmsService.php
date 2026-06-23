@@ -178,8 +178,15 @@ class SmsService
 
     private function whatsAppTemplateNameFor(string $purpose): ?string
     {
-        return config("services.sms.whatsapp.templates.{$purpose}")
-            ?? config('services.sms.whatsapp.templates.default');
+        $template = config("services.sms.whatsapp.templates.{$purpose}");
+
+        if (is_string($template) && $template !== '') {
+            return $template;
+        }
+
+        $default = config('services.sms.whatsapp.templates.default');
+
+        return is_string($default) && $default !== '' ? $default : null;
     }
 
     private function whatsAppTemplateComponents(string $otp, string $purpose, int $expiryMinutes): array
