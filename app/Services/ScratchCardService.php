@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Order;
 use App\Models\ScratchCardCoupon;
 use App\Models\ScratchCardSetting;
 use App\Models\User;
@@ -30,6 +31,12 @@ class ScratchCardService
     public function scratch(User $user): ScratchCardCoupon
     {
         $this->assertActive();
+
+        $existing = $this->findActiveCoupon($user);
+
+        if ($existing) {
+            return $existing;
+        }
 
         $setting = $this->settings();
         $discountPercent = random_int(
@@ -64,6 +71,17 @@ class ScratchCardService
             throw new DomainException('This scratch card coupon has already been redeemed.');
         }
 
+        $isUsedOnActiveOrder = Order::query()
+            ->where('user_id', $user->id)
+            ->where('scratch_coupon_code', $coupon->code)
+            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('payment_status', ['failed'])
+            ->exists();
+
+        if ($isUsedOnActiveOrder) {
+            throw new DomainException('This scratch card coupon is already applied to an active order.');
+        }
+
         return $coupon;
     }
 
@@ -95,9 +113,20 @@ class ScratchCardService
 
     public function findActiveCoupon(User $user): ?ScratchCardCoupon
     {
+        $codesOnActiveOrders = Order::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('scratch_coupon_code')
+            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('payment_status', ['failed'])
+            ->pluck('scratch_coupon_code');
+
         return ScratchCardCoupon::query()
             ->where('user_id', $user->id)
             ->where('is_redeemed', false)
+            ->when(
+                $codesOnActiveOrders->isNotEmpty(),
+                fn ($query) => $query->whereNotIn('code', $codesOnActiveOrders)
+            )
             ->latest('id')
             ->first();
     }
@@ -119,7 +148,23 @@ class ScratchCardService
 
     public function redeem(User $user, string $code, ?int $orderId = null, ?float $discountAmount = null): ScratchCardCoupon
     {
-        $coupon = $this->findRedeemableCoupon($user, $code);
+        $coupon = ScratchCardCoupon::query()
+            ->where('code', strtoupper(trim($code)))
+            ->where('user_id', $user->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$coupon) {
+            throw new DomainException('Invalid scratch card coupon code.');
+        }
+
+        if ($coupon->is_redeemed) {
+            if ($orderId !== null && (int) $coupon->order_id === $orderId) {
+                return $coupon;
+            }
+
+            throw new DomainException('This scratch card coupon has already been redeemed.');
+        }
 
         $coupon->update([
             'is_redeemed' => true,
@@ -129,6 +174,25 @@ class ScratchCardService
         ]);
 
         return $coupon->refresh();
+    }
+
+    public function releaseForOrder(Order $order): void
+    {
+        if (empty($order->scratch_coupon_code)) {
+            return;
+        }
+
+        ScratchCardCoupon::query()
+            ->where('code', strtoupper(trim($order->scratch_coupon_code)))
+            ->where('user_id', $order->user_id)
+            ->where('order_id', $order->id)
+            ->where('is_redeemed', true)
+            ->update([
+                'is_redeemed' => false,
+                'redeemed_at' => null,
+                'order_id' => null,
+                'discount_amount' => null,
+            ]);
     }
 
     private function generateUniqueCode(): string

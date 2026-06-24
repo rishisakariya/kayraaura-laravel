@@ -95,7 +95,7 @@ class OrderController extends Controller
 
                 $order = $this->checkoutService->createOrder($user, $payload, $checkout);
 
-                if ($coupon && $payload['payment_method'] === 'cod') {
+                if ($coupon) {
                     $this->scratchCardService->redeem(
                         $user,
                         $coupon->code,
@@ -297,6 +297,12 @@ class OrderController extends Controller
             if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
                 $this->checkoutService->refundRazorpayPayment($order);
                 $order->payment_status = 'refunded';
+            }
+
+            if ($order->payment_method === 'online'
+                && in_array($order->payment_status, ['pending', 'failed'], true)
+                && $order->scratch_coupon_code) {
+                $this->scratchCardService->releaseForOrder($order);
             }
 
             $order->cancel();

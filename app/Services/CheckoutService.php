@@ -486,6 +486,8 @@ class CheckoutService
         $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
 
         if ($order->payment_status === 'paid') {
+            $this->redeemScratchCouponForPaidOrder($order);
+
             return $order;
         }
 
@@ -503,6 +505,8 @@ class CheckoutService
                 'razorpay_signature' => $paymentData['razorpay_signature'] ?? $order->razorpay_signature,
                 'paid_at' => now(),
             ]);
+
+            $this->redeemScratchCouponForPaidOrder($order);
 
             return $order;
         }
@@ -551,6 +555,8 @@ class CheckoutService
                 'razorpay_payment_id' => $paymentId ?? $order->razorpay_payment_id,
                 'payment_failed_at' => now(),
             ]);
+
+            $this->scratchCardService->releaseForOrder($order);
         }
 
         return $order;
