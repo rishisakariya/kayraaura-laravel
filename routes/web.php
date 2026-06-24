@@ -1,11 +1,16 @@
 <?php
 
+use App\Http\Controllers\UploadServeController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Fallback when uploads live outside public_html or the uploads symlink is missing/broken.
+Route::get('/uploads/{path}', [UploadServeController::class, 'show'])
+    ->where('path', '.*');
 
 // One-time Hostinger setup via browser (remove this route after use).
 // Visit: /run-upload-link?token=YOUR_UPLOADS_SETUP_TOKEN
