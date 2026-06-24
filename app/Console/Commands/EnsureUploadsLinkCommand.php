@@ -48,6 +48,7 @@ class EnsureUploadsLinkCommand extends Command
 
         if ($this->option('migrate')) {
             $this->migrateExistingUploads($linkPath, $storageReal);
+            $this->forceClearDirectory($linkPath);
         }
 
         if (!$this->ensureSymlink($linkPath, $storageReal)) {
@@ -84,7 +85,8 @@ class EnsureUploadsLinkCommand extends Command
             }
 
             if (!$this->directoryIsEmpty($linkPath)) {
-                $this->error("Refusing to replace non-empty directory without --migrate: {$linkPath}");
+                $this->error("Could not empty uploads directory after migration: {$linkPath}");
+                $this->warn('Delete the uploads folder manually in File Manager, then run this again.');
 
                 return false;
             }
@@ -144,6 +146,9 @@ class EnsureUploadsLinkCommand extends Command
             }
 
             if (file_exists($destination)) {
+                // Already in persistent storage (e.g. app wrote directly to UPLOADS_DISK_ROOT).
+                unlink($item->getPathname());
+
                 continue;
             }
 
@@ -151,20 +156,47 @@ class EnsureUploadsLinkCommand extends Command
                 mkdir(dirname($destination), 0755, true);
             }
 
-            if (rename($item->getPathname(), $destination)) {
-                $migrated++;
+            if (!rename($item->getPathname(), $destination)) {
+                if (@copy($item->getPathname(), $destination)) {
+                    unlink($item->getPathname());
+                    $migrated++;
+                }
+
+                continue;
             }
+
+            $migrated++;
         }
 
         $this->cleanupEmptyDirectories($linkPath);
 
-        $htaccess = $linkPath.DIRECTORY_SEPARATOR.'.htaccess';
-        if (is_file($htaccess)) {
-            unlink($htaccess);
-        }
-
         if ($migrated > 0) {
             $this->info("Migrated {$migrated} upload file(s) into persistent storage.");
+        }
+    }
+
+    private function forceClearDirectory(string $path): void
+    {
+        if (!is_dir($path) || is_link($path)) {
+            return;
+        }
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($iterator as $item) {
+            if ($item->isDir()) {
+                @rmdir($item->getPathname());
+            } else {
+                @unlink($item->getPathname());
+            }
+        }
+
+        $htaccess = $path.DIRECTORY_SEPARATOR.'.htaccess';
+        if (is_file($htaccess)) {
+            @unlink($htaccess);
         }
     }
 
