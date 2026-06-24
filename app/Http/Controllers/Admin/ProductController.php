@@ -118,7 +118,6 @@ class ProductController extends Controller
             $product->discount_percentage = $request->input('discount_percentage');
             $product->is_active = $request->input('is_active', true);
             $product->is_collection = $request->input('is_collection', false);
-            $product->track_stock = $request->input('track_stock', true);
             $product->weight_grams = $request->input('weight_grams');
             $product->save();
 
@@ -162,7 +161,6 @@ class ProductController extends Controller
         $product->discount_percentage = $request->input('discount_percentage');
         $product->is_active = $request->input('is_active', $product->is_active);
         $product->is_collection = $request->input('is_collection', $product->is_collection);
-        $product->track_stock = $request->input('track_stock', $product->track_stock);
         $product->weight_grams = $request->input('weight_grams', $product->weight_grams);
         $product->save();
 

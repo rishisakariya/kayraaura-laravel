@@ -49,7 +49,6 @@ class ProductStoreRequest extends FormRequest
             'category_id' => 'nullable|integer|exists:categories,id',
             'is_active' => 'nullable|boolean',
             'is_collection' => 'nullable|boolean',
-            'track_stock' => 'nullable|boolean',
             'weight_grams' => 'required|integer|min:1|max:100000',
             'sizes' => [
                 'nullable',

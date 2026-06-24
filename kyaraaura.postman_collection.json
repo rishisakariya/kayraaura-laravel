@@ -443,7 +443,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\r\n  \"edit_value\": 1,\r\n  \"name\": \"Gold Ring\",\r\n  \"slug\": \"gold-ring\",\r\n  \"description\": \"Beautiful gold plated ring\",\r\n  \"short_description\": \"Gold plated ring\",\r\n  \"category_id\": 1,\r\n  \"discount_percentage\": 10,\r\n  \"is_active\": true,\r\n  \"track_stock\": true,\r\n  \"brand\": \"Kayraaura\",\r\n  \"base_material\": \"Brass\",\r\n  \"plating\": \"Gold\",\r\n  \"gemstone\": \"None\",\r\n  \"design\": \"Classic\",\r\n  \"occasion\": \"party\",\r\n  \"ideal_for\": \"woman\",\r\n  \"package_contents\": \"1 Ring\",\r\n  \"sizes\": [\r\n    {\r\n      \"size_text\": \"small 6\",\r\n      \"quantity\": 10,\r\n      \"price\": 499\r\n    },\r\n    {\r\n      \"size_text\": \"large 7\",\r\n      \"quantity\": 5,\r\n      \"price\": 549\r\n    }\r\n  ],\r\n  \"image\": [\r\n    \"products/example.jpg\",\r\n    \"products/example222.jpg\"\r\n  ]\r\n}",
+                  "raw": "{\r\n  \"edit_value\": 1,\r\n  \"name\": \"Gold Ring\",\r\n  \"slug\": \"gold-ring\",\r\n  \"description\": \"Beautiful gold plated ring\",\r\n  \"short_description\": \"Gold plated ring\",\r\n  \"category_id\": 1,\r\n  \"discount_percentage\": 10,\r\n  \"is_active\": true,\r\n  \"brand\": \"Kayraaura\",\r\n  \"base_material\": \"Brass\",\r\n  \"plating\": \"Gold\",\r\n  \"gemstone\": \"None\",\r\n  \"design\": \"Classic\",\r\n  \"occasion\": \"party\",\r\n  \"ideal_for\": \"woman\",\r\n  \"package_contents\": \"1 Ring\",\r\n  \"sizes\": [\r\n    {\r\n      \"size_text\": \"small 6\",\r\n      \"quantity\": 10,\r\n      \"price\": 499\r\n    },\r\n    {\r\n      \"size_text\": \"large 7\",\r\n      \"quantity\": 5,\r\n      \"price\": 549\r\n    }\r\n  ],\r\n  \"image\": [\r\n    \"products/example.jpg\",\r\n    \"products/example222.jpg\"\r\n  ]\r\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -557,12 +557,6 @@
                       "value": "15",
                       "type": "text",
                       "description": "Updated stock quantity"
-                    },
-                    {
-                      "key": "track_stock",
-                      "value": "1",
-                      "type": "text",
-                      "description": "Updated track stock setting"
                     },
                     {
                       "key": "images",

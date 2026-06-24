@@ -17,7 +17,7 @@ class WishlistController extends Controller
     public function index(): JsonResponse
     {
         $wishlistItems = Wishlist::forUser(Auth::id())
-            ->with(['product.category', 'product.images', 'product.sizes.size'])
+            ->with($this->productRelations())
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
@@ -63,7 +63,7 @@ class WishlistController extends Controller
                 ]);
             });
 
-            $wishlistItem->load(['product.category', 'product.images', 'product.sizes.size']);
+            $wishlistItem->load($this->productRelations());
 
             return response()->json([
                 'status' => true,
@@ -82,7 +82,7 @@ class WishlistController extends Controller
     public function show(int $id): JsonResponse
     {
         $wishlistItem = Wishlist::forUser(Auth::id())
-            ->with(['product.category', 'product.images', 'product.sizes.size'])
+            ->with($this->productRelations())
             ->find($id);
 
         if (!$wishlistItem) {
@@ -146,7 +146,7 @@ class WishlistController extends Controller
                 ], 404);
             }
 
-            $wishlistItem->load(['product.category', 'product.images', 'product.sizes.size']);
+            $wishlistItem->load($this->productRelations());
 
             return response()->json([
                 'status' => true,
@@ -194,5 +194,18 @@ class WishlistController extends Controller
     private function activeProduct(int $productId): ?Product
     {
         return Product::where('is_active', true)->find($productId);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function productRelations(): array
+    {
+        return [
+            'product' => function ($query) {
+                $query->with(['category', 'images', 'sizes.size', 'webReviews.user'])
+                    ->withCount('reviews');
+            },
+        ];
     }
 }

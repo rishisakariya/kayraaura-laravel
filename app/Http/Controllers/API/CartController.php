@@ -136,7 +136,7 @@ class CartController extends Controller
                     throw new DomainException('Product is already in cart');
                 }
 
-                if ($product->track_stock && $productSize->quantity < $quantity) {
+                if ($productSize->quantity < $quantity) {
                     throw new DomainException('Insufficient stock available for requested quantity');
                 }
 
@@ -214,7 +214,7 @@ class CartController extends Controller
             ], 404);
         }
 
-        if ($product->track_stock && $productSize->quantity < $quantity) {
+        if ($productSize->quantity < $quantity) {
             return response()->json([
                 'status' => false,
                 'message' => 'Insufficient stock available for requested quantity'

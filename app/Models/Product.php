@@ -18,7 +18,6 @@ class Product extends Model
         'category_id',
         'is_active',
         'is_collection',
-        'track_stock',
         'weight_grams',
 
         'brand',
@@ -34,7 +33,6 @@ class Product extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_collection' => 'boolean',
-        'track_stock' => 'boolean',
         'weight_grams' => 'integer',
         'discount_percentage' => 'decimal:2',
     ];

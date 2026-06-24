@@ -173,12 +173,13 @@ class CheckoutService
                 throw new DomainException('Product not found or inactive');
             }
 
-            if ($item->product->track_stock && $productSize->quantity < $item->quantity) {
-                throw new DomainException('Insufficient stock available for selected size');
-            }
+            $deducted = ProductSize::query()
+                ->whereKey($productSize->id)
+                ->where('quantity', '>=', $item->quantity)
+                ->decrement('quantity', $item->quantity);
 
-            if ($item->product->track_stock) {
-                $productSize->decrement('quantity', $item->quantity);
+            if ($deducted === 0) {
+                throw new DomainException('Insufficient stock available for selected size');
             }
         }
     }
@@ -227,7 +228,7 @@ class CheckoutService
         $product = $item->product;
         $productSize = ProductSize::whereKey($item->product_size_id)->lockForUpdate()->first();
 
-        if ($product && $productSize && $product->track_stock) {
+        if ($product && $productSize) {
             $productSize->increment('quantity', $quantity);
         }
     }
@@ -611,7 +612,7 @@ class CheckoutService
             throw new DomainException('Quantity must be at least 1');
         }
 
-        if ($product->track_stock && $productSize->quantity < $quantity) {
+        if ($productSize->quantity < $quantity) {
             throw new DomainException('Insufficient stock available for selected size');
         }
 
