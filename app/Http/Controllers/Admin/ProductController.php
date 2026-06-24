@@ -221,7 +221,7 @@ class ProductController extends Controller
         DB::beginTransaction();
 
         foreach ($product->images as $image) {
-            $this->deleteProductImageFile($image->image_path);
+            PublicStorage::delete($image->image_path);
         }
 
         // Delete product (images will be deleted via cascade)

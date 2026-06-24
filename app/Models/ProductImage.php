@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Support\MediaType;
 use App\Support\PublicStorage;
 
 class ProductImage extends Model
 {
     protected $appends = [
         'image_url',
+        'media_type',
     ];
 
     protected $fillable = [
@@ -33,6 +35,11 @@ class ProductImage extends Model
     public function getImageUrlAttribute(): ?string
     {
         return PublicStorage::url($this->image_path);
+    }
+
+    public function getMediaTypeAttribute(): string
+    {
+        return MediaType::fromPath($this->image_path);
     }
 
     protected static function boot()

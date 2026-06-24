@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Support\MediaType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -60,7 +61,17 @@ class ProductStoreRequest extends FormRequest
             'sizes.*.quantity' => 'required_with:sizes|integer|min:0',
             'sizes.*.price' => 'required_with:sizes|numeric|min:0|max:99999999.99',
             'image' => 'nullable|array|max:5',
-            'image.*' => ['required', 'string', 'max:2048', 'not_regex:/\.\./'],
+            'image.*' => [
+                'required',
+                'string',
+                'max:2048',
+                'not_regex:/\.\./',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (!is_string($value) || !MediaType::isAllowedPath($value)) {
+                        $fail('Each product media item must be a valid image or video file path.');
+                    }
+                },
+            ],
         ];
     }
 
@@ -75,8 +86,8 @@ class ProductStoreRequest extends FormRequest
 
             'category_id.exists' => 'Selected category does not exist',
             'edit_value.required' => 'Edit value is required',
-            'image.max' => 'Maximum 5 product images allowed',
-            'image.*.not_regex' => 'Product image must be a valid media URL or path',
+            'image.max' => 'Maximum 5 product media items allowed',
+            'image.*.not_regex' => 'Product media must be a valid image or video URL or path',
             'weight_grams.min' => 'Product weight must be at least 1 gram',
             'sizes.*.size_id.required_with' => 'Size is required',
             'sizes.*.size_id.exists' => 'Selected size does not exist',
