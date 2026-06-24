@@ -9,7 +9,6 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -211,13 +210,15 @@ class DashboardController extends Controller
     }
 
     /**
-     * Order status counts grouped by week for the last 8 weeks.
+     * Order status counts grouped by month for the last 12 months.
      */
     public function weeklyOrderStatus(): JsonResponse
     {
-        $weeks = collect(range(7, 0))->map(function (int $weeksAgo) {
-            $start = now()->startOfWeek(Carbon::MONDAY)->subWeeks($weeksAgo);
-            $end = $start->copy()->endOfWeek(Carbon::SUNDAY);
+        $startDate = now()->subMonths(11)->startOfMonth();
+
+        $months = collect(range(0, 11))->map(function (int $offset) use ($startDate) {
+            $start = $startDate->copy()->addMonths($offset);
+            $end = $start->copy()->endOfMonth();
 
             $statusCounts = Order::query()
                 ->whereBetween('created_at', [$start, $end])
@@ -232,9 +233,10 @@ class DashboardController extends Controller
             $total = (int) $statuses->sum();
 
             return [
-                'week' => $start->isoFormat('GGGG-[W]WW'),
-                'week_start' => $start->toDateString(),
-                'week_end' => $end->toDateString(),
+                'month' => $start->format('Y-m'),
+                'label' => $start->format('M Y'),
+                'month_start' => $start->toDateString(),
+                'month_end' => $end->toDateString(),
                 'statuses' => $statuses,
                 'total' => $total,
             ];
@@ -242,7 +244,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $weeks,
+            'data' => $months,
         ]);
     }
 
