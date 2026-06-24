@@ -136,7 +136,7 @@ class ProductController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Product created successfully',
-                'data' => new ProductResource($product->load(['category', 'images', 'primaryImage', 'sizes.size']))
+                'data' => $this->productResponseData($product),
             ]);
         }
 
@@ -179,7 +179,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Product updated successfully',
-            'data' => new ProductResource($product->load(['category', 'images', 'primaryImage', 'sizes.size']))
+            'data' => $this->productResponseData($product),
         ]);
     }
 
@@ -253,43 +253,69 @@ class ProductController extends Controller
 
     private function syncProductImages(Product $product, array $images): void
     {
-        $incomingImages = array_values(array_unique(array_map(function ($image) {
-            return PublicStorage::storePath($image);
-        }, $images)));
+        $incomingImages = [];
+        $seenPaths = [];
+
+        foreach ($images as $image) {
+            $path = PublicStorage::normalizeInput($image) ?? (is_string($image) ? PublicStorage::storePath($image) : null);
+
+            if ($path === null || isset($seenPaths[$path])) {
+                continue;
+            }
+
+            $seenPaths[$path] = true;
+            $incomingImages[] = $path;
+        }
+
+        $incomingDiskPaths = array_map(
+            fn (string $path) => PublicStorage::diskPath($path),
+            $incomingImages
+        );
 
         $existingImages = ProductImage::where('product_id', $product->id)->get();
-        $existingImagesByUrl = $existingImages->keyBy(function (ProductImage $image) {
-            return PublicStorage::diskPath($image->image_path);
-        });
 
         foreach ($existingImages as $existingImage) {
-            $existingImagePath = PublicStorage::diskPath($existingImage->image_path);
+            $existingDiskPath = PublicStorage::diskPath($existingImage->image_path);
 
-            if (!in_array($existingImagePath, array_map(fn ($img) => PublicStorage::diskPath($img), $incomingImages), true)) {
+            if (!in_array($existingDiskPath, $incomingDiskPaths, true)) {
                 PublicStorage::delete($existingImage->image_path);
                 $existingImage->delete();
             }
         }
 
-        foreach ($incomingImages as $index => $image) {
-            $existingImage = $existingImagesByUrl->get(PublicStorage::diskPath($image));
+        $existingImagesByPath = ProductImage::where('product_id', $product->id)
+            ->get()
+            ->keyBy(fn (ProductImage $image) => PublicStorage::diskPath($image->image_path) ?? '');
 
-            if ($existingImage) {
-                $existingImage->image_path = $image;
+        foreach ($incomingImages as $index => $path) {
+            $diskPath = PublicStorage::diskPath($path);
+            $existingImage = $diskPath !== null ? $existingImagesByPath->get($diskPath) : null;
+
+            if ($existingImage instanceof ProductImage) {
+                $existingImage->image_path = $path;
                 $existingImage->alt_text = null;
                 $existingImage->sort_order = $index;
                 $existingImage->is_primary = $index === 0;
                 $existingImage->save();
+
                 continue;
             }
 
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $image,
+                'image_path' => $path,
                 'alt_text' => null,
                 'sort_order' => $index,
                 'is_primary' => $index === 0,
             ]);
         }
+    }
+
+    private function productResponseData(Product $product): ProductResource
+    {
+        $product->unsetRelation('images');
+        $product->unsetRelation('primaryImage');
+
+        return new ProductResource($product->load(['category', 'images', 'primaryImage', 'sizes.size']));
     }
 }

@@ -3,7 +3,10 @@
 namespace App\Http\Requests\Admin;
 
 use App\Support\MediaType;
+use App\Support\PublicStorage;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ProductStoreRequest extends FormRequest
@@ -14,6 +17,64 @@ class ProductStoreRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $hasImageKey = $this->exists('image');
+        $hasVideoKey = $this->filled('video');
+
+        if (!$hasImageKey && !$hasVideoKey) {
+            return;
+        }
+
+        $images = $this->input('image');
+
+        if (is_string($images)) {
+            $decoded = json_decode($images, true);
+            $images = is_array($decoded) ? $decoded : [$images];
+        }
+
+        if (!is_array($images)) {
+            $images = [];
+        }
+
+        if ($this->filled('video')) {
+            $images[] = $this->input('video');
+        }
+
+        $normalized = [];
+
+        foreach ($images as $image) {
+            $path = $this->normalizeProductMediaInput($image);
+
+            if ($path !== null) {
+                $normalized[] = $path;
+            }
+        }
+
+        $this->merge([
+            'image' => array_values($normalized),
+        ]);
+    }
+
+    private function normalizeProductMediaInput(mixed $value): ?string
+    {
+        if ($value instanceof UploadedFile) {
+            $extension = strtolower($value->getClientOriginalExtension());
+
+            if (!MediaType::isAllowedPath('placeholder.'.$extension)) {
+                return null;
+            }
+
+            return PublicStorage::storeUploadedFile(
+                $value,
+                'products',
+                now()->timestamp.'_'.Str::random(16).'.'.$extension,
+            );
+        }
+
+        return PublicStorage::normalizeInput($value);
     }
 
     /**
@@ -61,6 +122,7 @@ class ProductStoreRequest extends FormRequest
             'sizes.*.quantity' => 'required_with:sizes|integer|min:0',
             'sizes.*.price' => 'required_with:sizes|numeric|min:0|max:99999999.99',
             'image' => 'nullable|array|max:5',
+            'video' => ['nullable', 'string', 'max:2048', 'not_regex:/\.\./'],
             'image.*' => [
                 'required',
                 'string',

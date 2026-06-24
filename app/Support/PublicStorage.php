@@ -95,6 +95,32 @@ class PublicStorage
     }
 
     /**
+     * Normalize incoming media from a URL, stored path, or API/upload payload shape.
+     */
+    public static function normalizeInput(mixed $value): ?string
+    {
+        if ($value instanceof UploadedFile) {
+            return null;
+        }
+
+        if (is_string($value)) {
+            return self::diskPath($value);
+        }
+
+        if (!is_array($value)) {
+            return null;
+        }
+
+        foreach (['image_path', 'file_path', 'image_url', 'file_url', 'url', 'path'] as $key) {
+            if (!empty($value[$key]) && is_string($value[$key])) {
+                return self::diskPath($value[$key]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Normalize incoming media input before saving to the database.
      */
     public static function storePath(?string $path): ?string
