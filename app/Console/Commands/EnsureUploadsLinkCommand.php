@@ -11,7 +11,7 @@ class EnsureUploadsLinkCommand extends Command
     protected $signature = 'uploads:ensure-link
                             {--migrate : Move existing files from the web uploads folder into persistent storage}';
 
-    protected $description = 'Ensure the public uploads symlink points at persistent storage (required on Hostinger after deploy).';
+    protected $description = 'Prepare persistent upload storage and symlink when the server allows it (Hostinger after deploy).';
 
     public function handle(): int
     {
@@ -51,11 +51,35 @@ class EnsureUploadsLinkCommand extends Command
             $this->forceClearDirectory($linkPath);
         }
 
-        if (!$this->ensureSymlink($linkPath, $storageReal)) {
-            return self::FAILURE;
+        if ($this->ensureSymlink($linkPath, $storageReal)) {
+            $this->info("Uploads symlink created: {$linkPath} -> {$storageReal}");
+
+            return self::SUCCESS;
         }
 
-        $this->info("Uploads symlink created: {$linkPath} -> {$storageReal}");
+        return $this->finishWithoutSymlink($linkPath, $storageReal);
+    }
+
+    private function finishWithoutSymlink(string $linkPath, string $storageReal): int
+    {
+        if (is_dir($linkPath) && !is_link($linkPath)) {
+            $backupPath = $linkPath.'_backup_'.date('YmdHis');
+
+            if (@rename($linkPath, $backupPath)) {
+                $this->warn("Renamed blocking uploads folder to {$backupPath}");
+            }
+        }
+
+        $this->newLine();
+        $this->warn('Symlink is not available on this server (PHP symlink() disabled on Hostinger).');
+        $this->info('This is OK — your setup will still work.');
+        $this->newLine();
+        $this->info("Persistent storage: {$storageReal}");
+        $this->info('Public URLs: /uploads/... are served by Laravel (UploadServeController).');
+        $this->info('Keep UPLOADS_DISK_ROOT in .env pointing at the path above.');
+        $this->newLine();
+        $this->comment('Optional SSH shortcut (if you have terminal access):');
+        $this->line("  ln -sfn {$storageReal} {$linkPath}");
 
         return self::SUCCESS;
     }
@@ -85,9 +109,7 @@ class EnsureUploadsLinkCommand extends Command
             }
 
             if (!$this->directoryIsEmpty($linkPath)) {
-                $this->error("Could not empty uploads directory after migration: {$linkPath}");
-                $this->warn('Delete the uploads folder manually in File Manager, then run this again.');
-
+                // finishWithoutSymlink() will rename the folder when symlink is unavailable.
                 return false;
             }
 
@@ -103,21 +125,36 @@ class EnsureUploadsLinkCommand extends Command
         }
 
         if (!function_exists('symlink')) {
-            $this->error('PHP symlink() is disabled on this server (common on shared hosting).');
-            $this->warn('Run this command over SSH instead of the browser, or ask Hostinger to enable symlink.');
-            $this->warn('Alternative: set UPLOADS_DISK_ROOT to your persistent folder and keep uploads as a real directory there.');
+            return $this->tryShellSymlink($linkPath, $targetPath);
+        }
 
+        if (\symlink($targetPath, $linkPath)) {
+            return true;
+        }
+
+        return $this->tryShellSymlink($linkPath, $targetPath);
+    }
+
+    private function tryShellSymlink(string $linkPath, string $targetPath): bool
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
             return false;
         }
 
-        if (!\symlink($targetPath, $linkPath)) {
-            $this->error("Could not create uploads symlink: {$linkPath} -> {$targetPath}");
-            $this->warn('On Hostinger, run this command over SSH after each git deploy.');
-
+        if (!function_exists('exec')) {
             return false;
         }
 
-        return true;
+        $command = sprintf('ln -sfn %s %s 2>&1', escapeshellarg($targetPath), escapeshellarg($linkPath));
+        exec($command, $output, $exitCode);
+
+        if ($exitCode === 0 && is_link($linkPath)) {
+            $this->info('Uploads symlink created via shell ln -s');
+
+            return true;
+        }
+
+        return false;
     }
 
     private function migrateExistingUploads(string $linkPath, string $targetPath): void
