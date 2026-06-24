@@ -15,8 +15,8 @@ class EnsureUploadsLinkCommand extends Command
 
     public function handle(): int
     {
-        $storageRoot = $this->normalizePath(config('filesystems.disks.uploads.root'));
-        $linkPath = $this->normalizePath(base_path('uploads'));
+        $storageRoot = $this->normalizePath((string) config('filesystems.disks.uploads.root'));
+        $linkPath = $this->normalizePath((string) config('filesystems.disks.uploads.link', base_path('uploads')));
 
         if ($storageRoot === '' || $linkPath === '') {
             $this->error('Uploads paths are not configured.');
@@ -100,7 +100,15 @@ class EnsureUploadsLinkCommand extends Command
             return false;
         }
 
-        if (!symlink($targetPath, $linkPath)) {
+        if (!function_exists('symlink')) {
+            $this->error('PHP symlink() is disabled on this server (common on shared hosting).');
+            $this->warn('Run this command over SSH instead of the browser, or ask Hostinger to enable symlink.');
+            $this->warn('Alternative: set UPLOADS_DISK_ROOT to your persistent folder and keep uploads as a real directory there.');
+
+            return false;
+        }
+
+        if (!\symlink($targetPath, $linkPath)) {
             $this->error("Could not create uploads symlink: {$linkPath} -> {$targetPath}");
             $this->warn('On Hostinger, run this command over SSH after each git deploy.');
 
@@ -149,6 +157,11 @@ class EnsureUploadsLinkCommand extends Command
         }
 
         $this->cleanupEmptyDirectories($linkPath);
+
+        $htaccess = $linkPath.DIRECTORY_SEPARATOR.'.htaccess';
+        if (is_file($htaccess)) {
+            unlink($htaccess);
+        }
 
         if ($migrated > 0) {
             $this->info("Migrated {$migrated} upload file(s) into persistent storage.");

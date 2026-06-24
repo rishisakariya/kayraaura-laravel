@@ -53,6 +53,8 @@ return [
             'root' => env('UPLOADS_DISK_ROOT', base_path('uploads')),
             // Web path that must resolve to the same files (symlink created by uploads:ensure-link).
             'link' => env('UPLOADS_LINK_PATH', base_path('uploads')),
+            // Optional token for the temporary /run-upload-link route; remove route after setup.
+            'setup_token' => env('UPLOADS_SETUP_TOKEN'),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/uploads',
             'visibility' => 'public',
             'throw' => false,
