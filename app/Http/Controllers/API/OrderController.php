@@ -290,6 +290,10 @@ class OrderController extends Controller
 
             DB::beginTransaction();
 
+            // Cancel before mutating payment_status so the cancellability
+            // re-check inside cancel() still sees the original paid state.
+            $order->cancel();
+
             if ($order->payment_method === 'cod' || $order->payment_status === 'paid') {
                 $this->restoreStockForOrder($order);
             }
@@ -304,8 +308,6 @@ class OrderController extends Controller
                 && $order->scratch_coupon_code) {
                 $this->scratchCardService->releaseForOrder($order);
             }
-
-            $order->cancel();
 
             if ($order->shipment?->waybill && !in_array($order->shipment->shipment_status, [
                 OrderShipment::STATUS_DELIVERED,
