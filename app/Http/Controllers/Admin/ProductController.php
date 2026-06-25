@@ -119,6 +119,7 @@ class ProductController extends Controller
             $product->is_active = $request->input('is_active', true);
             $product->is_collection = $request->input('is_collection', false);
             $product->weight_grams = $request->input('weight_grams');
+            $product->review_count = $request->input('review_count');
             $product->save();
 
             // Persist sizes
@@ -162,6 +163,7 @@ class ProductController extends Controller
         $product->is_active = $request->input('is_active', $product->is_active);
         $product->is_collection = $request->input('is_collection', $product->is_collection);
         $product->weight_grams = $request->input('weight_grams', $product->weight_grams);
+        $product->review_count = $request->input('review_count', $product->review_count);
         $product->save();
 
         // Persist sizes

@@ -19,6 +19,7 @@ class Product extends Model
         'is_active',
         'is_collection',
         'weight_grams',
+        'review_count',
 
         'brand',
         'base_material',
@@ -34,6 +35,7 @@ class Product extends Model
         'is_active' => 'boolean',
         'is_collection' => 'boolean',
         'weight_grams' => 'integer',
+        'review_count' => 'integer',
         'discount_percentage' => 'decimal:2',
     ];
 

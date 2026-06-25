@@ -112,6 +112,7 @@ class ProductStoreRequest extends FormRequest
             'is_active' => 'nullable|boolean',
             'is_collection' => 'nullable|boolean',
             'weight_grams' => 'required|integer|min:1|max:100000',
+            'review_count' => 'nullable|integer|min:0|max:1000000',
             'sizes' => [
                 'nullable',
                 'array',

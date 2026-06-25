@@ -22,6 +22,7 @@ class ProductResource extends JsonResource
             'is_active' => $this->is_active,
             'is_collection' => $this->is_collection,
             'weight_grams' => $this->weight_grams,
+            'review_count' => $this->review_count,
             'discount_percentage' => $this->discount_percentage,
             'cover_price' => $this->coverPrice(),
             'brand' => $this->brand,
