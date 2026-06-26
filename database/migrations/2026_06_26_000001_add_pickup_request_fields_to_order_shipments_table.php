@@ -13,15 +13,12 @@ return new class extends Migration
             $table->timestamp('pickup_requested_at')->nullable()->after('pickup_request_id');
             $table->json('pickup_request_payload')->nullable()->after('pickup_requested_at');
             $table->json('pickup_request_response')->nullable()->after('pickup_request_payload');
-
-            $table->index(['provider', 'pickup_location', 'pickup_requested_at']);
         });
     }
 
     public function down(): void
     {
         Schema::table('order_shipments', function (Blueprint $table) {
-            $table->dropIndex(['provider', 'pickup_location', 'pickup_requested_at']);
             $table->dropColumn([
                 'pickup_request_id',
                 'pickup_requested_at',
