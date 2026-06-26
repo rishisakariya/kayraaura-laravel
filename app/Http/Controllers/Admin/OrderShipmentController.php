@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ShipmentStatusHistory;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\OrderCancellationService;
 use App\Services\Shipping\ShippingProviderResolver;
 use App\Services\Shiprocket\ShiprocketShipmentService;
 use DomainException;
@@ -26,7 +27,8 @@ class OrderShipmentController extends Controller
     public function __construct(
         private readonly DelhiveryShipmentService $delhiveryShipmentService,
         private readonly ShiprocketShipmentService $shiprocketShipmentService,
-        private readonly ShippingProviderResolver $shippingProviderResolver
+        private readonly ShippingProviderResolver $shippingProviderResolver,
+        private readonly OrderCancellationService $orderCancellationService,
     )
     {
     }
@@ -103,8 +105,12 @@ class OrderShipmentController extends Controller
         ]);
     }
 
-    public function cancel(string $id): JsonResponse
+    public function cancel(Request $request, string $id): JsonResponse
     {
+        $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
         $order = Order::with(['shipment', 'orderItems.product.images', 'orderItems.productSize'])
             ->findOrFail($id);
 
@@ -127,13 +133,40 @@ class OrderShipmentController extends Controller
             ]);
         }
 
-        CancelDelhiveryShipmentJob::dispatch($order->shipment->id, ShipmentStatusHistory::SOURCE_ADMIN);
+        try {
+            $shipmentToCancel = $this->orderCancellationService->cancel(
+                $order,
+                $request->input('reason'),
+                'admin',
+            );
 
-        return response()->json([
-            'success' => true,
-            'data' => new OrderResource($order->refresh()->load(['shipment.statusHistories', 'orderItems.product.images', 'orderItems.productSize'])),
-            'message' => 'Shipment cancellation queued',
-        ]);
+            if ($shipmentToCancel) {
+                CancelDelhiveryShipmentJob::dispatch($shipmentToCancel->id, ShipmentStatusHistory::SOURCE_ADMIN);
+            }
+
+            $order->refresh()->load(['shipment.statusHistories', 'orderItems.product.images', 'orderItems.productSize']);
+
+            $message = $order->payment_method === 'online' && $order->payment_status === 'refunded'
+                ? 'Order cancelled, refund processed, and shipment cancellation queued'
+                : 'Order cancelled and shipment cancellation queued';
+
+            return response()->json([
+                'success' => true,
+                'data' => new OrderResource($order),
+                'message' => $message,
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to cancel order. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
 
     public function label(string $id): JsonResponse

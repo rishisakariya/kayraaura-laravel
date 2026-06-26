@@ -17,6 +17,7 @@ use App\Models\UserAddress;
 use App\Models\WebSetting;
 use App\Services\CheckoutService;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\OrderCancellationService;
 use App\Services\OrderReturnService;
 use App\Services\OtpService;
 use App\Services\ScratchCardService;
@@ -39,6 +40,7 @@ class OrderController extends Controller
         private readonly OtpService $otpService,
         private readonly ScratchCardService $scratchCardService,
         private readonly OrderReturnService $orderReturnService,
+        private readonly OrderCancellationService $orderCancellationService,
     )
     {
     }
@@ -286,46 +288,10 @@ class OrderController extends Controller
         }
 
         try {
-            $shipmentToCancel = null;
-
-            DB::beginTransaction();
-
-            // Cancel before mutating payment_status so the cancellability
-            // re-check inside cancel() still sees the original paid state.
-            $order->cancel();
-
-            if ($order->payment_method === 'cod' || $order->payment_status === 'paid') {
-                $this->restoreStockForOrder($order);
-            }
-
-            if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
-                $this->checkoutService->refundRazorpayPayment($order);
-                $order->payment_status = 'refunded';
-            }
-
-            if ($order->payment_method === 'online'
-                && in_array($order->payment_status, ['pending', 'failed'], true)
-                && $order->scratch_coupon_code) {
-                $this->scratchCardService->releaseForOrder($order);
-            }
-
-            if ($order->shipment?->waybill && !in_array($order->shipment->shipment_status, [
-                OrderShipment::STATUS_DELIVERED,
-                OrderShipment::STATUS_CANCELLED,
-                OrderShipment::STATUS_RTO,
-            ], true)) {
-                $shipmentToCancel = $order->shipment;
-            }
-
-            // Add cancellation reason if provided
-            if ($request->input('reason')) {
-                $order->notes = ($order->notes ? $order->notes . "\n\n" : '') .
-                               "Cancellation reason: " . $request->input('reason');
-            }
-
-            $order->save();
-
-            DB::commit();
+            $shipmentToCancel = $this->orderCancellationService->cancel(
+                $order,
+                $request->input('reason'),
+            );
 
             if ($shipmentToCancel) {
                 CancelDelhiveryShipmentJob::dispatch($shipmentToCancel->id);
@@ -333,21 +299,17 @@ class OrderController extends Controller
 
             return response()->json([
                 'status' => true,
-                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
+                'data' => new OrderResource($order->refresh()->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
                 'message' => 'Order cancelled successfully',
             ]);
 
         } catch (DomainException $e) {
-            DB::rollBack();
-
             return response()->json([
                 'status' => false,
                 'message' => $e->getMessage(),
             ], 400);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to cancel order. Please try again.',
