@@ -177,9 +177,9 @@ class DelhiveryShipmentService
             ->delay(now()->addSeconds($delaySeconds));
     }
 
-    public function processPickupBatch(string $pickupLocation, string $pickupDate): void
+    public function processPickupBatch(string $pickupLocation, string $pickupDate, bool $force = false): void
     {
-        if (!config('delhivery.auto_schedule_pickup', true)) {
+        if (!$force && !config('delhivery.auto_schedule_pickup', true)) {
             return;
         }
 
