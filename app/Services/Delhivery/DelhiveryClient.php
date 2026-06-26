@@ -5,6 +5,7 @@ namespace App\Services\Delhivery;
 use DomainException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class DelhiveryClient
 {
@@ -89,15 +90,28 @@ class DelhiveryClient
             return $this->mockCreatePickupRequestResponse($payload);
         }
 
+        $url = $this->url('pickup_request');
+
         $response = Http::withHeaders([
             ...$this->headers(),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
         ])
             ->timeout(30)
-            ->post($this->url('pickup_request'), $payload);
+            ->post($url, $payload);
 
-        return $this->decodeResponse($response, 'Delhivery pickup request creation failed', [201]);
+        try {
+            return $this->decodeResponse($response, 'Delhivery pickup request creation failed', [201]);
+        } catch (DomainException $e) {
+            Log::error('Delhivery pickup request HTTP error', [
+                'url' => $url,
+                'payload' => $payload,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw $e;
+        }
     }
 
     public function downloadBinary(string $url): string
@@ -246,25 +260,44 @@ class DelhiveryClient
 
     private function decodeResponse(Response $response, string $defaultMessage, array $successStatuses = []): array
     {
+        $status = $response->status();
+        $body = trim($response->body());
         $payload = $response->json();
 
-        if ($payload === null) {
-            $payload = ['raw' => $response->body()];
+        if (!is_array($payload)) {
+            $payload = $body !== '' ? ['raw' => $body] : [];
         }
 
         $isSuccessful = $response->successful()
-            || in_array($response->status(), $successStatuses, true);
+            || in_array($status, $successStatuses, true);
 
         if (!$isSuccessful) {
-            $message = $payload['error']['message']
-                ?? $payload['error']['description']
-                ?? $payload['rmk']
-                ?? $payload['message']
-                ?? $defaultMessage;
+            throw new DomainException($this->responseErrorMessage($payload, $body, $defaultMessage, $status));
+        }
 
-            throw new DomainException($message);
+        if (($payload['success'] ?? null) === false) {
+            throw new DomainException($this->responseErrorMessage($payload, $body, $defaultMessage, $status));
         }
 
         return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function responseErrorMessage(array $payload, string $body, string $defaultMessage, int $status): string
+    {
+        $message = $payload['error']['message']
+            ?? $payload['error']['description']
+            ?? $payload['error']
+            ?? $payload['rmk']
+            ?? $payload['message']
+            ?? ($payload['raw'] ?? null);
+
+        if (!is_string($message) || trim($message) === '') {
+            $message = $body !== '' ? $body : $defaultMessage;
+        }
+
+        return "{$message} (HTTP {$status})";
     }
 }

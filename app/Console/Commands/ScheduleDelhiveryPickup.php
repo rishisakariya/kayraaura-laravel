@@ -47,6 +47,8 @@ class ScheduleDelhiveryPickup extends Command
         }
 
         $this->info("Scheduling pickup for {$pendingCount} shipment(s) at {$pickupLocation} on {$pickupDate}...");
+        $this->line('Delhivery env: ' . config('delhivery.env'));
+        $this->line('Pickup location must exactly match your Delhivery warehouse name.');
 
         try {
             $delhiveryShipmentService->processPickupBatch($pickupLocation, $pickupDate, force: true);

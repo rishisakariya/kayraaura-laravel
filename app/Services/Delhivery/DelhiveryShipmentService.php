@@ -279,6 +279,7 @@ class DelhiveryShipmentService
             Log::error('Delhivery pickup request failed', [
                 'pickup_location' => $pickupLocation,
                 'pickup_date' => $pickupDate,
+                'delhivery_env' => config('delhivery.env'),
                 'error' => $e->getMessage(),
             ]);
 
@@ -1168,25 +1169,32 @@ class DelhiveryShipmentService
     {
         $now = now();
         $cutoff = (string) config('delhivery.pickup_same_day_cutoff', '14:00');
-        $pickupTime = $this->normalizePickupTime((string) config('delhivery.pickup_time', '14:00:00'));
+        $defaultPickupTime = $this->normalizePickupTime((string) config('delhivery.pickup_time', '14:00:00'));
 
-        if ($pickupDate) {
-            return [
-                'pickup_date' => $pickupDate,
-                'pickup_time' => $pickupTime,
-            ];
+        if (!$pickupDate) {
+            $pickupDate = $now->format('H:i') < $cutoff
+                ? $now->format('Y-m-d')
+                : $now->copy()->addDay()->format('Y-m-d');
         }
 
-        if ($now->format('H:i') < $cutoff) {
-            return [
-                'pickup_date' => $now->format('Y-m-d'),
-                'pickup_time' => $pickupTime,
-            ];
+        $scheduledAt = $now->copy()->setDateFrom(
+            (int) substr($pickupDate, 0, 4),
+            (int) substr($pickupDate, 5, 2),
+            (int) substr($pickupDate, 8, 2),
+        )->setTimeFromTimeString($defaultPickupTime);
+
+        if ($scheduledAt->lte($now)) {
+            if ($pickupDate === $now->format('Y-m-d') && $now->format('H:i') < $cutoff) {
+                $scheduledAt = $now->copy()->addMinutes(30)->second(0);
+            } else {
+                $pickupDate = $now->copy()->addDay()->format('Y-m-d');
+                $scheduledAt = $now->copy()->addDay()->setTime(10, 0, 0);
+            }
         }
 
         return [
-            'pickup_date' => $now->copy()->addDay()->format('Y-m-d'),
-            'pickup_time' => $pickupTime,
+            'pickup_date' => $pickupDate,
+            'pickup_time' => $scheduledAt->format('H:i:s'),
         ];
     }
 
