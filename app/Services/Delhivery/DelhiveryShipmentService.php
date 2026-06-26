@@ -181,36 +181,73 @@ class DelhiveryShipmentService
             return false;
         }
 
-        if ($shipment->hasWaybill() && $shipment->shipment_status !== OrderShipment::STATUS_FAILED) {
-            return true;
-        }
+        $statusBefore = $shipment->shipment_status;
 
         if ($shipment->hasWaybill() && $shipment->shipment_status === OrderShipment::STATUS_FAILED) {
+            $this->ensureManifestedState($shipment);
+
+            if ($shipment->refresh()->shipment_status !== OrderShipment::STATUS_FAILED) {
+                return true;
+            }
+
             try {
                 $this->syncShipment($shipment->refresh());
-
-                return $shipment->refresh()->shipment_status !== OrderShipment::STATUS_FAILED;
             } catch (\Throwable) {
-                // Fall through to order-reference recovery.
+                $this->ensureManifestedState($shipment->refresh());
+            }
+
+            if ($shipment->refresh()->shipment_status !== OrderShipment::STATUS_FAILED) {
+                return true;
             }
         }
 
-        return $this->recoverFromOrderReference($order, $shipment) !== null;
+        if ($shipment->hasWaybill()
+            && filled($shipment->failed_reason)
+            && $shipment->shipment_status !== OrderShipment::STATUS_FAILED) {
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+                'failed_reason' => null,
+                'raw_status' => $shipment->raw_status ?? 'Manifested',
+            ])->save();
+
+            return true;
+        }
+
+        if ($shipment->hasWaybill() && !in_array($shipment->shipment_status, [
+            OrderShipment::STATUS_FAILED,
+            OrderShipment::STATUS_RETRY_PENDING,
+            OrderShipment::STATUS_NOT_CREATED,
+        ], true)) {
+            return $statusBefore !== $shipment->shipment_status;
+        }
+
+        if ($this->recoverFromOrderReference($order, $shipment) !== null) {
+            return true;
+        }
+
+        return false;
     }
 
-    public function reconcileFailedShipments(): int
+    public function reconcileFailedShipments(?int $orderId = null, ?string $orderNumber = null): int
     {
         $reconciled = 0;
 
-        OrderShipment::needsDelhiveryReconciliation()
-            ->with('order')
-            ->chunkById(50, function ($shipments) use (&$reconciled) {
-                foreach ($shipments as $shipment) {
-                    if ($shipment->order && $this->reconcileOrderShipment($shipment->order)) {
-                        $reconciled++;
-                    }
+        $query = OrderShipment::needsDelhiveryReconciliation()->with('order');
+
+        if ($orderId) {
+            $query->where('order_id', $orderId);
+        }
+
+        if ($orderNumber) {
+            $query->whereHas('order', fn ($q) => $q->where('order_number', $orderNumber));
+        }
+
+        $query->chunkById(50, function ($shipments) use (&$reconciled) {
+            foreach ($shipments as $shipment) {
+                if ($shipment->order && $this->reconcileOrderShipment($shipment->order)) {
+                    $reconciled++;
                 }
-            });
+            }
+        });
 
         return $reconciled;
     }
@@ -1428,6 +1465,19 @@ class DelhiveryShipmentService
         }
 
         $waybill = $this->extractWaybillFromTrackingPayload($trackingPayload);
+
+        if (!$waybill && $shipment->hasWaybill()) {
+            try {
+                $trackingPayload = $this->client->trackShipment($shipment->waybill);
+                $rawStatus = strtolower((string) ($this->extractRawStatus($trackingPayload) ?? ''));
+
+                if ($rawStatus === '' || !str_contains($rawStatus, 'cancel')) {
+                    $waybill = $shipment->waybill;
+                }
+            } catch (\Throwable) {
+                $waybill = $shipment->waybill;
+            }
+        }
 
         if (!$waybill && is_array($createResponse)) {
             $waybill = $this->extractWaybill($createResponse);

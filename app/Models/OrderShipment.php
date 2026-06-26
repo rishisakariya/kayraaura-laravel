@@ -149,17 +149,18 @@ class OrderShipment extends Model
     public function scopeNeedsDelhiveryReconciliation(Builder $query): Builder
     {
         return $query->where('provider', self::PROVIDER_DELHIVERY)
+            ->whereHas('order', fn (Builder $query) => $query->where('status', '!=', 'cancelled'))
             ->where(function (Builder $query) {
                 $query->whereIn('shipment_status', [
                     self::STATUS_FAILED,
                     self::STATUS_RETRY_PENDING,
                     self::STATUS_NOT_CREATED,
                 ])->orWhere(function (Builder $query) {
-                    $query->where('shipment_status', self::STATUS_FAILED)
-                        ->whereNotNull('waybill');
+                    $query->whereNotNull('waybill')
+                        ->whereNotNull('failed_reason')
+                        ->where('failed_reason', '!=', '');
                 });
-            })
-            ->whereHas('order', fn (Builder $query) => $query->where('status', '!=', 'cancelled'));
+            });
     }
 
     public function scopeNeedsDelhiverySync(Builder $query): Builder
