@@ -6,12 +6,14 @@ use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ShipmentStatusHistory;
+use App\Jobs\ScheduleDelhiveryPickupJob;
 use App\Services\PdfMerger;
 use App\Services\Shipping\OrderShipmentLifecycleService;
 use App\Support\PublicStorage;
 use DomainException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -59,6 +61,8 @@ class DelhiveryShipmentService
                 $shipment->refresh();
 
                 if ($shipment->hasWaybill()) {
+                    $this->schedulePickupIfNeeded($shipment->refresh());
+
                     return $shipment;
                 }
 
@@ -83,6 +87,8 @@ class DelhiveryShipmentService
             });
 
             if ($shipment->hasWaybill()) {
+                $this->schedulePickupIfNeeded($shipment->refresh());
+
                 return $shipment;
             }
 
@@ -111,6 +117,8 @@ class DelhiveryShipmentService
                 'response_payload' => $responsePayload,
                 'failed_reason' => null,
             ])->save();
+
+            $this->schedulePickupIfNeeded($shipment->refresh());
 
             return $shipment;
         } catch (\Throwable $e) {
@@ -141,6 +149,178 @@ class DelhiveryShipmentService
                 'pickup_location' => $this->delhiverySettings()->pickup_location,
             ]
         );
+    }
+
+    public function schedulePickupIfNeeded(OrderShipment $shipment): void
+    {
+        if (!config('delhivery.auto_schedule_pickup', true)) {
+            return;
+        }
+
+        if ($shipment->provider !== OrderShipment::PROVIDER_DELHIVERY) {
+            return;
+        }
+
+        if (!$shipment->hasWaybill() || filled($shipment->pickup_request_id)) {
+            return;
+        }
+
+        if ($shipment->shipment_status !== OrderShipment::STATUS_MANIFESTED) {
+            return;
+        }
+
+        $pickupLocation = $shipment->pickup_location ?: $this->delhiverySettings()->pickup_location;
+        $schedule = $this->resolvePickupSchedule();
+        $delaySeconds = max(0, (int) config('delhivery.pickup_batch_delay_seconds', 180));
+
+        ScheduleDelhiveryPickupJob::dispatch($pickupLocation, $schedule['pickup_date'])
+            ->delay(now()->addSeconds($delaySeconds));
+    }
+
+    public function processPickupBatch(string $pickupLocation, string $pickupDate): void
+    {
+        if (!config('delhivery.auto_schedule_pickup', true)) {
+            return;
+        }
+
+        $lock = Cache::lock("delhivery:pickup-batch:{$pickupLocation}:{$pickupDate}", 120);
+
+        if (!$lock->get()) {
+            return;
+        }
+
+        try {
+            $schedule = $this->resolvePickupSchedule($pickupDate);
+
+            $batchContext = DB::transaction(function () use ($pickupLocation, $pickupDate, $schedule) {
+                $pendingShipments = OrderShipment::query()
+                    ->where('provider', OrderShipment::PROVIDER_DELHIVERY)
+                    ->where('pickup_location', $pickupLocation)
+                    ->whereNotNull('waybill')
+                    ->whereNull('pickup_request_id')
+                    ->where('shipment_status', OrderShipment::STATUS_MANIFESTED)
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($pendingShipments->isEmpty()) {
+                    return null;
+                }
+
+                $existingPickupId = OrderShipment::query()
+                    ->where('provider', OrderShipment::PROVIDER_DELHIVERY)
+                    ->where('pickup_location', $pickupLocation)
+                    ->whereNotNull('pickup_request_id')
+                    ->whereDate('pickup_requested_at', $pickupDate)
+                    ->value('pickup_request_id');
+
+                return [
+                    'pending_shipment_ids' => $pendingShipments->pluck('id')->all(),
+                    'existing_pickup_id' => $existingPickupId,
+                    'schedule' => $schedule,
+                    'package_count' => $pendingShipments->count(),
+                ];
+            });
+
+            if ($batchContext === null) {
+                return;
+            }
+
+            if ($batchContext['existing_pickup_id']) {
+                $this->finalizePickupBatch(
+                    $batchContext['pending_shipment_ids'],
+                    (string) $batchContext['existing_pickup_id'],
+                    $batchContext['schedule'],
+                    null,
+                    null,
+                );
+
+                Log::info('Delhivery shipments linked to existing pickup request', [
+                    'pickup_location' => $pickupLocation,
+                    'pickup_date' => $pickupDate,
+                    'pickup_request_id' => $batchContext['existing_pickup_id'],
+                    'shipment_count' => $batchContext['package_count'],
+                ]);
+
+                return;
+            }
+
+            $payload = [
+                'pickup_location' => $this->requiredSetting(
+                    $pickupLocation,
+                    'Delhivery pickup location is not configured'
+                ),
+                'pickup_date' => $batchContext['schedule']['pickup_date'],
+                'pickup_time' => $batchContext['schedule']['pickup_time'],
+                'expected_package_count' => $batchContext['package_count'],
+            ];
+
+            $responsePayload = $this->client->createPickupRequest($payload);
+            $pickupRequestId = $this->extractPickupRequestId($responsePayload);
+
+            if (!$pickupRequestId) {
+                throw new DomainException('Delhivery pickup request did not return a pickup_id');
+            }
+
+            $this->finalizePickupBatch(
+                $batchContext['pending_shipment_ids'],
+                $pickupRequestId,
+                $batchContext['schedule'],
+                $payload,
+                $responsePayload,
+            );
+
+            Log::info('Delhivery pickup request created', [
+                'pickup_location' => $pickupLocation,
+                'pickup_date' => $pickupDate,
+                'pickup_request_id' => $pickupRequestId,
+                'shipment_count' => $batchContext['package_count'],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Delhivery pickup request failed', [
+                'pickup_location' => $pickupLocation,
+                'pickup_date' => $pickupDate,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param  list<int>  $shipmentIds
+     * @param  array{pickup_date: string, pickup_time: string}  $schedule
+     * @param  array<string, mixed>|null  $payload
+     * @param  array<string, mixed>|null  $responsePayload
+     */
+    private function finalizePickupBatch(
+        array $shipmentIds,
+        string $pickupRequestId,
+        array $schedule,
+        ?array $payload,
+        ?array $responsePayload,
+    ): void {
+        DB::transaction(function () use ($shipmentIds, $pickupRequestId, $schedule, $payload, $responsePayload): void {
+            $shipments = OrderShipment::query()
+                ->whereIn('id', $shipmentIds)
+                ->whereNull('pickup_request_id')
+                ->where('shipment_status', OrderShipment::STATUS_MANIFESTED)
+                ->lockForUpdate()
+                ->get();
+
+            if ($shipments->isEmpty()) {
+                return;
+            }
+
+            $this->markShipmentsPickupScheduled(
+                $shipments,
+                $pickupRequestId,
+                $schedule,
+                $payload,
+                $responsePayload,
+            );
+        });
     }
 
     public function syncShipment(OrderShipment $shipment): OrderShipment
@@ -979,5 +1159,90 @@ class DelhiveryShipmentService
         if ($normalizedStatus === OrderShipment::STATUS_CANCELLED && !$shipment->cancelled_at) {
             $shipment->cancelled_at = now();
         }
+    }
+
+    /**
+     * @return array{pickup_date: string, pickup_time: string}
+     */
+    private function resolvePickupSchedule(?string $pickupDate = null): array
+    {
+        $now = now();
+        $cutoff = (string) config('delhivery.pickup_same_day_cutoff', '14:00');
+        $pickupTime = $this->normalizePickupTime((string) config('delhivery.pickup_time', '14:00:00'));
+
+        if ($pickupDate) {
+            return [
+                'pickup_date' => $pickupDate,
+                'pickup_time' => $pickupTime,
+            ];
+        }
+
+        if ($now->format('H:i') < $cutoff) {
+            return [
+                'pickup_date' => $now->format('Y-m-d'),
+                'pickup_time' => $pickupTime,
+            ];
+        }
+
+        return [
+            'pickup_date' => $now->copy()->addDay()->format('Y-m-d'),
+            'pickup_time' => $pickupTime,
+        ];
+    }
+
+    private function normalizePickupTime(string $pickupTime): string
+    {
+        if (preg_match('/^\d{2}:\d{2}:\d{2}$/', $pickupTime) === 1) {
+            return $pickupTime;
+        }
+
+        if (preg_match('/^\d{2}:\d{2}$/', $pickupTime) === 1) {
+            return $pickupTime . ':00';
+        }
+
+        return '14:00:00';
+    }
+
+    /**
+     * @param  Collection<int, OrderShipment>  $shipments
+     * @param  array{pickup_date: string, pickup_time: string}  $schedule
+     * @param  array<string, mixed>|null  $payload
+     * @param  array<string, mixed>|null  $responsePayload
+     */
+    private function markShipmentsPickupScheduled(
+        Collection $shipments,
+        string $pickupRequestId,
+        array $schedule,
+        ?array $payload,
+        ?array $responsePayload,
+    ): void {
+        foreach ($shipments as $shipment) {
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+                'pickup_request_id' => $pickupRequestId,
+                'pickup_requested_at' => now(),
+                'pickup_request_payload' => $payload ?? [
+                    'pickup_location' => $shipment->pickup_location,
+                    'pickup_date' => $schedule['pickup_date'],
+                    'pickup_time' => $schedule['pickup_time'],
+                    'linked_to_existing_pickup' => true,
+                ],
+                'pickup_request_response' => $responsePayload,
+                'shipment_status' => OrderShipment::STATUS_PICKUP_SCHEDULED,
+                'raw_status' => 'Pickup Scheduled',
+            ])->save();
+        }
+    }
+
+    private function extractPickupRequestId(array $payload): ?string
+    {
+        $pickupId = Arr::get($payload, 'pickup_id')
+            ?? Arr::get($payload, 'pickup_request_id')
+            ?? Arr::get($payload, 'data.pickup_id');
+
+        if ($pickupId === null || $pickupId === '') {
+            return null;
+        }
+
+        return (string) $pickupId;
     }
 }

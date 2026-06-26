@@ -80,6 +80,26 @@ class DelhiveryClient
         return $this->decodeResponse($response, 'Delhivery shipping label generation failed');
     }
 
+    /**
+     * @param  array{pickup_location: string, pickup_date: string, pickup_time: string, expected_package_count: int}  $payload
+     */
+    public function createPickupRequest(array $payload): array
+    {
+        if ($this->mockEnabled()) {
+            return $this->mockCreatePickupRequestResponse($payload);
+        }
+
+        $response = Http::withHeaders([
+            ...$this->headers(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        ])
+            ->timeout(30)
+            ->post($this->url('pickup_request'), $payload);
+
+        return $this->decodeResponse($response, 'Delhivery pickup request creation failed', [201]);
+    }
+
     public function downloadBinary(string $url): string
     {
         $response = Http::timeout(60)->get($url);
@@ -177,6 +197,22 @@ class DelhiveryClient
         ];
     }
 
+    /**
+     * @param  array{pickup_location: string, pickup_date: string, pickup_time: string, expected_package_count: int}  $payload
+     */
+    private function mockCreatePickupRequestResponse(array $payload): array
+    {
+        return [
+            'mock' => true,
+            'success' => true,
+            'pickup_id' => 'MOCK-PUR-' . now()->format('YmdHis'),
+            'pickup_location_name' => $payload['pickup_location'],
+            'pickup_date' => $payload['pickup_date'],
+            'pickup_time' => $payload['pickup_time'],
+            'expected_package_count' => $payload['expected_package_count'],
+        ];
+    }
+
     private function headers(): array
     {
         return [
@@ -208,7 +244,7 @@ class DelhiveryClient
         return $url;
     }
 
-    private function decodeResponse(Response $response, string $defaultMessage): array
+    private function decodeResponse(Response $response, string $defaultMessage, array $successStatuses = []): array
     {
         $payload = $response->json();
 
@@ -216,10 +252,14 @@ class DelhiveryClient
             $payload = ['raw' => $response->body()];
         }
 
-        if (!$response->successful()) {
+        $isSuccessful = $response->successful()
+            || in_array($response->status(), $successStatuses, true);
+
+        if (!$isSuccessful) {
             $message = $payload['error']['message']
                 ?? $payload['error']['description']
                 ?? $payload['rmk']
+                ?? $payload['message']
                 ?? $defaultMessage;
 
             throw new DomainException($message);
