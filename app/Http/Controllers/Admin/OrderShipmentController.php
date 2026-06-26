@@ -17,6 +17,7 @@ use App\Services\Shiprocket\ShiprocketShipmentService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Support\PublicStorage;
 use Illuminate\Support\Facades\URL;
@@ -35,6 +36,10 @@ class OrderShipmentController extends Controller
 
     public function create(string $id): JsonResponse
     {
+        Log::info('Delhivery flow: admin shipment create requested', [
+            'order_id' => $id,
+        ]);
+
         $order = Order::with(['shipment', 'orderItems.product.images', 'orderItems.productSize'])
             ->findOrFail($id);
 
@@ -71,6 +76,10 @@ class OrderShipmentController extends Controller
 
         if (!$shipment->waybill) {
             CreateDelhiveryShipmentJob::dispatch((int) $id);
+
+            Log::info('Delhivery flow: admin shipment create job dispatched', [
+                'order_id' => $id,
+            ]);
         }
 
         return response()->json([
@@ -84,6 +93,10 @@ class OrderShipmentController extends Controller
 
     public function sync(string $id): JsonResponse
     {
+        Log::info('Delhivery flow: admin shipment sync requested', [
+            'order_id' => $id,
+        ]);
+
         $order = Order::with(['shipment', 'orderItems.product.images', 'orderItems.productSize'])
             ->findOrFail($id);
 
@@ -96,6 +109,11 @@ class OrderShipmentController extends Controller
 
         if (!in_array($order->shipment->shipment_status, OrderShipment::TERMINAL_STATUSES, true)) {
             SyncDelhiveryShipmentStatusJob::dispatch($order->shipment->id);
+
+            Log::info('Delhivery flow: admin shipment sync job dispatched', [
+                'order_id' => $id,
+                'shipment_id' => $order->shipment->id,
+            ]);
         }
 
         return response()->json([
@@ -134,6 +152,11 @@ class OrderShipmentController extends Controller
         }
 
         try {
+            Log::info('Delhivery flow: admin order cancel requested', [
+                'order_id' => $id,
+                'reason' => $request->input('reason'),
+            ]);
+
             $shipmentToCancel = $this->orderCancellationService->cancel(
                 $order,
                 $request->input('reason'),
@@ -142,6 +165,11 @@ class OrderShipmentController extends Controller
 
             if ($shipmentToCancel) {
                 CancelDelhiveryShipmentJob::dispatch($shipmentToCancel->id, ShipmentStatusHistory::SOURCE_ADMIN);
+
+                Log::info('Delhivery flow: admin cancel shipment job dispatched', [
+                    'order_id' => $id,
+                    'shipment_id' => $shipmentToCancel->id,
+                ]);
             }
 
             $order->refresh()->load(['shipment.statusHistories', 'orderItems.product.images', 'orderItems.productSize']);
@@ -254,6 +282,20 @@ class OrderShipmentController extends Controller
                 'message' => 'Some selected orders do not have a shipment AWB yet',
                 'data' => [
                     'order_ids' => $ordersWithoutAwb->pluck('id')->values()->all(),
+                ],
+            ], 422);
+        }
+
+        $cancelledShipments = $orderedOrders->filter(
+            fn (Order $order) => $order->shipment->shipment_status === OrderShipment::STATUS_CANCELLED
+        );
+
+        if ($cancelledShipments->isNotEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cancelled shipments cannot be included in bulk label download',
+                'data' => [
+                    'order_ids' => $cancelledShipments->pluck('id')->values()->all(),
                 ],
             ], 422);
         }

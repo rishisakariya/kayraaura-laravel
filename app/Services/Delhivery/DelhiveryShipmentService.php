@@ -25,6 +25,7 @@ class DelhiveryShipmentService
         private readonly DelhiveryClient $client,
         private readonly OrderShipmentLifecycleService $lifecycle,
         private readonly PdfMerger $pdfMerger,
+        private readonly DelhiveryShipmentErrorClassifier $errorClassifier,
     )
     {
     }
@@ -41,9 +42,11 @@ class DelhiveryShipmentService
     public function createShipment(Order $order): OrderShipment
     {
         $shipment = null;
+        $payload = null;
+        $responsePayload = null;
 
         try {
-            $shipment = DB::transaction(function () use (&$order) {
+            $shipment = DB::transaction(function () use (&$order, &$payload) {
                 $order = Order::with(['orderItems.product'])
                     ->whereKey($order->id)
                     ->lockForUpdate()
@@ -61,8 +64,6 @@ class DelhiveryShipmentService
                 $shipment->refresh();
 
                 if ($shipment->hasWaybill()) {
-                    $this->schedulePickupIfNeeded($shipment->refresh());
-
                     return $shipment;
                 }
 
@@ -87,56 +88,163 @@ class DelhiveryShipmentService
             });
 
             if ($shipment->hasWaybill()) {
+                $this->ensureManifestedState($shipment);
                 $this->schedulePickupIfNeeded($shipment->refresh());
 
                 return $shipment;
             }
 
             $payload = $shipment->request_payload ?? $this->buildCreatePayload($order);
+
+            $this->logShipmentCreation($order, 'create_request', [
+                'payload' => $payload,
+            ]);
+
             $responsePayload = $this->client->createShipment($payload);
             $shipment->fill(['response_payload' => $responsePayload])->save();
 
+            $this->logShipmentCreation($order, 'create_response', [
+                'response' => $responsePayload,
+                'parsed_waybill' => $this->extractWaybill($responsePayload),
+            ]);
+
             if ($responseError = $this->extractCreateError($responsePayload)) {
+                if ($recovered = $this->recoverFromOrderReference($order, $shipment, $responsePayload)) {
+                    return $recovered;
+                }
+
                 throw new DomainException($responseError);
             }
 
             $waybill = $this->extractWaybill($responsePayload);
 
             if (!$waybill) {
+                if ($recovered = $this->recoverFromOrderReference($order, $shipment, $responsePayload)) {
+                    return $recovered;
+                }
+
                 throw new DomainException($this->missingWaybillMessage($responsePayload));
             }
 
-            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
-                'waybill' => $waybill,
-                'provider_reference' => $this->extractProviderReference($responsePayload),
-                'delhivery_order_id' => $this->extractDelhiveryOrderId($responsePayload),
-                'shipment_status' => OrderShipment::STATUS_MANIFESTED,
-                'raw_status' => $this->extractRawStatus($responsePayload) ?? 'Manifested',
-                'courier_tracking_url' => "https://www.delhivery.com/track/package/{$waybill}",
-                'manifested_at' => now(),
-                'response_payload' => $responsePayload,
-                'failed_reason' => null,
-            ])->save();
-
+            $shipment = $this->applyManifestFromCreateResponse($shipment, $responsePayload, $waybill);
             $this->schedulePickupIfNeeded($shipment->refresh());
+
+            $this->logShipmentCreation($order, 'manifested', [
+                'waybill' => $shipment->waybill,
+                'shipment_status' => $shipment->shipment_status,
+            ]);
 
             return $shipment;
         } catch (\Throwable $e) {
-            if ($shipment) {
-                $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
-                    'shipment_status' => OrderShipment::STATUS_FAILED,
-                    'failed_reason' => $e->getMessage(),
-                ])->save();
+            if ($shipment && ($recovered = $this->recoverFromOrderReference($order, $shipment, $responsePayload))) {
+                $this->logShipmentCreation($order, 'recovered_after_error', [
+                    'waybill' => $recovered->waybill,
+                    'original_error' => $e->getMessage(),
+                ]);
+
+                return $recovered;
             }
 
-            Log::error('Delhivery shipment creation failed', [
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
+            if ($shipment) {
+                if ($this->errorClassifier->isRetryable($e)) {
+                    $this->markShipmentRetryPending($shipment, $e);
+                } else {
+                    $this->markShipmentPermanentFailed($shipment, $e);
+                }
+            }
+
+            $this->logShipmentCreation($order, 'failed', [
                 'error' => $e->getMessage(),
+                'retryable' => $this->errorClassifier->isRetryable($e),
+                'recoverable_duplicate' => $this->errorClassifier->isRecoverableDuplicate($e->getMessage()),
+                'request_payload' => $payload,
+                'response_payload' => $responsePayload,
             ]);
 
             throw $e;
         }
+    }
+
+    public function reconcileOrderShipment(int|Order $order): bool
+    {
+        $order = $order instanceof Order
+            ? $order->loadMissing('shipment')
+            : Order::with('shipment')->findOrFail($order);
+
+        $shipment = $order->shipment;
+
+        if (!$shipment || $shipment->provider !== OrderShipment::PROVIDER_DELHIVERY) {
+            return false;
+        }
+
+        if ($order->status === 'cancelled') {
+            return false;
+        }
+
+        if ($shipment->hasWaybill() && $shipment->shipment_status !== OrderShipment::STATUS_FAILED) {
+            return true;
+        }
+
+        if ($shipment->hasWaybill() && $shipment->shipment_status === OrderShipment::STATUS_FAILED) {
+            try {
+                $this->syncShipment($shipment->refresh());
+
+                return $shipment->refresh()->shipment_status !== OrderShipment::STATUS_FAILED;
+            } catch (\Throwable) {
+                // Fall through to order-reference recovery.
+            }
+        }
+
+        return $this->recoverFromOrderReference($order, $shipment) !== null;
+    }
+
+    public function reconcileFailedShipments(): int
+    {
+        $reconciled = 0;
+
+        OrderShipment::needsDelhiveryReconciliation()
+            ->with('order')
+            ->chunkById(50, function ($shipments) use (&$reconciled) {
+                foreach ($shipments as $shipment) {
+                    if ($shipment->order && $this->reconcileOrderShipment($shipment->order)) {
+                        $reconciled++;
+                    }
+                }
+            });
+
+        return $reconciled;
+    }
+
+    public function cancelShipmentAndVerify(
+        OrderShipment $shipment,
+        string $source = ShipmentStatusHistory::SOURCE_SYSTEM,
+    ): OrderShipment {
+        $shipment = $this->cancelShipment($shipment, $source);
+
+        if ($shipment->shipment_status !== OrderShipment::STATUS_CANCELLED || !$shipment->hasWaybill()) {
+            return $shipment;
+        }
+
+        try {
+            $tracking = $this->client->trackShipment($shipment->waybill);
+            $rawStatus = strtolower((string) ($this->extractRawStatus($tracking) ?? ''));
+
+            if (!str_contains($rawStatus, 'cancel')) {
+                Log::warning('Delhivery cancellation requested but tracking is not cancelled yet', [
+                    'shipment_id' => $shipment->id,
+                    'waybill' => $shipment->waybill,
+                    'raw_status' => $rawStatus,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Delhivery cancellation verification tracking failed', [
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $shipment;
     }
 
     public function queuePlaceholder(Order $order): OrderShipment
@@ -360,6 +468,13 @@ class DelhiveryShipmentService
             $shipment->save();
             $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
+            Log::info('Delhivery tracking sync completed', [
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+                'shipment_status' => $normalizedStatus,
+                'raw_status' => $rawStatus,
+            ]);
+
             return $shipment;
         } catch (\Throwable $e) {
             $shipment->fill([
@@ -418,6 +533,13 @@ class DelhiveryShipmentService
 
             $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
 
+            Log::info('Delhivery reverse tracking sync completed', [
+                'shipment_id' => $shipment->id,
+                'reverse_waybill' => $shipment->reverse_waybill,
+                'reverse_status' => $normalizedStatus,
+                'raw_status' => $rawStatus,
+            ]);
+
             return $shipment;
         } catch (\Throwable $e) {
             $shipment->fill([
@@ -459,6 +581,13 @@ class DelhiveryShipmentService
                 'response_payload' => array_merge($shipment->response_payload ?? [], ['cancel' => $payload]),
                 'failed_reason' => null,
             ])->save();
+
+            Log::info('Delhivery shipment cancelled', [
+                'shipment_id' => $shipment->id,
+                'order_id' => $shipment->order_id,
+                'waybill' => $shipment->waybill,
+                'source' => $source,
+            ]);
 
             return $shipment;
         } catch (\Throwable $e) {
@@ -561,10 +690,19 @@ class DelhiveryShipmentService
 
         try {
             $payload = $this->client->shippingLabelPdf($waybills);
+            $packagesFound = (int) ($payload['packages_found'] ?? count(Arr::get($payload, 'packages', [])));
             $pdfUrl = $this->extractMergedPdfDownloadLink($payload);
 
-            if ($pdfUrl) {
+            if ($pdfUrl && $packagesFound >= $shipments->count()) {
                 return $this->client->downloadBinary($pdfUrl);
+            }
+
+            if ($pdfUrl && $packagesFound > 0 && $packagesFound < $shipments->count()) {
+                Log::info('Delhivery bulk label returned partial package count, merging individually', [
+                    'waybills' => $waybills,
+                    'packages_found' => $packagesFound,
+                    'expected' => $shipments->count(),
+                ]);
             }
         } catch (\Throwable $e) {
             Log::info('Delhivery bulk label request failed, falling back to individual labels', [
@@ -645,6 +783,14 @@ class DelhiveryShipmentService
                 'reverse_failed_reason' => null,
             ])->save();
 
+            Log::info('Delhivery reverse pickup created', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'shipment_id' => $shipment->id,
+                'forward_waybill' => $shipment->waybill,
+                'reverse_waybill' => $waybill,
+            ]);
+
             return $shipment;
         } catch (\Throwable $e) {
             $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
@@ -707,6 +853,13 @@ class DelhiveryShipmentService
 
             $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
 
+            Log::info('Delhivery webhook processed for reverse shipment', [
+                'shipment_id' => $shipment->id,
+                'order_id' => $shipment->order_id,
+                'reverse_waybill' => $waybill,
+                'reverse_status' => $normalizedStatus,
+            ]);
+
             return $shipment;
         }
 
@@ -722,6 +875,14 @@ class DelhiveryShipmentService
         $this->applyForwardShipmentTimestamps($shipment, $normalizedStatus);
         $shipment->save();
         $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
+
+        Log::info('Delhivery webhook processed for forward shipment', [
+            'shipment_id' => $shipment->id,
+            'order_id' => $shipment->order_id,
+            'waybill' => $waybill,
+            'shipment_status' => $normalizedStatus,
+            'raw_status' => $rawStatus,
+        ]);
 
         return $shipment;
     }
@@ -1252,5 +1413,141 @@ class DelhiveryShipmentService
         }
 
         return (string) $pickupId;
+    }
+
+    private function recoverFromOrderReference(
+        Order $order,
+        OrderShipment $shipment,
+        ?array $createResponse = null,
+    ): ?OrderShipment {
+        $trackingPayload = $this->client->trackByOrderReference($order->order_number);
+        $rawStatus = strtolower((string) ($this->extractRawStatus($trackingPayload) ?? ''));
+
+        if ($rawStatus !== '' && str_contains($rawStatus, 'cancel')) {
+            return null;
+        }
+
+        $waybill = $this->extractWaybillFromTrackingPayload($trackingPayload);
+
+        if (!$waybill && is_array($createResponse)) {
+            $waybill = $this->extractWaybill($createResponse);
+        }
+
+        if (!$waybill) {
+            return null;
+        }
+
+        if ($shipment->waybill && $shipment->waybill !== $waybill) {
+            Log::warning('Delhivery recovery AWB differs from local shipment AWB', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'local_waybill' => $shipment->waybill,
+                'recovered_waybill' => $waybill,
+            ]);
+        }
+
+        $shipment = $this->applyManifestFromCreateResponse(
+            $shipment,
+            $createResponse ?? ['recovered_from' => 'order_reference', 'tracking' => $trackingPayload],
+            $waybill,
+        );
+
+        $this->schedulePickupIfNeeded($shipment->refresh());
+
+        $this->logShipmentCreation($order, 'recovered_from_delhivery', [
+            'waybill' => $shipment->waybill,
+            'shipment_status' => $shipment->shipment_status,
+        ]);
+
+        return $shipment;
+    }
+
+    private function applyManifestFromCreateResponse(
+        OrderShipment $shipment,
+        array $responsePayload,
+        string $waybill,
+    ): OrderShipment {
+        $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+            'waybill' => $waybill,
+            'provider_reference' => $this->extractProviderReference($responsePayload),
+            'delhivery_order_id' => $this->extractDelhiveryOrderId($responsePayload),
+            'shipment_status' => OrderShipment::STATUS_MANIFESTED,
+            'raw_status' => $this->extractRawStatus($responsePayload) ?? 'Manifested',
+            'courier_tracking_url' => "https://www.delhivery.com/track/package/{$waybill}",
+            'manifested_at' => $shipment->manifested_at ?? now(),
+            'response_payload' => array_merge($shipment->response_payload ?? [], [
+                'create' => $responsePayload,
+            ]),
+            'failed_reason' => null,
+        ])->save();
+
+        return $shipment;
+    }
+
+    private function ensureManifestedState(OrderShipment $shipment): void
+    {
+        if (!$shipment->hasWaybill()) {
+            return;
+        }
+
+        if (in_array($shipment->shipment_status, [
+            OrderShipment::STATUS_FAILED,
+            OrderShipment::STATUS_RETRY_PENDING,
+            OrderShipment::STATUS_NOT_CREATED,
+        ], true)) {
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+                'shipment_status' => OrderShipment::STATUS_MANIFESTED,
+                'raw_status' => $shipment->raw_status ?? 'Manifested',
+                'failed_reason' => null,
+                'manifested_at' => $shipment->manifested_at ?? now(),
+            ])->save();
+        }
+    }
+
+    private function markShipmentRetryPending(OrderShipment $shipment, \Throwable $e): void
+    {
+        $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+            'shipment_status' => OrderShipment::STATUS_RETRY_PENDING,
+            'failed_reason' => $e->getMessage(),
+        ])->save();
+    }
+
+    private function markShipmentPermanentFailed(OrderShipment $shipment, \Throwable $e): void
+    {
+        if ($shipment->hasWaybill()) {
+            $this->ensureManifestedState($shipment);
+
+            return;
+        }
+
+        $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+            'shipment_status' => OrderShipment::STATUS_FAILED,
+            'failed_reason' => $e->getMessage(),
+        ])->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function logShipmentCreation(Order $order, string $stage, array $context = []): void
+    {
+        Log::info('Delhivery shipment creation trace', array_merge([
+            'stage' => $stage,
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+        ], $context));
+    }
+
+    private function extractWaybillFromTrackingPayload(array $payload): ?string
+    {
+        $awb = Arr::get($payload, 'ShipmentData.0.Shipment.AWB')
+            ?? Arr::get($payload, 'ShipmentData.0.Shipment.Waybill')
+            ?? Arr::get($payload, 'ShipmentData.0.Shipment.waybill');
+
+        if ($awb === null || $awb === '') {
+            return null;
+        }
+
+        return (string) $awb;
     }
 }

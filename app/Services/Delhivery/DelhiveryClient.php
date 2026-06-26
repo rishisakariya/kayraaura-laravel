@@ -11,8 +11,22 @@ class DelhiveryClient
 {
     public function createShipment(array $payload): array
     {
+        $orderReference = $payload['shipments'][0]['order'] ?? null;
+
+        Log::info('Delhivery API: create shipment requested', [
+            'order_reference' => $orderReference,
+            'payment_mode' => $payload['shipments'][0]['payment_mode'] ?? null,
+        ]);
+
         if ($this->mockEnabled()) {
-            return $this->mockCreateShipmentResponse($payload);
+            $response = $this->mockCreateShipmentResponse($payload);
+
+            Log::info('Delhivery API: create shipment mock response', [
+                'order_reference' => $orderReference,
+                'waybill' => $response['packages'][0]['waybill'] ?? null,
+            ]);
+
+            return $response;
         }
 
         $response = Http::asForm()
@@ -23,7 +37,15 @@ class DelhiveryClient
                 'data' => json_encode($payload, JSON_THROW_ON_ERROR),
             ]);
 
-        return $this->decodeResponse($response, 'Delhivery shipment creation failed');
+        $decoded = $this->decodeResponse($response, 'Delhivery shipment creation failed');
+
+        Log::info('Delhivery API: create shipment response', [
+            'order_reference' => $orderReference,
+            'http_status' => $response->status(),
+            'waybill' => $decoded['packages'][0]['waybill'] ?? $decoded['packages'][0]['wbn'] ?? null,
+        ]);
+
+        return $decoded;
     }
 
     public function trackShipment(string $waybill): array
@@ -42,10 +64,48 @@ class DelhiveryClient
         return $this->decodeResponse($response, 'Delhivery tracking failed');
     }
 
-    public function cancelShipment(string $waybill): array
+    public function trackByOrderReference(string $orderReference): array
     {
         if ($this->mockEnabled()) {
-            return $this->mockCancelShipmentResponse($waybill);
+            return $this->mockTrackByOrderReferenceResponse($orderReference);
+        }
+
+        $response = Http::withHeaders($this->headers())
+            ->timeout(30)
+            ->get($this->url('track'), [
+                'ref_ids' => $orderReference,
+                'token' => $this->token(),
+            ]);
+
+        $payload = $response->json();
+
+        if (!is_array($payload)) {
+            return [
+                'success' => false,
+                'raw' => $response->body(),
+                'http_status' => $response->status(),
+            ];
+        }
+
+        $payload['http_status'] = $response->status();
+
+        return $payload;
+    }
+
+    public function cancelShipment(string $waybill): array
+    {
+        Log::info('Delhivery API: cancel shipment requested', [
+            'waybill' => $waybill,
+        ]);
+
+        if ($this->mockEnabled()) {
+            $response = $this->mockCancelShipmentResponse($waybill);
+
+            Log::info('Delhivery API: cancel shipment mock response', [
+                'waybill' => $waybill,
+            ]);
+
+            return $response;
         }
 
         $response = Http::asForm()
@@ -56,7 +116,14 @@ class DelhiveryClient
                 'cancellation' => 'true',
             ]);
 
-        return $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
+        $decoded = $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
+
+        Log::info('Delhivery API: cancel shipment response', [
+            'waybill' => $waybill,
+            'http_status' => $response->status(),
+        ]);
+
+        return $decoded;
     }
 
     /**
@@ -179,6 +246,25 @@ class DelhiveryClient
                                     'ScanDateTime' => now()->format('Y-m-d H:i:s'),
                                 ],
                             ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    private function mockTrackByOrderReferenceResponse(string $orderReference): array
+    {
+        return [
+            'mock' => true,
+            'ShipmentData' => [
+                [
+                    'Shipment' => [
+                        'AWB' => 'MOCK' . substr(md5($orderReference), 0, 10),
+                        'OrderID' => $orderReference,
+                        'Status' => [
+                            'Status' => 'Manifested',
+                            'StatusLocation' => 'Local Mock',
                         ],
                     ],
                 ],

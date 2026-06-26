@@ -35,6 +35,8 @@ class OrderShipment extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_RETRY_PENDING = 'retry_pending';
+
     public const ACTIVE_STATUSES = [
         self::STATUS_MANIFESTED,
         self::STATUS_PICKUP_SCHEDULED,
@@ -142,6 +144,22 @@ class OrderShipment extends Model
         return $query->where('provider', self::PROVIDER_DELHIVERY)
             ->whereNotNull('waybill')
             ->whereIn('shipment_status', self::ACTIVE_STATUSES);
+    }
+
+    public function scopeNeedsDelhiveryReconciliation(Builder $query): Builder
+    {
+        return $query->where('provider', self::PROVIDER_DELHIVERY)
+            ->where(function (Builder $query) {
+                $query->whereIn('shipment_status', [
+                    self::STATUS_FAILED,
+                    self::STATUS_RETRY_PENDING,
+                    self::STATUS_NOT_CREATED,
+                ])->orWhere(function (Builder $query) {
+                    $query->where('shipment_status', self::STATUS_FAILED)
+                        ->whereNotNull('waybill');
+                });
+            })
+            ->whereHas('order', fn (Builder $query) => $query->where('status', '!=', 'cancelled'));
     }
 
     public function scopeNeedsDelhiverySync(Builder $query): Builder
