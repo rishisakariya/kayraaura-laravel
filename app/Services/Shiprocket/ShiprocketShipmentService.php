@@ -219,6 +219,8 @@ class ShiprocketShipmentService
                 'failed_reason' => null,
             ])->save();
 
+            $this->markOrderCancelled($shipment);
+
             return $shipment;
         } catch (\Throwable $e) {
             $shipment->fill(['failed_reason' => $e->getMessage()])->save();
@@ -231,6 +233,18 @@ class ShiprocketShipmentService
 
             throw $e;
         }
+    }
+
+    private function markOrderCancelled(OrderShipment $shipment): void
+    {
+        $order = $shipment->order()->first();
+
+        if (!$order || in_array($order->status, ['cancelled', 'delivered', 'return_requested', 'returned'], true)) {
+            return;
+        }
+
+        $order->status = 'cancelled';
+        $order->save();
     }
 
     public function generateShippingLabel(OrderShipment $shipment): OrderShipment
