@@ -735,24 +735,33 @@ class DelhiveryShipmentService
             return PublicStorage::get($storagePath);
         }
 
-        $waybills = $shipments->pluck('waybill')->all();
+        $waybills = $shipments->pluck('waybill')->map(fn ($waybill) => (string) $waybill)->all();
 
         try {
             $payload = $this->client->shippingLabelPdf($waybills);
-            $packagesFound = (int) ($payload['packages_found'] ?? count(Arr::get($payload, 'packages', [])));
-            $pdfUrl = $this->extractMergedPdfDownloadLink($payload);
+            $linksByWaybill = $this->extractPdfDownloadLinksByWaybill($payload);
 
-            if ($pdfUrl && $packagesFound >= $shipments->count()) {
-                return $this->client->downloadBinary($pdfUrl);
+            // Delhivery's packing slip API returns one PDF link per package (waybill),
+            // not a single merged document. Download each label and merge them so the
+            // resulting PDF contains a page for every requested shipment.
+            $orderedLinks = collect($waybills)
+                ->map(fn (string $waybill) => $linksByWaybill[$waybill] ?? null)
+                ->filter()
+                ->values();
+
+            if ($orderedLinks->count() === $shipments->count()) {
+                $pdfBinaries = $orderedLinks
+                    ->map(fn (string $link) => $this->client->downloadBinary($link))
+                    ->all();
+
+                return $this->pdfMerger->mergeBinaries($pdfBinaries);
             }
 
-            if ($pdfUrl && $packagesFound > 0 && $packagesFound < $shipments->count()) {
-                Log::info('Delhivery bulk label returned partial package count, merging individually', [
-                    'waybills' => $waybills,
-                    'packages_found' => $packagesFound,
-                    'expected' => $shipments->count(),
-                ]);
-            }
+            Log::info('Delhivery bulk label did not return a link for every waybill, merging individually', [
+                'waybills' => $waybills,
+                'links_found' => $orderedLinks->count(),
+                'expected' => $shipments->count(),
+            ]);
         } catch (\Throwable $e) {
             Log::info('Delhivery bulk label request failed, falling back to individual labels', [
                 'waybills' => $waybills,
@@ -1212,22 +1221,47 @@ class DelhiveryShipmentService
         return null;
     }
 
-    private function extractMergedPdfDownloadLink(array $payload): ?string
-    {
-        $rootLink = Arr::get($payload, 'pdf_download_link')
-            ?? Arr::get($payload, 'pdf_link')
-            ?? Arr::get($payload, 'label_url');
-
-        if (filled($rootLink)) {
-            return (string) $rootLink;
-        }
-
-        return $this->extractPdfDownloadLink($payload);
-    }
-
     private function labelStoragePath(?string $labelUrl): ?string
     {
         return PublicStorage::diskPath($labelUrl);
+    }
+
+    /**
+     * Map each package's PDF download link by its waybill number.
+     *
+     * @return array<string, string>
+     */
+    private function extractPdfDownloadLinksByWaybill(array $payload): array
+    {
+        $packages = Arr::get($payload, 'packages', []);
+
+        if (!is_array($packages)) {
+            return [];
+        }
+
+        $links = [];
+
+        foreach ($packages as $package) {
+            if (!is_array($package)) {
+                continue;
+            }
+
+            $waybill = $package['waybill']
+                ?? $package['wbn']
+                ?? $package['Waybill']
+                ?? null;
+
+            $link = $package['pdf_download_link']
+                ?? $package['pdf_link']
+                ?? $package['label_url']
+                ?? null;
+
+            if (filled($waybill) && filled($link)) {
+                $links[(string) $waybill] = (string) $link;
+            }
+        }
+
+        return $links;
     }
 
     private function extractPdfDownloadLink(array $payload): ?string
