@@ -31,7 +31,7 @@ class CheckoutService
      */
     private const FIXED_TOTAL_TEST_EMAIL = 'ajradadiya129@gmail.com';
 
-    private const FIXED_TOTAL_TEST_AMOUNT = 1.00;
+    private const FIXED_TOTAL_TEST_AMOUNT = 2.00;
 
     public function buildCheckout(User $user, array $payload, bool $lockProductSizes = false): array
     {
