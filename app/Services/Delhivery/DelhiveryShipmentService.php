@@ -650,10 +650,6 @@ class DelhiveryShipmentService
 
         $order->status = 'cancelled';
         $order->save();
-
-        if ($order->scratch_coupon_code) {
-            app(\App\Services\ScratchCardService::class)->releaseForOrder($order);
-        }
     }
 
     public function generateShippingLabel(OrderShipment $shipment): OrderShipment

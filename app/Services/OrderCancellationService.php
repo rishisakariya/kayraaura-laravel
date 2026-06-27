@@ -61,10 +61,13 @@ class OrderCancellationService
                     $this->checkoutService->restoreStockForOrder($order);
                 }
 
-                // Cancelling an order frees up its scratch coupon so the customer can
-                // reuse it. releaseForOrder only un-redeems the coupon that was redeemed
-                // for this specific order, so it is safe for every payment state.
-                if ($order->scratch_coupon_code) {
+                // Online orders awaiting payment never redeemed their coupon, so this
+                // only clears the pending reservation. A cancelled order that was paid
+                // keeps its coupon consumed, so the customer scratches a new coupon for
+                // their next order rather than reusing the old code.
+                if ($order->payment_method === 'online'
+                    && in_array($order->payment_status, ['pending', 'failed'], true)
+                    && $order->scratch_coupon_code) {
                     $this->scratchCardService->releaseForOrder($order);
                 }
             }
