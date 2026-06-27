@@ -101,6 +101,14 @@ class CheckoutService
             : $baseTotalAfterOnlineDiscount;
 
         if (strcasecmp((string) $user->email, self::FIXED_TOTAL_TEST_EMAIL) === 0) {
+            $itemsSubtotal = 0.0;
+            $buyTwoGetOneDiscountAmount = 0.0;
+            $firstOrderDiscountAmount = 0.0;
+            $onlinePaymentDiscountAmount = 0.0;
+            $subtotal = 0.0;
+            $taxAmount = 0.0;
+            $shippingAmount = 0.0;
+            $codCharge = 0.0;
             $totalAmount = self::FIXED_TOTAL_TEST_AMOUNT;
         }
 
