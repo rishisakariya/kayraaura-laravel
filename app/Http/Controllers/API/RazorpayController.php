@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RazorpayController extends Controller
 {
@@ -25,6 +26,13 @@ class RazorpayController extends Controller
     {
         $payload = $request->validated();
         $order = Order::where('user_id', Auth::id())->findOrFail($payload['order_id']);
+
+        Log::info('Payment flow: verify payment requested', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'razorpay_order_id' => $payload['razorpay_order_id'],
+            'razorpay_payment_id' => $payload['razorpay_payment_id'],
+        ]);
 
         if ($order->razorpay_order_id !== $payload['razorpay_order_id']) {
             return $this->paymentError($order, $payload, 'Razorpay order id does not match local order');
@@ -66,6 +74,11 @@ class RazorpayController extends Controller
 
             if ($verifiedOrder->payment_status === 'paid') {
                 CreateDelhiveryShipmentJob::dispatch($verifiedOrder->id);
+
+                Log::info('Payment flow: verify payment succeeded, shipment job dispatched', [
+                    'order_id' => $verifiedOrder->id,
+                    'order_number' => $verifiedOrder->order_number,
+                ]);
             }
 
             return response()->json([
@@ -86,6 +99,11 @@ class RazorpayController extends Controller
         $webhookPayload = $request->all();
         $signature = $request->header('X-Razorpay-Signature');
         $signatureVerified = $this->checkoutService->verifyWebhookSignature($rawPayload, $signature);
+
+        Log::info('Payment flow: Razorpay webhook received', [
+            'event' => $webhookPayload['event'] ?? null,
+            'signature_verified' => $signatureVerified,
+        ]);
 
         $order = $this->findOrderFromWebhookPayload($webhookPayload);
 
@@ -146,8 +164,19 @@ class RazorpayController extends Controller
 
             if ($processedOrder?->payment_status === 'paid') {
                 CreateDelhiveryShipmentJob::dispatch($processedOrder->id);
+
+                Log::info('Payment flow: Razorpay webhook processed, shipment job dispatched', [
+                    'order_id' => $processedOrder->id,
+                    'event' => $webhookPayload['event'] ?? null,
+                ]);
             }
         } catch (DomainException $e) {
+            Log::warning('Payment flow: Razorpay webhook processing failed', [
+                'order_id' => $order?->id,
+                'event' => $webhookPayload['event'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'status' => false,
                 'message' => $e->getMessage(),
@@ -162,6 +191,14 @@ class RazorpayController extends Controller
 
     private function paymentError(Order $order, array $payload, string $message): JsonResponse
     {
+        Log::warning('Payment flow: verify payment failed', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'razorpay_order_id' => $payload['razorpay_order_id'] ?? null,
+            'razorpay_payment_id' => $payload['razorpay_payment_id'] ?? null,
+            'error' => $message,
+        ]);
+
         RazorpayPaymentLog::create([
             'order_id' => $order->id,
             'user_id' => $order->user_id,

@@ -17,6 +17,7 @@ use App\Models\UserAddress;
 use App\Models\WebSetting;
 use App\Services\CheckoutService;
 use App\Services\Delhivery\DelhiveryShipmentService;
+use App\Services\OrderCancellationService;
 use App\Services\OrderReturnService;
 use App\Services\OtpService;
 use App\Services\ScratchCardService;
@@ -27,6 +28,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Support\PublicStorage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -39,6 +41,7 @@ class OrderController extends Controller
         private readonly OtpService $otpService,
         private readonly ScratchCardService $scratchCardService,
         private readonly OrderReturnService $orderReturnService,
+        private readonly OrderCancellationService $orderCancellationService,
     )
     {
     }
@@ -120,7 +123,19 @@ class OrderController extends Controller
 
             if ($order->payment_method === 'cod') {
                 CreateDelhiveryShipmentJob::dispatch($order->id);
+
+                Log::info('Order flow: COD order placed, shipment job dispatched', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                ]);
             }
+
+            Log::info('Order flow: order placed', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'payment_method' => $order->payment_method,
+                'total_amount' => $order->total_amount,
+            ]);
 
             return response()->json([
                 'status' => true,
@@ -286,68 +301,39 @@ class OrderController extends Controller
         }
 
         try {
-            $shipmentToCancel = null;
+            Log::info('Order cancellation flow: API request received', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'user_id' => $order->user_id,
+            ]);
 
-            DB::beginTransaction();
-
-            // Cancel before mutating payment_status so the cancellability
-            // re-check inside cancel() still sees the original paid state.
-            $order->cancel();
-
-            if ($order->payment_method === 'cod' || $order->payment_status === 'paid') {
-                $this->restoreStockForOrder($order);
-            }
-
-            if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
-                $this->checkoutService->refundRazorpayPayment($order);
-                $order->payment_status = 'refunded';
-            }
-
-            if ($order->payment_method === 'online'
-                && in_array($order->payment_status, ['pending', 'failed'], true)
-                && $order->scratch_coupon_code) {
-                $this->scratchCardService->releaseForOrder($order);
-            }
-
-            if ($order->shipment?->waybill && !in_array($order->shipment->shipment_status, [
-                OrderShipment::STATUS_DELIVERED,
-                OrderShipment::STATUS_CANCELLED,
-                OrderShipment::STATUS_RTO,
-            ], true)) {
-                $shipmentToCancel = $order->shipment;
-            }
-
-            // Add cancellation reason if provided
-            if ($request->input('reason')) {
-                $order->notes = ($order->notes ? $order->notes . "\n\n" : '') .
-                               "Cancellation reason: " . $request->input('reason');
-            }
-
-            $order->save();
-
-            DB::commit();
+            $shipmentToCancel = $this->orderCancellationService->cancel(
+                $order,
+                $request->input('reason'),
+            );
 
             if ($shipmentToCancel) {
                 CancelDelhiveryShipmentJob::dispatch($shipmentToCancel->id);
+
+                Log::info('Order cancellation flow: cancel shipment job dispatched', [
+                    'order_id' => $order->id,
+                    'shipment_id' => $shipmentToCancel->id,
+                ]);
             }
 
             return response()->json([
                 'status' => true,
-                'data' => new OrderResource($order->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
+                'data' => new OrderResource($order->refresh()->load(['orderItems.product.images', 'orderItems.productSize', 'shipment'])),
                 'message' => 'Order cancelled successfully',
             ]);
 
         } catch (DomainException $e) {
-            DB::rollBack();
-
             return response()->json([
                 'status' => false,
                 'message' => $e->getMessage(),
             ], 400);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to cancel order. Please try again.',
@@ -423,6 +409,12 @@ class OrderController extends Controller
         }
 
         try {
+            Log::info('Return flow: return request received', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'payment_method' => $order->payment_method,
+            ]);
+
             $service = $order->shipment?->provider === OrderShipment::PROVIDER_SHIPROCKET
                 ? $this->shiprocketShipmentService
                 : $this->shipmentService;
@@ -449,8 +441,21 @@ class OrderController extends Controller
             } catch (\Throwable $e) {
                 $this->orderReturnService->deleteProductImages($imageUrls);
 
+                Log::error('Return flow: reverse pickup or return request failed', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'error' => $e->getMessage(),
+                ]);
+
                 throw $e;
             }
+
+            Log::info('Return flow: return request accepted', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'refund_amount' => $refundCalculation['refund_amount'],
+                'is_partial' => $refundCalculation['is_partial'],
+            ]);
 
             $message = $order->payment_method === 'cod'
                 ? 'Return pickup scheduled successfully. A refund of ₹'

@@ -35,6 +35,8 @@ class OrderShipment extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_RETRY_PENDING = 'retry_pending';
+
     public const ACTIVE_STATUSES = [
         self::STATUS_MANIFESTED,
         self::STATUS_PICKUP_SCHEDULED,
@@ -87,6 +89,10 @@ class OrderShipment extends Model
         'shipping_label_url',
         'last_synced_at',
         'manifested_at',
+        'pickup_request_id',
+        'pickup_requested_at',
+        'pickup_request_payload',
+        'pickup_request_response',
         'delivered_at',
         'cancelled_at',
         'rto_at',
@@ -105,6 +111,9 @@ class OrderShipment extends Model
         'tracking_payload' => 'array',
         'last_synced_at' => 'datetime',
         'manifested_at' => 'datetime',
+        'pickup_requested_at' => 'datetime',
+        'pickup_request_payload' => 'array',
+        'pickup_request_response' => 'array',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'rto_at' => 'datetime',
@@ -135,6 +144,23 @@ class OrderShipment extends Model
         return $query->where('provider', self::PROVIDER_DELHIVERY)
             ->whereNotNull('waybill')
             ->whereIn('shipment_status', self::ACTIVE_STATUSES);
+    }
+
+    public function scopeNeedsDelhiveryReconciliation(Builder $query): Builder
+    {
+        return $query->where('provider', self::PROVIDER_DELHIVERY)
+            ->whereHas('order', fn (Builder $query) => $query->where('status', '!=', 'cancelled'))
+            ->where(function (Builder $query) {
+                $query->whereIn('shipment_status', [
+                    self::STATUS_FAILED,
+                    self::STATUS_RETRY_PENDING,
+                    self::STATUS_NOT_CREATED,
+                ])->orWhere(function (Builder $query) {
+                    $query->whereNotNull('waybill')
+                        ->whereNotNull('failed_reason')
+                        ->where('failed_reason', '!=', '');
+                });
+            });
     }
 
     public function scopeNeedsDelhiverySync(Builder $query): Builder

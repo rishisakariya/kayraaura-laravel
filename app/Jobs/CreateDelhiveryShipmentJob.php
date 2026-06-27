@@ -14,6 +14,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class CreateDelhiveryShipmentJob implements ShouldQueue
@@ -40,6 +41,11 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
         ShippingProviderResolver $providerResolver
     ): void
     {
+        Log::info('Delhivery job: create shipment started', [
+            'order_id' => $this->orderId,
+            'attempt' => $this->attempts(),
+        ]);
+
         $order = Order::findOrFail($this->orderId);
         $provider = $providerResolver->activeProvider();
 
@@ -50,6 +56,10 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
 
             $shiprocketService->createShipment($order);
 
+            Log::info('Delhivery job: create shipment completed via Shiprocket', [
+                'order_id' => $this->orderId,
+            ]);
+
             return;
         }
 
@@ -57,22 +67,61 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
             throw new DomainException('Delhivery is enabled but API token is not configured.');
         }
 
-        $delhiveryService->createShipment($order);
+        $shipment = $delhiveryService->createShipment($order);
+
+        Log::info('Delhivery job: create shipment completed', [
+            'order_id' => $this->orderId,
+            'shipment_id' => $shipment->id,
+            'waybill' => $shipment->waybill,
+        ]);
     }
 
     public function failed(Throwable $exception): void
     {
-        $shipment = OrderShipment::where('order_id', $this->orderId)->first();
+        Log::error('Delhivery job: create shipment failed', [
+            'order_id' => $this->orderId,
+            'attempt' => $this->attempts(),
+            'error' => $exception->getMessage(),
+        ]);
+
+        $delhiveryService = app(DelhiveryShipmentService::class);
 
         try {
-            $provider = $shipment?->provider ?? app(ShippingProviderResolver::class)->activeProvider();
-            $pickupLocation = app(ShippingProviderResolver::class)->pickupLocation();
+            if ($delhiveryService->reconcileOrderShipment($this->orderId)) {
+                return;
+            }
         } catch (Throwable) {
-            $provider = $shipment?->provider ?? OrderShipment::PROVIDER_DELHIVERY;
-            $pickupLocation = $shipment?->pickup_location;
+            // Continue to failed-state handling below.
         }
 
-        $shipment = OrderShipment::firstOrNew(['order_id' => $this->orderId]);
+        $shipment = OrderShipment::where('order_id', $this->orderId)->first();
+
+        if ($shipment?->hasWaybill()) {
+            try {
+                $delhiveryService->reconcileOrderShipment($this->orderId);
+            } catch (Throwable) {
+                // Keep existing shipment record as-is.
+            }
+
+            return;
+        }
+
+        if (!$shipment || $shipment->shipment_status === OrderShipment::STATUS_FAILED) {
+            return;
+        }
+
+        if ($shipment->shipment_status !== OrderShipment::STATUS_RETRY_PENDING) {
+            return;
+        }
+
+        try {
+            $provider = $shipment->provider ?? app(ShippingProviderResolver::class)->activeProvider();
+            $pickupLocation = app(ShippingProviderResolver::class)->pickupLocation();
+        } catch (Throwable) {
+            $provider = $shipment->provider ?? OrderShipment::PROVIDER_DELHIVERY;
+            $pickupLocation = $shipment->pickup_location;
+        }
+
         $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
             'provider' => $provider,
             'shipment_status' => OrderShipment::STATUS_FAILED,

@@ -5,13 +5,28 @@ namespace App\Services\Delhivery;
 use DomainException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class DelhiveryClient
 {
     public function createShipment(array $payload): array
     {
+        $orderReference = $payload['shipments'][0]['order'] ?? null;
+
+        Log::info('Delhivery API: create shipment requested', [
+            'order_reference' => $orderReference,
+            'payment_mode' => $payload['shipments'][0]['payment_mode'] ?? null,
+        ]);
+
         if ($this->mockEnabled()) {
-            return $this->mockCreateShipmentResponse($payload);
+            $response = $this->mockCreateShipmentResponse($payload);
+
+            Log::info('Delhivery API: create shipment mock response', [
+                'order_reference' => $orderReference,
+                'waybill' => $response['packages'][0]['waybill'] ?? null,
+            ]);
+
+            return $response;
         }
 
         $response = Http::asForm()
@@ -22,7 +37,15 @@ class DelhiveryClient
                 'data' => json_encode($payload, JSON_THROW_ON_ERROR),
             ]);
 
-        return $this->decodeResponse($response, 'Delhivery shipment creation failed');
+        $decoded = $this->decodeResponse($response, 'Delhivery shipment creation failed');
+
+        Log::info('Delhivery API: create shipment response', [
+            'order_reference' => $orderReference,
+            'http_status' => $response->status(),
+            'waybill' => $decoded['packages'][0]['waybill'] ?? $decoded['packages'][0]['wbn'] ?? null,
+        ]);
+
+        return $decoded;
     }
 
     public function trackShipment(string $waybill): array
@@ -41,10 +64,48 @@ class DelhiveryClient
         return $this->decodeResponse($response, 'Delhivery tracking failed');
     }
 
-    public function cancelShipment(string $waybill): array
+    public function trackByOrderReference(string $orderReference): array
     {
         if ($this->mockEnabled()) {
-            return $this->mockCancelShipmentResponse($waybill);
+            return $this->mockTrackByOrderReferenceResponse($orderReference);
+        }
+
+        $response = Http::withHeaders($this->headers())
+            ->timeout(30)
+            ->get($this->url('track'), [
+                'ref_ids' => $orderReference,
+                'token' => $this->token(),
+            ]);
+
+        $payload = $response->json();
+
+        if (!is_array($payload)) {
+            return [
+                'success' => false,
+                'raw' => $response->body(),
+                'http_status' => $response->status(),
+            ];
+        }
+
+        $payload['http_status'] = $response->status();
+
+        return $payload;
+    }
+
+    public function cancelShipment(string $waybill): array
+    {
+        Log::info('Delhivery API: cancel shipment requested', [
+            'waybill' => $waybill,
+        ]);
+
+        if ($this->mockEnabled()) {
+            $response = $this->mockCancelShipmentResponse($waybill);
+
+            Log::info('Delhivery API: cancel shipment mock response', [
+                'waybill' => $waybill,
+            ]);
+
+            return $response;
         }
 
         $response = Http::asForm()
@@ -55,7 +116,14 @@ class DelhiveryClient
                 'cancellation' => 'true',
             ]);
 
-        return $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
+        $decoded = $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
+
+        Log::info('Delhivery API: cancel shipment response', [
+            'waybill' => $waybill,
+            'http_status' => $response->status(),
+        ]);
+
+        return $decoded;
     }
 
     /**
@@ -78,6 +146,39 @@ class DelhiveryClient
             ]);
 
         return $this->decodeResponse($response, 'Delhivery shipping label generation failed');
+    }
+
+    /**
+     * @param  array{pickup_location: string, pickup_date: string, pickup_time: string, expected_package_count: int}  $payload
+     */
+    public function createPickupRequest(array $payload): array
+    {
+        if ($this->mockEnabled()) {
+            return $this->mockCreatePickupRequestResponse($payload);
+        }
+
+        $url = $this->url('pickup_request');
+
+        $response = Http::withHeaders([
+            ...$this->headers(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        ])
+            ->timeout(30)
+            ->post($url, $payload);
+
+        try {
+            return $this->decodeResponse($response, 'Delhivery pickup request creation failed', [201]);
+        } catch (DomainException $e) {
+            Log::error('Delhivery pickup request HTTP error', [
+                'url' => $url,
+                'payload' => $payload,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw $e;
+        }
     }
 
     public function downloadBinary(string $url): string
@@ -152,6 +253,25 @@ class DelhiveryClient
         ];
     }
 
+    private function mockTrackByOrderReferenceResponse(string $orderReference): array
+    {
+        return [
+            'mock' => true,
+            'ShipmentData' => [
+                [
+                    'Shipment' => [
+                        'AWB' => 'MOCK' . substr(md5($orderReference), 0, 10),
+                        'OrderID' => $orderReference,
+                        'Status' => [
+                            'Status' => 'Manifested',
+                            'StatusLocation' => 'Local Mock',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
     private function mockCancelShipmentResponse(string $waybill): array
     {
         return [
@@ -174,6 +294,22 @@ class DelhiveryClient
                 ],
             ],
             'packages_found' => 1,
+        ];
+    }
+
+    /**
+     * @param  array{pickup_location: string, pickup_date: string, pickup_time: string, expected_package_count: int}  $payload
+     */
+    private function mockCreatePickupRequestResponse(array $payload): array
+    {
+        return [
+            'mock' => true,
+            'success' => true,
+            'pickup_id' => 'MOCK-PUR-' . now()->format('YmdHis'),
+            'pickup_location_name' => $payload['pickup_location'],
+            'pickup_date' => $payload['pickup_date'],
+            'pickup_time' => $payload['pickup_time'],
+            'expected_package_count' => $payload['expected_package_count'],
         ];
     }
 
@@ -208,23 +344,46 @@ class DelhiveryClient
         return $url;
     }
 
-    private function decodeResponse(Response $response, string $defaultMessage): array
+    private function decodeResponse(Response $response, string $defaultMessage, array $successStatuses = []): array
     {
+        $status = $response->status();
+        $body = trim($response->body());
         $payload = $response->json();
 
-        if ($payload === null) {
-            $payload = ['raw' => $response->body()];
+        if (!is_array($payload)) {
+            $payload = $body !== '' ? ['raw' => $body] : [];
         }
 
-        if (!$response->successful()) {
-            $message = $payload['error']['message']
-                ?? $payload['error']['description']
-                ?? $payload['rmk']
-                ?? $defaultMessage;
+        $isSuccessful = $response->successful()
+            || in_array($status, $successStatuses, true);
 
-            throw new DomainException($message);
+        if (!$isSuccessful) {
+            throw new DomainException($this->responseErrorMessage($payload, $body, $defaultMessage, $status));
+        }
+
+        if (($payload['success'] ?? null) === false) {
+            throw new DomainException($this->responseErrorMessage($payload, $body, $defaultMessage, $status));
         }
 
         return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function responseErrorMessage(array $payload, string $body, string $defaultMessage, int $status): string
+    {
+        $message = $payload['error']['message']
+            ?? $payload['error']['description']
+            ?? $payload['error']
+            ?? $payload['rmk']
+            ?? $payload['message']
+            ?? ($payload['raw'] ?? null);
+
+        if (!is_string($message) || trim($message) === '') {
+            $message = $body !== '' ? $body : $defaultMessage;
+        }
+
+        return "{$message} (HTTP {$status})";
     }
 }

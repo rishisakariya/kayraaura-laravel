@@ -7,6 +7,7 @@ use App\Support\PublicStorage;
 use DomainException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class OrderReturnService
@@ -110,6 +111,13 @@ class OrderReturnService
         ?string $returnRequestId = null,
         ?string $upiTransactionReference = null,
     ): array {
+        Log::info('Return refund flow: processing requested', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'payment_method' => $order->payment_method,
+            'return_request_id' => $returnRequestId,
+        ]);
+
         return match ($order->payment_method) {
             'online' => $this->processOnlineReturnRefund($order, $returnRequestId),
             'cod' => $this->processCodReturnRefund($order, $returnRequestId, $upiTransactionReference),
@@ -169,6 +177,14 @@ class OrderReturnService
                     return $request;
                 }
             );
+
+            Log::info('Return refund flow: online refund completed', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'return_request_id' => $requestId,
+                'refund_amount' => $refundAmount,
+                'razorpay_refund_id' => $razorpayRefund['id'] ?? null,
+            ]);
 
             return [
                 'refund_amount' => $refundAmount,
@@ -260,6 +276,15 @@ class OrderReturnService
                 }
             );
 
+            Log::info('Return refund flow: COD refund completed', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'return_request_id' => $requestId,
+                'refund_amount' => $refundAmount,
+                'refund_method' => $refundMethod,
+                'payout_id' => $payout['id'] ?? null,
+            ]);
+
             return [
                 'refund_amount' => $refundAmount,
                 'return_request_id' => $requestId,
@@ -350,6 +375,15 @@ class OrderReturnService
         }
 
         $order->save();
+
+        Log::info('Return refund flow: return request finalized', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'return_request_id' => $requestId,
+            'refund_amount' => $refundAmount,
+            'payment_status' => $order->payment_status,
+            'total_refunded_amount' => $returnRequest['total_refunded_amount'],
+        ]);
     }
 
     /**

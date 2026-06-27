@@ -13,6 +13,7 @@ use DomainException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
@@ -143,6 +144,13 @@ class OrderController extends Controller
         try {
             $order = Order::findOrFail($id);
 
+            Log::info('Return refund flow: admin payout requested', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'payment_method' => $order->payment_method,
+                'return_request_id' => $request->validated('return_request_id'),
+            ]);
+
             if (!$this->orderReturnService->canPayReturnRefund($order)) {
                 return response()->json([
                     'success' => false,
@@ -167,6 +175,14 @@ class OrderController extends Controller
                     . number_format($result['refund_amount'], 2)
                     . ' has been processed successfully';
 
+            Log::info('Return refund flow: admin payout completed', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'refund_amount' => $result['refund_amount'],
+                'return_request_id' => $result['return_request_id'],
+                'payment_method' => $result['payment_method'] ?? $order->payment_method,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => $message,
@@ -184,6 +200,11 @@ class OrderController extends Controller
                 'message' => 'Order not found',
             ], 404);
         } catch (DomainException $e) {
+            Log::warning('Return refund flow: admin payout failed', [
+                'order_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
