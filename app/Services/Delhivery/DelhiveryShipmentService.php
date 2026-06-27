@@ -787,7 +787,7 @@ class DelhiveryShipmentService
      */
     private function mergeIndividualShippingLabels(Collection $shipments, int $labelsPerPage = 1): string
     {
-        $filePaths = [];
+        $binaries = [];
 
         foreach ($shipments as $shipment) {
             $shipment = $this->generateShippingLabel($shipment);
@@ -797,10 +797,18 @@ class DelhiveryShipmentService
                 throw new DomainException("Label PDF file was not found for AWB {$shipment->waybill}");
             }
 
-            $filePaths[] = PublicStorage::absolutePath($storagePath);
+            $binary = PublicStorage::get($storagePath);
+
+            // When packing several labels per page, trim each label to its artwork so
+            // blank areas of the carrier's page don't shrink the label inside its cell.
+            if ($labelsPerPage > 1) {
+                $binary = $this->pdfMerger->cropToContent($binary);
+            }
+
+            $binaries[] = $binary;
         }
 
-        return $this->pdfMerger->merge($filePaths, $labelsPerPage);
+        return $this->pdfMerger->mergeBinaries($binaries, $labelsPerPage);
     }
 
     public function createReversePickup(Order $order): OrderShipment

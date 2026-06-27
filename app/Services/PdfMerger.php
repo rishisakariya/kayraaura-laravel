@@ -13,7 +13,7 @@ class PdfMerger
 
     private const A4_HEIGHT_MM = 297.0;
 
-    private const GRID_MARGIN_MM = 1.0;
+    private const GRID_MARGIN_MM = 4.0;
 
     private const GRID_GUTTER_MM = 2.0;
 
@@ -40,6 +40,53 @@ class PdfMerger
         }
 
         return $this->render($sources, $perPage);
+    }
+
+    /**
+     * Crop a single-page PDF down to the bounding box of its actual content.
+     *
+     * Some carrier labels (e.g. Delhivery's A4 desktop format) place the real
+     * label artwork in just one corner of an otherwise blank page. Packing that
+     * mostly-empty page into a grid makes the label look tiny. This trims the
+     * page to the artwork so it fills its grid cell. If the content box cannot be
+     * detected, the original PDF is returned unchanged.
+     */
+    public function cropToContent(string $pdfBinary): string
+    {
+        if ($pdfBinary === '' || !str_starts_with($pdfBinary, '%PDF')) {
+            return $pdfBinary;
+        }
+
+        $box = $this->detectContentBoxPt($pdfBinary);
+
+        if ($box === null) {
+            return $pdfBinary;
+        }
+
+        [$cx0, $cy0, $cx1, $cy1, $mediaHeight] = $box;
+        $cropWidth = $cx1 - $cx0;
+        $cropHeight = $cy1 - $cy0;
+
+        try {
+            $pdf = new Fpdi('P', 'pt', [$cropWidth, $cropHeight]);
+            $pdf->setSourceFile(StreamReader::createByString($pdfBinary));
+            $template = $pdf->importPage(1);
+            $size = $pdf->getTemplateSize($template);
+
+            $pdf->AddPage('P', [$cropWidth, $cropHeight]);
+
+            // Shift the full page so the detected content box aligns to the page
+            // origin; everything outside the new page is clipped when this page is
+            // later imported as a form XObject during merging.
+            $offsetX = -$cx0;
+            $offsetY = -($mediaHeight - $cy1);
+
+            $pdf->useTemplate($template, $offsetX, $offsetY, $size['width'], $size['height']);
+
+            return $pdf->Output('S');
+        } catch (\Throwable $e) {
+            return $pdfBinary;
+        }
     }
 
     /**
@@ -183,5 +230,145 @@ class PdfMerger
         $rows = (int) ceil($perPage / $columns);
 
         return [$columns, $rows];
+    }
+
+    /**
+     * Detect the bounding box (in PDF points) of the artwork on a label page that
+     * places a single form XObject onto an otherwise blank page.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float, 4: float}|null
+     *         [contentX0, contentY0, contentX1, contentY1, mediaHeight] or null.
+     */
+    private function detectContentBoxPt(string $bytes): ?array
+    {
+        try {
+            if (!preg_match('/\/MediaBox\s*\[\s*([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s*\]/', $bytes, $mb)) {
+                return null;
+            }
+
+            $mediaX0 = (float) $mb[1];
+            $mediaY0 = (float) $mb[2];
+            $mediaX1 = (float) $mb[3];
+            $mediaY1 = (float) $mb[4];
+            $mediaWidth = $mediaX1 - $mediaX0;
+            $mediaHeight = $mediaY1 - $mediaY0;
+
+            if ($mediaWidth <= 0 || $mediaHeight <= 0) {
+                return null;
+            }
+
+            $placement = $this->findSinglePlacement($bytes);
+
+            if ($placement === null) {
+                return null;
+            }
+
+            [$a, $b, $c, $d, $e, $f, $name] = $placement;
+
+            $bbox = $this->findXObjectBBox($bytes, $name);
+
+            if ($bbox === null) {
+                return null;
+            }
+
+            [$bx0, $by0, $bx1, $by1] = $bbox;
+
+            $map = static fn (float $x, float $y): array => [$a * $x + $c * $y + $e, $b * $x + $d * $y + $f];
+
+            $corners = [$map($bx0, $by0), $map($bx1, $by0), $map($bx0, $by1), $map($bx1, $by1)];
+            $xs = array_column($corners, 0);
+            $ys = array_column($corners, 1);
+
+            $cx0 = max($mediaX0, min($xs));
+            $cy0 = max($mediaY0, min($ys));
+            $cx1 = min($mediaX1, max($xs));
+            $cy1 = min($mediaY1, max($ys));
+
+            if (($cx1 - $cx0) < 20 || ($cy1 - $cy0) < 20) {
+                return null;
+            }
+
+            // If the content already fills most of the page there is nothing to trim.
+            if (($cx1 - $cx0) > 0.95 * $mediaWidth && ($cy1 - $cy0) > 0.95 * $mediaHeight) {
+                return null;
+            }
+
+            return [$cx0, $cy0, $cx1, $cy1, $mediaHeight];
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Find a short page-content stream that places exactly one XObject and return
+     * its transform matrix and XObject name.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float, 4: float, 5: float, 6: string}|null
+     */
+    private function findSinglePlacement(string $bytes): ?array
+    {
+        if (!preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $bytes, $streams)) {
+            return null;
+        }
+
+        foreach ($streams[1] as $stream) {
+            $data = @gzuncompress($stream);
+
+            if ($data === false) {
+                $data = @gzinflate($stream);
+            }
+
+            if ($data === false) {
+                $data = $stream;
+            }
+
+            // The page content that positions the label is tiny; the heavy streams
+            // are the artwork XObjects themselves.
+            if (strlen($data) > 4000 || !preg_match('/\bDo\b/', $data)) {
+                continue;
+            }
+
+            if (preg_match(
+                '/([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+cm\s+\/([A-Za-z0-9._\-]+)\s+Do/s',
+                $data,
+                $m
+            )) {
+                return [
+                    (float) $m[1],
+                    (float) $m[2],
+                    (float) $m[3],
+                    (float) $m[4],
+                    (float) $m[5],
+                    (float) $m[6],
+                    $m[7],
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the /BBox of a named form XObject by following its indirect reference.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float}|null
+     */
+    private function findXObjectBBox(string $bytes, string $name): ?array
+    {
+        if (!preg_match('#/' . preg_quote($name, '#') . '\s+(\d+)\s+(\d+)\s+R#', $bytes, $ref)) {
+            return null;
+        }
+
+        $objNumber = $ref[1];
+
+        if (!preg_match('/\b' . $objNumber . '\s+0\s+obj\b(.*?)(?:stream|endobj)/s', $bytes, $obj)) {
+            return null;
+        }
+
+        if (!preg_match('/\/BBox\s*\[\s*([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s*\]/', $obj[1], $bb)) {
+            return null;
+        }
+
+        return [(float) $bb[1], (float) $bb[2], (float) $bb[3], (float) $bb[4]];
     }
 }
