@@ -25,6 +25,13 @@ class CheckoutService
 
     private const GST_RATE = 0.03;
 
+    /**
+     * Test account whose payable total is always forced to ₹1 (e.g. live payment testing).
+     */
+    private const FIXED_TOTAL_TEST_EMAIL = 'ajradadiya129@gmail.com';
+
+    private const FIXED_TOTAL_TEST_AMOUNT = 1.00;
+
     public function buildCheckout(User $user, array $payload, bool $lockProductSizes = false): array
     {
         $address = UserAddress::where('user_id', $user->id)->find($payload['address_id']);
@@ -92,6 +99,10 @@ class CheckoutService
         $totalAmount = $isCod
             ? round($baseTotalAfterFirstOrderDiscount + $codCharge, 2)
             : $baseTotalAfterOnlineDiscount;
+
+        if (strcasecmp((string) $user->email, self::FIXED_TOTAL_TEST_EMAIL) === 0) {
+            $totalAmount = self::FIXED_TOTAL_TEST_AMOUNT;
+        }
 
         return [
             'items_subtotal' => $itemsSubtotal,
