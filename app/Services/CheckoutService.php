@@ -27,11 +27,13 @@ class CheckoutService
     private const GST_RATE = 0.03;
 
     /**
-     * Test account whose payable total is always forced to ₹1 (e.g. live payment testing).
+     * Test accounts whose payable total is always forced to a fixed amount (e.g. live payment testing).
+     * Email (lowercase) => fixed total amount in ₹.
      */
-    private const FIXED_TOTAL_TEST_EMAIL = 'ajradadiya129@gmail.com';
-
-    private const FIXED_TOTAL_TEST_AMOUNT = 2.00;
+    private const FIXED_TOTAL_TEST_ACCOUNTS = [
+        'ajradadiya129@gmail.com' => 2.00,
+        'rishi.sakriya@gmail.com' => 2.00,
+    ];
 
     public function buildCheckout(User $user, array $payload, bool $lockProductSizes = false): array
     {
@@ -101,7 +103,9 @@ class CheckoutService
             ? round($baseTotalAfterFirstOrderDiscount + $codCharge, 2)
             : $baseTotalAfterOnlineDiscount;
 
-        if (strcasecmp((string) $user->email, self::FIXED_TOTAL_TEST_EMAIL) === 0) {
+        $fixedTestTotal = self::FIXED_TOTAL_TEST_ACCOUNTS[strtolower((string) $user->email)] ?? null;
+
+        if ($fixedTestTotal !== null) {
             $itemsSubtotal = 0.0;
             $buyTwoGetOneDiscountAmount = 0.0;
             $firstOrderDiscountAmount = 0.0;
@@ -110,7 +114,7 @@ class CheckoutService
             $taxAmount = 0.0;
             $shippingAmount = 0.0;
             $codCharge = 0.0;
-            $totalAmount = self::FIXED_TOTAL_TEST_AMOUNT;
+            $totalAmount = (float) $fixedTestTotal;
         }
 
         return [
