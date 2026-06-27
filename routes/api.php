@@ -15,6 +15,7 @@ use App\Http\Controllers\API\WishlistController;
 use App\Http\Controllers\API\BannerController;
 use App\Http\Controllers\API\OrderShipmentController;
 use App\Http\Controllers\API\DelhiveryWebhookController;
+use App\Http\Controllers\API\WhatsAppWebhookController;
 use App\Http\Controllers\API\CustomerReviewController;
 use App\Http\Controllers\API\WebSettingController;
 use App\Http\Controllers\API\ScratchCardController;
@@ -119,3 +120,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::post('/razorpay/webhook', [RazorpayController::class, 'webhook']);
 Route::post('/delhivery/webhook', DelhiveryWebhookController::class);
+
+// WhatsApp Cloud API webhook: GET handshake for Meta verification, POST for incoming events
+Route::get('/whatsapp/webhook', [WhatsAppWebhookController::class, 'verify']);
+Route::post('/whatsapp/webhook', [WhatsAppWebhookController::class, 'handle']);
