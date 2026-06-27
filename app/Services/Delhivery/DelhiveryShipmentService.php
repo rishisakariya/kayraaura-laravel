@@ -490,7 +490,7 @@ class DelhiveryShipmentService
                 throw new DomainException('Delhivery tracking response did not contain shipment status');
             }
 
-            $normalizedStatus = $this->normalizeStatus($rawStatus);
+            $normalizedStatus = $this->normalizeStatus($rawStatus, $this->extractStatusType($payload));
 
             $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYNC)->fill([
                 'shipment_status' => $normalizedStatus,
@@ -558,7 +558,7 @@ class DelhiveryShipmentService
                 throw new DomainException('Delhivery reverse tracking response did not contain shipment status');
             }
 
-            $normalizedStatus = $this->normalizeStatus($rawStatus);
+            $normalizedStatus = $this->normalizeStatus($rawStatus, $this->extractStatusType($payload));
 
             $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYNC)->fill([
                 'reverse_status' => $normalizedStatus,
@@ -918,7 +918,7 @@ class DelhiveryShipmentService
             ?? Arr::get($payload, 'Shipment.Status.Status')
             ?? null;
 
-        $normalizedStatus = $this->normalizeStatus($rawStatus);
+        $normalizedStatus = $this->normalizeStatus($rawStatus, $this->extractStatusType($payload));
 
         if ($shipment->reverse_waybill === $waybill) {
             $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_WEBHOOK)->fill([
@@ -1346,6 +1346,18 @@ class DelhiveryShipmentService
             ?? null;
     }
 
+    private function extractStatusType(array $payload): ?string
+    {
+        return Arr::get($payload, 'packages.0.status_type')
+            ?? Arr::get($payload, 'ShipmentData.0.Shipment.Status.StatusType')
+            ?? Arr::get($payload, 'ShipmentData.0.Status.StatusType')
+            ?? Arr::get($payload, 'Status.StatusType')
+            ?? Arr::get($payload, 'Shipment.Status.StatusType')
+            ?? $payload['status_type']
+            ?? $payload['StatusType']
+            ?? null;
+    }
+
     private function extractStatusLocation(array $payload): ?string
     {
         return Arr::get($payload, 'ShipmentData.0.Shipment.Status.StatusLocation')
@@ -1389,16 +1401,29 @@ class DelhiveryShipmentService
         })->values()->all();
     }
 
-    private function normalizeStatus(?string $rawStatus): string
+    private function normalizeStatus(?string $rawStatus, ?string $statusType = null): string
     {
-        $status = strtolower((string) $rawStatus);
+        $status = strtolower(trim((string) $rawStatus));
+        $type = strtolower(trim((string) $statusType));
+
+        // Delhivery sometimes signals the real disposition (e.g. cancellation/RTO)
+        // in StatusType rather than the human-readable Status text, so consider both
+        // when detecting terminal states.
+        $combined = trim($status . ' ' . $type);
 
         return match (true) {
-            str_contains($status, 'delivered') => OrderShipment::STATUS_DELIVERED,
+            str_contains($combined, 'delivered') => OrderShipment::STATUS_DELIVERED,
             str_contains($status, 'out for delivery') || str_contains($status, 'dispatched') => OrderShipment::STATUS_OUT_FOR_DELIVERY,
-            str_contains($status, 'rto') || str_contains($status, 'dto') || str_contains($status, 'return') => OrderShipment::STATUS_RTO,
-            str_contains($status, 'cancel') => OrderShipment::STATUS_CANCELLED,
-            str_contains($status, 'lost') => OrderShipment::STATUS_FAILED,
+            str_contains($combined, 'rto') || str_contains($combined, 'dto') || str_contains($status, 'return') => OrderShipment::STATUS_RTO,
+            str_contains($combined, 'cancel') => OrderShipment::STATUS_CANCELLED,
+            str_contains($combined, 'lost') => OrderShipment::STATUS_FAILED,
+            // "Not Picked" / "Pickup Failed" mean the parcel was NOT collected. This must
+            // be checked before the generic "picked" rule below, otherwise the substring
+            // "picked" inside "not picked" wrongly classifies it as picked up.
+            str_contains($status, 'not picked')
+                || str_contains($status, 'pickup failed')
+                || str_contains($status, 'pickup pending')
+                || str_contains($status, 'not picked up') => OrderShipment::STATUS_PICKUP_PENDING,
             str_contains($status, 'picked') => OrderShipment::STATUS_PICKED_UP,
             str_contains($status, 'pickup scheduled') => OrderShipment::STATUS_PICKUP_SCHEDULED,
             str_contains($status, 'pickup') => OrderShipment::STATUS_PICKUP_PENDING,
