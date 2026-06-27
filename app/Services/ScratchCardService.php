@@ -68,7 +68,16 @@ class ScratchCardService
         }
 
         if ($coupon->is_redeemed) {
-            throw new DomainException('This scratch card coupon has already been redeemed.');
+            // Self-heal: if the coupon was redeemed for an order that has since been
+            // cancelled, free it up so the customer can use it again.
+            $redeemedOrder = $coupon->order_id ? Order::find($coupon->order_id) : null;
+
+            if ($redeemedOrder && $redeemedOrder->status === 'cancelled') {
+                $this->releaseForOrder($redeemedOrder);
+                $coupon->refresh();
+            } else {
+                throw new DomainException('This scratch card coupon has already been redeemed.');
+            }
         }
 
         $isUsedOnActiveOrder = $this->ordersReservingCoupon($user)
