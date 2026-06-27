@@ -701,9 +701,11 @@ class DelhiveryShipmentService
 
     /**
      * @param  iterable<int, OrderShipment>  $shipments
+     * @param  int  $labelsPerPage  How many labels to place on each output page (1 = one per page).
      */
-    public function generateMergedShippingLabels(iterable $shipments): string
+    public function generateMergedShippingLabels(iterable $shipments, int $labelsPerPage = 1): string
     {
+        $labelsPerPage = max(1, $labelsPerPage);
         $shipments = collect($shipments)->values();
 
         if ($shipments->isEmpty()) {
@@ -724,7 +726,7 @@ class DelhiveryShipmentService
             throw new DomainException('Cannot generate labels for more than 30 shipments at once');
         }
 
-        if ($shipments->count() === 1) {
+        if ($shipments->count() === 1 && $labelsPerPage === 1) {
             $shipment = $this->generateShippingLabel($shipments->first());
             $storagePath = PublicStorage::diskPath($shipment->shipping_label_url);
 
@@ -754,7 +756,7 @@ class DelhiveryShipmentService
                     ->map(fn (string $link) => $this->client->downloadBinary($link))
                     ->all();
 
-                return $this->pdfMerger->mergeBinaries($pdfBinaries);
+                return $this->pdfMerger->mergeBinaries($pdfBinaries, $labelsPerPage);
             }
 
             Log::info('Delhivery bulk label did not return a link for every waybill, merging individually', [
@@ -769,13 +771,13 @@ class DelhiveryShipmentService
             ]);
         }
 
-        return $this->mergeIndividualShippingLabels($shipments);
+        return $this->mergeIndividualShippingLabels($shipments, $labelsPerPage);
     }
 
     /**
      * @param  Collection<int, OrderShipment>  $shipments
      */
-    private function mergeIndividualShippingLabels(Collection $shipments): string
+    private function mergeIndividualShippingLabels(Collection $shipments, int $labelsPerPage = 1): string
     {
         $filePaths = [];
 
@@ -790,7 +792,7 @@ class DelhiveryShipmentService
             $filePaths[] = PublicStorage::absolutePath($storagePath);
         }
 
-        return $this->pdfMerger->merge($filePaths);
+        return $this->pdfMerger->merge($filePaths, $labelsPerPage);
     }
 
     public function createReversePickup(Order $order): OrderShipment

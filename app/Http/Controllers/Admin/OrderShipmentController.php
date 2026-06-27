@@ -253,6 +253,8 @@ class OrderShipmentController extends Controller
             'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
         ]);
 
+        $labelsPerPage = 4;
+
         $orders = Order::with('shipment')
             ->whereIn('id', $validated['order_ids'])
             ->get()
@@ -316,7 +318,8 @@ class OrderShipmentController extends Controller
 
         try {
             $pdfBinary = $this->delhiveryShipmentService->generateMergedShippingLabels(
-                $orderedOrders->pluck('shipment')
+                $orderedOrders->pluck('shipment'),
+                $labelsPerPage
             );
         } catch (DomainException $e) {
             return response()->json([
