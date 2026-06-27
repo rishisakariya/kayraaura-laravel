@@ -67,13 +67,17 @@ class PdfMerger
         $cropWidth = $cx1 - $cx0;
         $cropHeight = $cy1 - $cy0;
 
+        // FPDF reorders the page size to match the orientation, so pick the
+        // orientation that matches the crop box to avoid the page being swapped.
+        $orientation = $cropWidth > $cropHeight ? 'L' : 'P';
+
         try {
-            $pdf = new Fpdi('P', 'pt', [$cropWidth, $cropHeight]);
+            $pdf = new Fpdi($orientation, 'pt', [$cropWidth, $cropHeight]);
             $pdf->setSourceFile(StreamReader::createByString($pdfBinary));
             $template = $pdf->importPage(1);
             $size = $pdf->getTemplateSize($template);
 
-            $pdf->AddPage('P', [$cropWidth, $cropHeight]);
+            $pdf->AddPage($orientation, [$cropWidth, $cropHeight]);
 
             // Shift the full page so the detected content box aligns to the page
             // origin; everything outside the new page is clipped when this page is
@@ -287,13 +291,43 @@ class PdfMerger
 
             [$a, $b, $c, $d, $e, $f, $name] = $placement;
 
-            $bbox = $this->findXObjectBBox($bytes, $name);
+            $xobject = $this->findXObject($bytes, $name);
 
-            if ($bbox === null) {
+            if ($xobject === null) {
                 return null;
             }
 
+            [$bbox, $content] = $xobject;
             [$bx0, $by0, $bx1, $by1] = $bbox;
+
+            // Try to trim to the actual visible ink (ignoring the blank/white parts of
+            // the label) so the artwork fills its grid cell. Falls back to the full
+            // XObject box if detection looks unreliable, so content is never cut.
+            $ink = $this->computeInkBox($content);
+
+            if ($ink !== null) {
+                // A little padding so thin strokes / glyph edges are never clipped.
+                $pad = 8.0;
+                $ix0 = max($bx0, $ink[0] - $pad);
+                $iy0 = max($by0, $ink[1] - $pad);
+                $ix1 = min($bx1, $ink[2] + $pad);
+                $iy1 = min($by1, $ink[3] + $pad);
+
+                $boxWidth = $bx1 - $bx0;
+                $boxHeight = $by1 - $by0;
+
+                if ($boxWidth > 0 && $boxHeight > 0
+                    && ($ix1 - $ix0) >= 0.25 * $boxWidth
+                    && ($iy1 - $iy0) >= 0.25 * $boxHeight
+                    && ($ix1 - $ix0) > 0
+                    && ($iy1 - $iy0) > 0
+                ) {
+                    $bx0 = $ix0;
+                    $by0 = $iy0;
+                    $bx1 = $ix1;
+                    $by1 = $iy1;
+                }
+            }
 
             $map = static fn (float $x, float $y): array => [$a * $x + $c * $y + $e, $b * $x + $d * $y + $f];
 
@@ -371,11 +405,12 @@ class PdfMerger
     }
 
     /**
-     * Resolve the /BBox of a named form XObject by following its indirect reference.
+     * Resolve a named form XObject (its /BBox and decompressed content stream) by
+     * following its indirect reference.
      *
-     * @return array{0: float, 1: float, 2: float, 3: float}|null
+     * @return array{0: array{0: float, 1: float, 2: float, 3: float}, 1: string}|null
      */
-    private function findXObjectBBox(string $bytes, string $name): ?array
+    private function findXObject(string $bytes, string $name): ?array
     {
         if (!preg_match('#/' . preg_quote($name, '#') . '\s+(\d+)\s+(\d+)\s+R#', $bytes, $ref)) {
             return null;
@@ -383,14 +418,251 @@ class PdfMerger
 
         $objNumber = $ref[1];
 
-        if (!preg_match('/\b' . $objNumber . '\s+0\s+obj\b(.*?)(?:stream|endobj)/s', $bytes, $obj)) {
+        if (!preg_match(
+            '/\b' . $objNumber . '\s+0\s+obj\b(.*?)stream\r?\n(.*?)\r?\nendstream/s',
+            $bytes,
+            $obj
+        )) {
             return null;
         }
 
-        if (!preg_match('/\/BBox\s*\[\s*([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s*\]/', $obj[1], $bb)) {
+        $dict = $obj[1];
+
+        if (!preg_match('/\/BBox\s*\[\s*([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s+([\-\d.]+)\s*\]/', $dict, $bb)) {
             return null;
         }
 
-        return [(float) $bb[1], (float) $bb[2], (float) $bb[3], (float) $bb[4]];
+        $content = @gzuncompress($obj[2]);
+
+        if ($content === false) {
+            $content = @gzinflate($obj[2]);
+        }
+
+        if ($content === false) {
+            $content = $obj[2];
+        }
+
+        return [
+            [(float) $bb[1], (float) $bb[2], (float) $bb[3], (float) $bb[4]],
+            $content,
+        ];
+    }
+
+    /**
+     * Interpret a content stream's path/image operators (with a CTM stack) to find
+     * the bounding box of the visible ink, ignoring clip rectangles and white fills.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float}|null
+     */
+    private function computeInkBox(string $content): ?array
+    {
+        if ($content === '') {
+            return null;
+        }
+
+        $ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        $stack = [];
+        $operands = [];
+        $path = [];
+        $fill = [0.0, 0.0, 0.0];
+        $stroke = [0.0, 0.0, 0.0];
+
+        $minX = INF;
+        $minY = INF;
+        $maxX = -INF;
+        $maxY = -INF;
+
+        $apply = static fn (array $m, float $x, float $y): array => [
+            $m[0] * $x + $m[2] * $y + $m[4],
+            $m[1] * $x + $m[3] * $y + $m[5],
+        ];
+
+        $commit = function () use (&$path, &$minX, &$minY, &$maxX, &$maxY): void {
+            foreach ($path as $p) {
+                if ($p[0] < $minX) {
+                    $minX = $p[0];
+                }
+                if ($p[1] < $minY) {
+                    $minY = $p[1];
+                }
+                if ($p[0] > $maxX) {
+                    $maxX = $p[0];
+                }
+                if ($p[1] > $maxY) {
+                    $maxY = $p[1];
+                }
+            }
+        };
+
+        $isWhite = static fn (array $c): bool => $c[0] > 0.95 && $c[1] > 0.95 && $c[2] > 0.95;
+
+        // Replace string literals with a neutral token so parentheses don't break tokenizing.
+        $clean = preg_replace('/\((?:[^()\\\\]|\\\\.)*\)/', ' 0 ', $content);
+        $tokens = preg_split('/\s+/', (string) $clean);
+
+        foreach ($tokens as $t) {
+            if ($t === '') {
+                continue;
+            }
+
+            if (is_numeric($t)) {
+                $operands[] = (float) $t;
+
+                continue;
+            }
+
+            switch ($t) {
+                case 'q':
+                    $stack[] = $ctm;
+                    break;
+                case 'Q':
+                    if ($stack) {
+                        $ctm = array_pop($stack);
+                    }
+                    break;
+                case 'cm':
+                    if (count($operands) >= 6) {
+                        $m = array_slice($operands, -6);
+                        $ctm = [
+                            $ctm[0] * $m[0] + $ctm[2] * $m[1],
+                            $ctm[1] * $m[0] + $ctm[3] * $m[1],
+                            $ctm[0] * $m[2] + $ctm[2] * $m[3],
+                            $ctm[1] * $m[2] + $ctm[3] * $m[3],
+                            $ctm[0] * $m[4] + $ctm[2] * $m[5] + $ctm[4],
+                            $ctm[1] * $m[4] + $ctm[3] * $m[5] + $ctm[5],
+                        ];
+                    }
+                    $operands = [];
+                    break;
+                case 'rg':
+                    if (count($operands) >= 3) {
+                        $fill = array_slice($operands, -3);
+                    }
+                    $operands = [];
+                    break;
+                case 'g':
+                    if (count($operands) >= 1) {
+                        $v = end($operands);
+                        $fill = [$v, $v, $v];
+                    }
+                    $operands = [];
+                    break;
+                case 'k':
+                    if (count($operands) >= 4) {
+                        $a = array_slice($operands, -4);
+                        $kk = $a[3];
+                        $fill = [(1 - $a[0]) * (1 - $kk), (1 - $a[1]) * (1 - $kk), (1 - $a[2]) * (1 - $kk)];
+                    }
+                    $operands = [];
+                    break;
+                case 'RG':
+                    if (count($operands) >= 3) {
+                        $stroke = array_slice($operands, -3);
+                    }
+                    $operands = [];
+                    break;
+                case 'G':
+                    if (count($operands) >= 1) {
+                        $v = end($operands);
+                        $stroke = [$v, $v, $v];
+                    }
+                    $operands = [];
+                    break;
+                case 're':
+                    if (count($operands) >= 4) {
+                        [$x, $y, $w, $h] = array_slice($operands, -4);
+                        foreach ([[$x, $y], [$x + $w, $y], [$x, $y + $h], [$x + $w, $y + $h]] as $p) {
+                            $path[] = $apply($ctm, $p[0], $p[1]);
+                        }
+                    }
+                    $operands = [];
+                    break;
+                case 'm':
+                case 'l':
+                    if (count($operands) >= 2) {
+                        [$x, $y] = array_slice($operands, -2);
+                        $path[] = $apply($ctm, $x, $y);
+                    }
+                    $operands = [];
+                    break;
+                case 'c':
+                    if (count($operands) >= 6) {
+                        $a = array_slice($operands, -6);
+                        for ($j = 0; $j < 6; $j += 2) {
+                            $path[] = $apply($ctm, $a[$j], $a[$j + 1]);
+                        }
+                    }
+                    $operands = [];
+                    break;
+                case 'v':
+                case 'y':
+                    if (count($operands) >= 4) {
+                        $a = array_slice($operands, -4);
+                        for ($j = 0; $j < 4; $j += 2) {
+                            $path[] = $apply($ctm, $a[$j], $a[$j + 1]);
+                        }
+                    }
+                    $operands = [];
+                    break;
+                case 'f':
+                case 'F':
+                case 'f*':
+                    if (!$isWhite($fill)) {
+                        $commit();
+                    }
+                    $path = [];
+                    $operands = [];
+                    break;
+                case 'S':
+                case 's':
+                    if (!$isWhite($stroke)) {
+                        $commit();
+                    }
+                    $path = [];
+                    $operands = [];
+                    break;
+                case 'B':
+                case 'B*':
+                case 'b':
+                case 'b*':
+                    $commit();
+                    $path = [];
+                    $operands = [];
+                    break;
+                case 'W':
+                case 'W*':
+                    // Clipping path: keep points for the following painting/no-op but do
+                    // not treat the clip region as ink.
+                    break;
+                case 'n':
+                    $path = [];
+                    $operands = [];
+                    break;
+                case 'Do':
+                    foreach ([[0, 0], [1, 0], [0, 1], [1, 1]] as $p) {
+                        $path[] = $apply($ctm, $p[0], $p[1]);
+                    }
+                    $commit();
+                    $path = [];
+                    $operands = [];
+                    break;
+                case 'Tj':
+                case 'TJ':
+                case "'":
+                case '"':
+                    $commit();
+                    $operands = [];
+                    break;
+                default:
+                    $operands = [];
+                    break;
+            }
+        }
+
+        if (!is_finite($minX) || !is_finite($maxX) || $maxX <= $minX || $maxY <= $minY) {
+            return null;
+        }
+
+        return [$minX, $minY, $maxX, $maxY];
     }
 }
