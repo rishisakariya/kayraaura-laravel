@@ -655,12 +655,23 @@ class CheckoutService
             return;
         }
 
-        $this->scratchCardService->redeem(
-            $user,
-            $order->scratch_coupon_code,
-            $order->id,
-            $order->discount_amount !== null ? (float) $order->discount_amount : null
-        );
+        try {
+            $this->scratchCardService->redeem(
+                $user,
+                $order->scratch_coupon_code,
+                $order->id,
+                $order->discount_amount !== null ? (float) $order->discount_amount : null
+            );
+        } catch (DomainException $e) {
+            // A coupon may already be redeemed (e.g. applied to another order that was
+            // paid first). Never let this block a successful payment from completing.
+            Log::warning('Payment flow: scratch coupon redemption skipped for paid order', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'scratch_coupon_code' => $order->scratch_coupon_code,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function markOrderPaymentFailed(Order $order, ?string $paymentId = null): Order

@@ -71,11 +71,8 @@ class ScratchCardService
             throw new DomainException('This scratch card coupon has already been redeemed.');
         }
 
-        $isUsedOnActiveOrder = Order::query()
-            ->where('user_id', $user->id)
+        $isUsedOnActiveOrder = $this->ordersReservingCoupon($user)
             ->where('scratch_coupon_code', $coupon->code)
-            ->where('status', '!=', 'cancelled')
-            ->whereNotIn('payment_status', ['failed'])
             ->exists();
 
         if ($isUsedOnActiveOrder) {
@@ -113,11 +110,8 @@ class ScratchCardService
 
     public function findActiveCoupon(User $user): ?ScratchCardCoupon
     {
-        $codesOnActiveOrders = Order::query()
-            ->where('user_id', $user->id)
+        $codesOnActiveOrders = $this->ordersReservingCoupon($user)
             ->whereNotNull('scratch_coupon_code')
-            ->where('status', '!=', 'cancelled')
-            ->whereNotIn('payment_status', ['failed'])
             ->pluck('scratch_coupon_code');
 
         return ScratchCardCoupon::query()
@@ -129,6 +123,26 @@ class ScratchCardService
             )
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * Orders that genuinely reserve a scratch coupon (and so should hide it / block re-use).
+     *
+     * Online orders awaiting payment do NOT reserve the coupon: the coupon is only
+     * consumed when the payment succeeds (the order is redeemed at that point). This
+     * keeps the same coupon available to the customer while an online payment is still
+     * pending or has failed.
+     */
+    private function ordersReservingCoupon(User $user)
+    {
+        return Order::query()
+            ->where('user_id', $user->id)
+            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('payment_status', ['failed'])
+            ->where(function ($query) {
+                $query->where('payment_method', '!=', 'online')
+                    ->orWhere('payment_status', '!=', 'pending');
+            });
     }
 
     public function applyDiscount(array $checkout, ScratchCardCoupon $coupon): array

@@ -98,22 +98,27 @@ class OrderController extends Controller
 
                 $order = $this->checkoutService->createOrder($user, $payload, $checkout);
 
-                if ($coupon) {
-                    $this->scratchCardService->redeem(
-                        $user,
-                        $coupon->code,
-                        $order->id,
-                        $checkout['discount_amount'] ?? null
-                    );
-                }
-
                 if ($payload['payment_method'] === 'cod') {
+                    // COD orders are confirmed at placement, so redeem the coupon immediately.
+                    if ($coupon) {
+                        $this->scratchCardService->redeem(
+                            $user,
+                            $coupon->code,
+                            $order->id,
+                            $checkout['discount_amount'] ?? null
+                        );
+                    }
+
                     $this->checkoutService->deductStockForOrder($order);
                     $this->checkoutService->clearCartIfNeeded($order);
 
                     return $order;
                 }
 
+                // Online orders are created with a pending payment. The coupon code is
+                // stored on the order but only redeemed once the payment succeeds
+                // (see CheckoutService::markOrderPaid). If the payment never succeeds the
+                // coupon stays available for the customer to use again.
                 $razorpayCheckout = $this->checkoutService->createRazorpayOrder($order);
 
                 return $order;
