@@ -737,6 +737,14 @@ class DelhiveryShipmentService
             return PublicStorage::get($storagePath);
         }
 
+        // For multi-up grids we must use the per-waybill (4R) labels, which are tightly
+        // cropped to the label artwork. The bulk packing-slip links can come back on a
+        // larger page with the label only in the top portion, which scales down to a tiny
+        // label with lots of empty space when packed into a grid cell.
+        if ($labelsPerPage > 1) {
+            return $this->mergeIndividualShippingLabels($shipments, $labelsPerPage);
+        }
+
         $waybills = $shipments->pluck('waybill')->map(fn ($waybill) => (string) $waybill)->all();
 
         try {

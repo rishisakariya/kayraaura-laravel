@@ -13,9 +13,9 @@ class PdfMerger
 
     private const A4_HEIGHT_MM = 297.0;
 
-    private const GRID_MARGIN_MM = 5.0;
+    private const GRID_MARGIN_MM = 4.0;
 
-    private const GRID_GUTTER_MM = 3.0;
+    private const GRID_GUTTER_MM = 2.0;
 
     /**
      * Merge PDF files into a single PDF.
