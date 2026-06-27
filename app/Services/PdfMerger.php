@@ -13,7 +13,7 @@ class PdfMerger
 
     private const A4_HEIGHT_MM = 297.0;
 
-    private const GRID_MARGIN_MM = 4.0;
+    private const GRID_MARGIN_MM = 1.0;
 
     private const GRID_GUTTER_MM = 2.0;
 
