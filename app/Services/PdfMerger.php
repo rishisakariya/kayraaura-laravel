@@ -149,54 +149,70 @@ class PdfMerger
     }
 
     /**
-     * Pack several source pages onto each A4 page in a centered grid.
+     * Pack several source pages onto each A4 page, choosing a layout per page that
+     * maximises label size for the number of labels actually on that page (so a
+     * page with 2 labels fills the sheet instead of leaving empty cells).
      *
      * @param  list<string|StreamReader>  $sources
      */
     private function renderGrid(array $sources, int $perPage): string
     {
-        [$columns, $rows] = $this->gridDimensions($perPage);
-
-        $usableWidth = self::A4_WIDTH_MM - (2 * self::GRID_MARGIN_MM);
-        $usableHeight = self::A4_HEIGHT_MM - (2 * self::GRID_MARGIN_MM);
-
-        $cellWidth = ($usableWidth - (($columns - 1) * self::GRID_GUTTER_MM)) / $columns;
-        $cellHeight = ($usableHeight - (($rows - 1) * self::GRID_GUTTER_MM)) / $rows;
+        $perPage = max(1, $perPage);
 
         $pdf = new Fpdi();
-        $slot = 0;
+
+        // Import every page up front so we know how many labels there are and can
+        // pick the best layout for each output page.
+        $labels = [];
 
         foreach ($sources as $source) {
             $pageCount = $pdf->setSourceFile($source);
 
             for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
-                $positionOnPage = $slot % $perPage;
-
-                if ($positionOnPage === 0) {
-                    $pdf->AddPage('P', [self::A4_WIDTH_MM, self::A4_HEIGHT_MM]);
-                }
-
-                $column = $positionOnPage % $columns;
-                $row = intdiv($positionOnPage, $columns);
-
                 $template = $pdf->importPage($pageNumber);
                 $size = $pdf->getTemplateSize($template);
 
-                // Scale the label to fit its cell while preserving aspect ratio.
-                $scale = min($cellWidth / $size['width'], $cellHeight / $size['height']);
-                $drawWidth = $size['width'] * $scale;
-                $drawHeight = $size['height'] * $scale;
+                $labels[] = [
+                    'template' => $template,
+                    'width' => $size['width'],
+                    'height' => $size['height'],
+                ];
+            }
+        }
+
+        if ($labels === []) {
+            throw new DomainException('No label pages were found for merging');
+        }
+
+        $labelAspect = $labels[0]['width'] / max(0.01, $labels[0]['height']);
+
+        $usableWidth = self::A4_WIDTH_MM - (2 * self::GRID_MARGIN_MM);
+        $usableHeight = self::A4_HEIGHT_MM - (2 * self::GRID_MARGIN_MM);
+
+        foreach (array_chunk($labels, $perPage) as $pageLabels) {
+            $count = count($pageLabels);
+            [$columns, $rows] = $this->bestLayout($count, $labelAspect, $usableWidth, $usableHeight);
+
+            $cellWidth = ($usableWidth - (($columns - 1) * self::GRID_GUTTER_MM)) / $columns;
+            $cellHeight = ($usableHeight - (($rows - 1) * self::GRID_GUTTER_MM)) / $rows;
+
+            $pdf->AddPage('P', [self::A4_WIDTH_MM, self::A4_HEIGHT_MM]);
+
+            foreach ($pageLabels as $index => $label) {
+                $column = $index % $columns;
+                $row = intdiv($index, $columns);
+
+                $scale = min($cellWidth / $label['width'], $cellHeight / $label['height']);
+                $drawWidth = $label['width'] * $scale;
+                $drawHeight = $label['height'] * $scale;
 
                 $cellX = self::GRID_MARGIN_MM + ($column * ($cellWidth + self::GRID_GUTTER_MM));
                 $cellY = self::GRID_MARGIN_MM + ($row * ($cellHeight + self::GRID_GUTTER_MM));
 
-                // Center the label within its cell.
                 $x = $cellX + (($cellWidth - $drawWidth) / 2);
                 $y = $cellY + (($cellHeight - $drawHeight) / 2);
 
-                $pdf->useTemplate($template, $x, $y, $drawWidth, $drawHeight);
-
-                $slot++;
+                $pdf->useTemplate($label['template'], $x, $y, $drawWidth, $drawHeight);
             }
         }
 
@@ -204,32 +220,38 @@ class PdfMerger
     }
 
     /**
-     * Work out a sensible columns x rows grid for the requested labels per page.
+     * Choose the columns x rows arrangement that makes each label as large as
+     * possible for the given count and label aspect ratio.
      *
      * @return array{0: int, 1: int}
      */
-    private function gridDimensions(int $perPage): array
+    private function bestLayout(int $count, float $labelAspect, float $usableWidth, float $usableHeight): array
     {
-        return match ($perPage) {
-            2 => [1, 2],
-            3 => [1, 3],
-            4 => [2, 2],
-            6 => [2, 3],
-            8 => [2, 4],
-            9 => [3, 3],
-            default => $this->squareishGrid($perPage),
-        };
-    }
+        $count = max(1, $count);
+        $best = [1, $count];
+        $bestArea = -1.0;
 
-    /**
-     * @return array{0: int, 1: int}
-     */
-    private function squareishGrid(int $perPage): array
-    {
-        $columns = (int) ceil(sqrt($perPage));
-        $rows = (int) ceil($perPage / $columns);
+        for ($columns = 1; $columns <= $count; $columns++) {
+            $rows = (int) ceil($count / $columns);
 
-        return [$columns, $rows];
+            $cellWidth = ($usableWidth - (($columns - 1) * self::GRID_GUTTER_MM)) / $columns;
+            $cellHeight = ($usableHeight - (($rows - 1) * self::GRID_GUTTER_MM)) / $rows;
+
+            if ($cellWidth <= 0 || $cellHeight <= 0) {
+                continue;
+            }
+
+            // Largest label (aspect-preserving) that fits this cell.
+            $scale = min($cellWidth / $labelAspect, $cellHeight);
+            $area = ($labelAspect * $scale) * $scale;
+
+            if ($area > $bestArea) {
+                $bestArea = $area;
+                $best = [$columns, $rows];
+            }
+        }
+
+        return $best;
     }
 
     /**
