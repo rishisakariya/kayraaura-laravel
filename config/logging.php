@@ -54,7 +54,7 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 
@@ -71,12 +71,13 @@ return [
         | every queued Job and every scheduled (cron) command.
         |
         | It is a "stack" so each message is written to BOTH a dedicated
-        | rotating file (storage/logs/thirdparty-YYYY-MM-DD.log) AND the
-        | normal application log, so nothing that used to be logged is lost.
+        | day-wise file (storage/logs/thirdparty-YYYY-MM-DD.log) AND the
+        | normal day-wise application log, so nothing that used to be
+        | logged is lost. A brand new file is created automatically each day.
         */
         'thirdparty' => [
             'driver' => 'stack',
-            'channels' => ['thirdparty_file', 'single'],
+            'channels' => ['thirdparty_file', 'daily'],
             'ignore_exceptions' => false,
         ],
 
@@ -92,7 +93,7 @@ return [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
-            'days' => env('LOG_DAILY_DAYS', 14),
+            'days' => env('LOG_DAILY_DAYS', 30),
             'replace_placeholders' => true,
         ],
 
