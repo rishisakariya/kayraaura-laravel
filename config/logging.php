@@ -83,7 +83,7 @@ return [
 
         'thirdparty_file' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/thirdparty.log'),
+            'path' => env('LOG_THIRDPARTY_PATH', storage_path('logs/thirdparty.log')),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_THIRDPARTY_DAYS', 30),
             'replace_placeholders' => true,
@@ -91,7 +91,7 @@ return [
 
         'daily' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/laravel.log'),
+            'path' => env('LOG_DAILY_PATH', storage_path('logs/laravel.log')),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 30),
             'replace_placeholders' => true,
