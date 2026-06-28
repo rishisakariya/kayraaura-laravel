@@ -7,6 +7,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ShiprocketClient
 {
@@ -16,6 +17,10 @@ class ShiprocketClient
 
     public function login(): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: login requested', [
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -54,6 +59,11 @@ class ShiprocketClient
 
     public function createAdhocOrder(array $payload): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: create adhoc order requested', [
+            'order_reference' => $payload['order_id'] ?? null,
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -72,6 +82,11 @@ class ShiprocketClient
 
     public function createReturnOrder(array $payload): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: create return order requested', [
+            'order_reference' => $payload['order_id'] ?? null,
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -90,6 +105,13 @@ class ShiprocketClient
 
     public function assignAwb(int $shipmentId, ?int $courierId = null, bool $isReturn = false): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: assign AWB requested', [
+            'shipment_id' => $shipmentId,
+            'courier_id' => $courierId,
+            'is_return' => $isReturn,
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             $awb = ($isReturn ? 'RMOCK' : 'MOCK') . now()->format('YmdHis');
 
@@ -119,6 +141,11 @@ class ShiprocketClient
 
     public function generatePickup(int $shipmentId): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: generate pickup requested', [
+            'shipment_id' => $shipmentId,
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -140,6 +167,11 @@ class ShiprocketClient
 
     public function generateManifest(array $shipmentIds): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: generate manifest requested', [
+            'shipment_ids' => array_values($shipmentIds),
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -159,6 +191,11 @@ class ShiprocketClient
 
     public function generateLabel(array $shipmentIds): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: generate label requested', [
+            'shipment_ids' => array_values($shipmentIds),
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -178,6 +215,11 @@ class ShiprocketClient
 
     public function trackAwb(string $awbCode): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: track AWB requested', [
+            'awb' => $awbCode,
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -208,6 +250,11 @@ class ShiprocketClient
 
     public function cancelOrder(string $srOrderId): array
     {
+        Log::channel('thirdparty')->info('Shiprocket API: cancel order requested', [
+            'sr_order_id' => $srOrderId,
+            'mock' => $this->mockEnabled(),
+        ]);
+
         if ($this->mockEnabled()) {
             return [
                 'mock' => true,
@@ -268,8 +315,19 @@ class ShiprocketClient
                 ?? Arr::get($payload, 'errors.0.message')
                 ?? $defaultMessage;
 
+            Log::channel('thirdparty')->error('Shiprocket API: request failed', [
+                'operation' => $defaultMessage,
+                'http_status' => $response->status(),
+                'message' => (string) $message,
+            ]);
+
             throw new DomainException((string) $message);
         }
+
+        Log::channel('thirdparty')->info('Shiprocket API: request succeeded', [
+            'operation' => $defaultMessage,
+            'http_status' => $response->status(),
+        ]);
 
         return $payload;
     }

@@ -30,6 +30,10 @@ return Application::configure(basePath: dirname(__DIR__))
             $schedule->command('delhivery:reconcile-failed-shipments')
                 ->hourly()
                 ->withoutOverlapping();
+
+            $schedule->command('delhivery:schedule-pickup')
+                ->hourly()
+                ->withoutOverlapping();
         }
 
         if (config('shiprocket.enabled')) {

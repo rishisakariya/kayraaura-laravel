@@ -115,6 +115,14 @@ class ShiprocketShipmentService
                 'failed_reason' => null,
             ])->save();
 
+            Log::channel('thirdparty')->info('Shiprocket shipment created', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+                'shipment_status' => $shipment->shipment_status,
+            ]);
+
             return $shipment;
         } catch (\Throwable $e) {
             if ($shipment) {
@@ -124,7 +132,7 @@ class ShiprocketShipmentService
                 ])->save();
             }
 
-            Log::error('Shiprocket shipment creation failed', [
+            Log::channel('thirdparty')->error('Shiprocket shipment creation failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'error' => $e->getMessage(),
@@ -181,6 +189,13 @@ class ShiprocketShipmentService
             $shipment->save();
             $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
+            Log::channel('thirdparty')->info('Shiprocket tracking sync completed', [
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+                'shipment_status' => $shipment->shipment_status,
+                'raw_status' => $rawStatus,
+            ]);
+
             return $shipment;
         } catch (\Throwable $e) {
             $shipment->fill([
@@ -188,7 +203,7 @@ class ShiprocketShipmentService
                 'last_synced_at' => now(),
             ])->save();
 
-            Log::warning('Shiprocket tracking sync failed', [
+            Log::channel('thirdparty')->warning('Shiprocket tracking sync failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -221,11 +236,16 @@ class ShiprocketShipmentService
 
             $this->markOrderCancelled($shipment);
 
+            Log::channel('thirdparty')->info('Shiprocket shipment cancelled', [
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+            ]);
+
             return $shipment;
         } catch (\Throwable $e) {
             $shipment->fill(['failed_reason' => $e->getMessage()])->save();
 
-            Log::warning('Shiprocket shipment cancellation failed', [
+            Log::channel('thirdparty')->warning('Shiprocket shipment cancellation failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -292,7 +312,7 @@ class ShiprocketShipmentService
         } catch (\Throwable $e) {
             $shipment->fill(['failed_reason' => $e->getMessage()])->save();
 
-            Log::warning('Shiprocket shipping label generation failed', [
+            Log::channel('thirdparty')->warning('Shiprocket shipping label generation failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -402,7 +422,7 @@ class ShiprocketShipmentService
                 'reverse_failed_reason' => $e->getMessage(),
             ])->save();
 
-            Log::error('Shiprocket reverse pickup creation failed', [
+            Log::channel('thirdparty')->error('Shiprocket reverse pickup creation failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'error' => $e->getMessage(),

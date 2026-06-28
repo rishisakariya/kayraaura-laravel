@@ -36,7 +36,7 @@ class SyncDelhiveryShipmentStatusJob implements ShouldQueue
         ShiprocketShipmentService $shiprocketShipmentService
     ): void
     {
-        Log::info('Delhivery job: sync shipment status started', [
+        Log::channel('thirdparty')->info('Delhivery job: sync shipment status started', [
             'shipment_id' => $this->shipmentId,
             'attempt' => $this->attempts(),
         ]);
@@ -46,7 +46,7 @@ class SyncDelhiveryShipmentStatusJob implements ShouldQueue
         if ($shipment->provider === OrderShipment::PROVIDER_SHIPROCKET) {
             $shiprocketShipmentService->syncShipment($shipment);
 
-            Log::info('Delhivery job: sync shipment status completed via Shiprocket', [
+            Log::channel('thirdparty')->info('Delhivery job: sync shipment status completed via Shiprocket', [
                 'shipment_id' => $this->shipmentId,
             ]);
 
@@ -56,7 +56,7 @@ class SyncDelhiveryShipmentStatusJob implements ShouldQueue
         $delhiveryShipmentService->syncShipment($shipment);
         $shipment = $delhiveryShipmentService->syncReverseShipment($shipment->refresh());
 
-        Log::info('Delhivery job: sync shipment status completed', [
+        Log::channel('thirdparty')->info('Delhivery job: sync shipment status completed', [
             'shipment_id' => $this->shipmentId,
             'waybill' => $shipment->waybill,
             'shipment_status' => $shipment->shipment_status,
@@ -66,7 +66,7 @@ class SyncDelhiveryShipmentStatusJob implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        Log::error('Delhivery job: sync shipment status failed', [
+        Log::channel('thirdparty')->error('Delhivery job: sync shipment status failed', [
             'shipment_id' => $this->shipmentId,
             'error' => $exception->getMessage(),
         ]);

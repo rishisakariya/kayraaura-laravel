@@ -111,7 +111,7 @@ class OrderReturnService
         ?string $returnRequestId = null,
         ?string $upiTransactionReference = null,
     ): array {
-        Log::info('Return refund flow: processing requested', [
+        Log::channel('thirdparty')->info('Return refund flow: processing requested', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'payment_method' => $order->payment_method,
@@ -178,7 +178,7 @@ class OrderReturnService
                 }
             );
 
-            Log::info('Return refund flow: online refund completed', [
+            Log::channel('thirdparty')->info('Return refund flow: online refund completed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'return_request_id' => $requestId,
@@ -276,7 +276,7 @@ class OrderReturnService
                 }
             );
 
-            Log::info('Return refund flow: COD refund completed', [
+            Log::channel('thirdparty')->info('Return refund flow: COD refund completed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'return_request_id' => $requestId,
@@ -376,7 +376,7 @@ class OrderReturnService
 
         $order->save();
 
-        Log::info('Return refund flow: return request finalized', [
+        Log::channel('thirdparty')->info('Return refund flow: return request finalized', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'return_request_id' => $requestId,

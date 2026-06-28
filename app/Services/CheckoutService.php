@@ -183,7 +183,7 @@ class CheckoutService
             ]);
         }
 
-        Log::info('Payment flow: order created', [
+        Log::channel('thirdparty')->info('Payment flow: order created', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'user_id' => $order->user_id,
@@ -284,7 +284,7 @@ class CheckoutService
             ],
         ];
 
-        Log::info('Payment flow: Razorpay order create requested', [
+        Log::channel('thirdparty')->info('Payment flow: Razorpay order create requested', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'amount_paise' => $requestPayload['amount'],
@@ -308,7 +308,7 @@ class CheckoutService
         ]);
 
         if (!$response->successful() || empty($responsePayload['id'])) {
-            Log::error('Payment flow: Razorpay order create failed', [
+            Log::channel('thirdparty')->error('Payment flow: Razorpay order create failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'error' => $responsePayload['error']['description'] ?? 'Failed to create Razorpay order',
@@ -319,7 +319,7 @@ class CheckoutService
 
         $order->update(['razorpay_order_id' => $responsePayload['id']]);
 
-        Log::info('Payment flow: Razorpay order created', [
+        Log::channel('thirdparty')->info('Payment flow: Razorpay order created', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'razorpay_order_id' => $responsePayload['id'],
@@ -404,7 +404,7 @@ class CheckoutService
             throw new DomainException('Refund amount must be greater than zero');
         }
 
-        Log::info('Payment flow: Razorpay refund requested', [
+        Log::channel('thirdparty')->info('Payment flow: Razorpay refund requested', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'razorpay_payment_id' => $order->razorpay_payment_id,
@@ -441,7 +441,7 @@ class CheckoutService
         ]);
 
         if (!$response->successful()) {
-            Log::error('Payment flow: Razorpay refund failed', [
+            Log::channel('thirdparty')->error('Payment flow: Razorpay refund failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'razorpay_payment_id' => $order->razorpay_payment_id,
@@ -453,7 +453,7 @@ class CheckoutService
             throw new DomainException($responsePayload['error']['description'] ?? 'Failed to refund Razorpay payment');
         }
 
-        Log::info('Payment flow: Razorpay refund processed', [
+        Log::channel('thirdparty')->info('Payment flow: Razorpay refund processed', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'razorpay_payment_id' => $order->razorpay_payment_id,
@@ -498,7 +498,7 @@ class CheckoutService
             throw new DomainException('Payout amount must be greater than zero');
         }
 
-        Log::info('Payment flow: UPI payout requested', [
+        Log::channel('thirdparty')->info('Payment flow: UPI payout requested', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'reference_id' => $referenceId,
@@ -551,7 +551,7 @@ class CheckoutService
         ]);
 
         if (!$response->successful()) {
-            Log::error('Payment flow: UPI payout failed', [
+            Log::channel('thirdparty')->error('Payment flow: UPI payout failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'reference_id' => $referenceId,
@@ -562,7 +562,7 @@ class CheckoutService
             throw new DomainException($responsePayload['error']['description'] ?? 'Failed to process UPI payout');
         }
 
-        Log::info('Payment flow: UPI payout processed', [
+        Log::channel('thirdparty')->info('Payment flow: UPI payout processed', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'payout_id' => $responsePayload['id'] ?? null,
@@ -589,7 +589,7 @@ class CheckoutService
         $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
 
         if ($order->payment_status === 'paid') {
-            Log::info('Payment flow: order already paid, skipping mark paid', [
+            Log::channel('thirdparty')->info('Payment flow: order already paid, skipping mark paid', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
             ]);
@@ -614,7 +614,7 @@ class CheckoutService
                 'paid_at' => now(),
             ]);
 
-            Log::warning('Payment flow: order paid but stock deduction failed', [
+            Log::channel('thirdparty')->warning('Payment flow: order paid but stock deduction failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'razorpay_payment_id' => $paymentData['razorpay_payment_id'] ?? null,
@@ -637,7 +637,7 @@ class CheckoutService
         $this->clearCartIfNeeded($order);
         $this->redeemScratchCouponForPaidOrder($order);
 
-        Log::info('Payment flow: order marked paid', [
+        Log::channel('thirdparty')->info('Payment flow: order marked paid', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'razorpay_payment_id' => $order->razorpay_payment_id,
@@ -669,7 +669,7 @@ class CheckoutService
         } catch (DomainException $e) {
             // A coupon may already be redeemed (e.g. applied to another order that was
             // paid first). Never let this block a successful payment from completing.
-            Log::warning('Payment flow: scratch coupon redemption skipped for paid order', [
+            Log::channel('thirdparty')->warning('Payment flow: scratch coupon redemption skipped for paid order', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'scratch_coupon_code' => $order->scratch_coupon_code,
@@ -689,7 +689,7 @@ class CheckoutService
                 'payment_failed_at' => now(),
             ]);
 
-            Log::info('Payment flow: order payment marked failed', [
+            Log::channel('thirdparty')->info('Payment flow: order payment marked failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'razorpay_payment_id' => $paymentId ?? $order->razorpay_payment_id,

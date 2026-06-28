@@ -26,7 +26,7 @@ class OrderCancellationService
      */
     public function cancel(Order $order, ?string $reason = null, string $cancelledBy = 'customer'): ?OrderShipment
     {
-        Log::info('Order cancellation flow: requested', [
+        Log::channel('thirdparty')->info('Order cancellation flow: requested', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'payment_method' => $order->payment_method,
@@ -76,7 +76,7 @@ class OrderCancellationService
                 $this->checkoutService->refundRazorpayPayment($order);
                 $order->payment_status = 'refunded';
 
-                Log::info('Order cancellation flow: online refund processed', [
+                Log::channel('thirdparty')->info('Order cancellation flow: online refund processed', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                 ]);
@@ -95,7 +95,7 @@ class OrderCancellationService
             $shipment = $order->shipment;
 
             if (!$shipment?->waybill) {
-                Log::info('Order cancellation flow: completed without shipment cancel', [
+                Log::channel('thirdparty')->info('Order cancellation flow: completed without shipment cancel', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'reason' => 'no_waybill',
@@ -109,7 +109,7 @@ class OrderCancellationService
                 OrderShipment::STATUS_CANCELLED,
                 OrderShipment::STATUS_RTO,
             ], true)) {
-                Log::info('Order cancellation flow: completed without shipment cancel', [
+                Log::channel('thirdparty')->info('Order cancellation flow: completed without shipment cancel', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'reason' => 'terminal_shipment_status',
@@ -123,7 +123,7 @@ class OrderCancellationService
                 try {
                     $this->delhiveryShipmentService->cancelShipmentAndVerify($shipment, $auditSource);
 
-                    Log::info('Order cancellation flow: Delhivery shipment cancelled', [
+                    Log::channel('thirdparty')->info('Order cancellation flow: Delhivery shipment cancelled', [
                         'order_id' => $order->id,
                         'shipment_id' => $shipment->id,
                         'waybill' => $shipment->waybill,
@@ -131,7 +131,7 @@ class OrderCancellationService
 
                     return null;
                 } catch (\Throwable $e) {
-                    Log::warning('Order cancellation flow: Delhivery shipment cancel deferred to job', [
+                    Log::channel('thirdparty')->warning('Order cancellation flow: Delhivery shipment cancel deferred to job', [
                         'order_id' => $order->id,
                         'shipment_id' => $shipment->id,
                         'waybill' => $shipment->waybill,
@@ -142,7 +142,7 @@ class OrderCancellationService
                 }
             }
 
-            Log::info('Order cancellation flow: completed', [
+            Log::channel('thirdparty')->info('Order cancellation flow: completed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'order_status' => $order->status,

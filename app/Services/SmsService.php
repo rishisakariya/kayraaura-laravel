@@ -21,7 +21,7 @@ class SmsService
         }
 
         if ($driver === 'whatsapp') {
-            Log::info('WhatsApp text message skipped; OTP messages must use approved templates', [
+            Log::channel('thirdparty')->info('WhatsApp text message skipped; OTP messages must use approved templates', [
                 'mobile' => $this->formatWhatsAppMobile($mobile),
                 'message' => $message,
             ]);
@@ -29,7 +29,7 @@ class SmsService
             return;
         }
 
-        Log::info('SMS message queued', [
+        Log::channel('thirdparty')->info('SMS message queued', [
             'mobile' => $mobile,
             'message' => $message,
         ]);
@@ -46,7 +46,7 @@ class SmsService
         }
 
         if ($driver !== 'msg91') {
-            Log::info('SMS OTP queued', [
+            Log::channel('thirdparty')->info('SMS OTP queued', [
                 'mobile' => $mobile,
                 'otp' => $otp,
                 'purpose' => $purpose,
@@ -93,13 +93,19 @@ class SmsService
             ->post(config('services.sms.msg91.endpoint'), $payload);
 
         if (!$response->successful()) {
-            Log::warning('MSG91 SMS send failed', [
+            Log::channel('thirdparty')->warning('MSG91 SMS send failed', [
                 'status' => $response->status(),
                 'response' => $response->json() ?? $response->body(),
             ]);
 
             throw new DomainException('Failed to send SMS OTP');
         }
+
+        Log::channel('thirdparty')->info('MSG91 SMS sent successfully', [
+            'mobile' => $this->formatMsg91Mobile($mobile),
+            'purpose' => $purpose,
+            'status' => $response->status(),
+        ]);
     }
 
     private function sendViaWhatsApp(string $mobile, string $otp, string $purpose, int $expiryMinutes): void
@@ -131,13 +137,20 @@ class SmsService
             ]);
 
         if (!$response->successful()) {
-            Log::warning('WhatsApp OTP send failed', [
+            Log::channel('thirdparty')->warning('WhatsApp OTP send failed', [
                 'status' => $response->status(),
                 'response' => $response->json() ?? $response->body(),
             ]);
 
             throw new DomainException('Failed to send WhatsApp OTP');
         }
+
+        Log::channel('thirdparty')->info('WhatsApp OTP sent successfully', [
+            'mobile' => $this->formatWhatsAppMobile($mobile),
+            'purpose' => $purpose,
+            'template' => $templateName,
+            'status' => $response->status(),
+        ]);
     }
 
     private function flowIdFor(): ?string

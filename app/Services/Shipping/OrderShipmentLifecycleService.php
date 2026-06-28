@@ -49,7 +49,7 @@ class OrderShipmentLifecycleService
         if ($dirty) {
             $order->save();
 
-            Log::info('Shipment lifecycle: forward delivery applied to order', [
+            Log::channel('thirdparty')->info('Shipment lifecycle: forward delivery applied to order', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'shipment_id' => $shipment->id,
@@ -158,7 +158,7 @@ class OrderShipmentLifecycleService
                 $order->status = $this->allItemsReturned($order) ? 'returned' : 'delivered';
                 $order->save();
 
-                Log::info('Return flow: return received at warehouse', [
+                Log::channel('thirdparty')->info('Return flow: return received at warehouse', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'shipment_id' => $shipment->id,
@@ -169,7 +169,7 @@ class OrderShipmentLifecycleService
                 ]);
             });
         } catch (DomainException $e) {
-            Log::error('Return completion failed after reverse delivery', [
+            Log::channel('thirdparty')->error('Return completion failed after reverse delivery', [
                 'order_id' => $order->id,
                 'shipment_id' => $shipment->id,
                 'error' => $e->getMessage(),

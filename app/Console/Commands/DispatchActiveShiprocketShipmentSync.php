@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\SyncDelhiveryShipmentStatusJob;
 use App\Models\OrderShipment;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class DispatchActiveShiprocketShipmentSync extends Command
 {
@@ -14,6 +15,8 @@ class DispatchActiveShiprocketShipmentSync extends Command
 
     public function handle(): int
     {
+        Log::channel('thirdparty')->info('Shiprocket cron: sync-active-shipments started');
+
         $count = 0;
 
         OrderShipment::activeForShiprocketSync()
@@ -26,6 +29,10 @@ class DispatchActiveShiprocketShipmentSync extends Command
             });
 
         $this->info("Dispatched {$count} Shiprocket shipment sync jobs.");
+
+        Log::channel('thirdparty')->info('Shiprocket cron: sync-active-shipments completed', [
+            'dispatched_jobs' => $count,
+        ]);
 
         return self::SUCCESS;
     }

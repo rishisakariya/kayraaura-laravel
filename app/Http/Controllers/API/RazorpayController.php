@@ -27,7 +27,7 @@ class RazorpayController extends Controller
         $payload = $request->validated();
         $order = Order::where('user_id', Auth::id())->findOrFail($payload['order_id']);
 
-        Log::info('Payment flow: verify payment requested', [
+        Log::channel('thirdparty')->info('Payment flow: verify payment requested', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'razorpay_order_id' => $payload['razorpay_order_id'],
@@ -75,7 +75,7 @@ class RazorpayController extends Controller
             if ($verifiedOrder->payment_status === 'paid') {
                 CreateDelhiveryShipmentJob::dispatch($verifiedOrder->id);
 
-                Log::info('Payment flow: verify payment succeeded, shipment job dispatched', [
+                Log::channel('thirdparty')->info('Payment flow: verify payment succeeded, shipment job dispatched', [
                     'order_id' => $verifiedOrder->id,
                     'order_number' => $verifiedOrder->order_number,
                 ]);
@@ -100,7 +100,7 @@ class RazorpayController extends Controller
         $signature = $request->header('X-Razorpay-Signature');
         $signatureVerified = $this->checkoutService->verifyWebhookSignature($rawPayload, $signature);
 
-        Log::info('Payment flow: Razorpay webhook received', [
+        Log::channel('thirdparty')->info('Payment flow: Razorpay webhook received', [
             'event' => $webhookPayload['event'] ?? null,
             'signature_verified' => $signatureVerified,
         ]);
@@ -165,13 +165,13 @@ class RazorpayController extends Controller
             if ($processedOrder?->payment_status === 'paid') {
                 CreateDelhiveryShipmentJob::dispatch($processedOrder->id);
 
-                Log::info('Payment flow: Razorpay webhook processed, shipment job dispatched', [
+                Log::channel('thirdparty')->info('Payment flow: Razorpay webhook processed, shipment job dispatched', [
                     'order_id' => $processedOrder->id,
                     'event' => $webhookPayload['event'] ?? null,
                 ]);
             }
         } catch (DomainException $e) {
-            Log::warning('Payment flow: Razorpay webhook processing failed', [
+            Log::channel('thirdparty')->warning('Payment flow: Razorpay webhook processing failed', [
                 'order_id' => $order?->id,
                 'event' => $webhookPayload['event'] ?? null,
                 'error' => $e->getMessage(),
@@ -191,7 +191,7 @@ class RazorpayController extends Controller
 
     private function paymentError(Order $order, array $payload, string $message): JsonResponse
     {
-        Log::warning('Payment flow: verify payment failed', [
+        Log::channel('thirdparty')->warning('Payment flow: verify payment failed', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'razorpay_order_id' => $payload['razorpay_order_id'] ?? null,

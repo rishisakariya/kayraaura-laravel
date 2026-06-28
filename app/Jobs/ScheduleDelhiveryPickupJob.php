@@ -33,7 +33,7 @@ class ScheduleDelhiveryPickupJob implements ShouldQueue
 
     public function handle(DelhiveryShipmentService $delhiveryShipmentService): void
     {
-        Log::info('Delhivery job: schedule pickup started', [
+        Log::channel('thirdparty')->info('Delhivery job: schedule pickup started', [
             'pickup_location' => $this->pickupLocation,
             'pickup_date' => $this->pickupDate,
             'attempt' => $this->attempts(),
@@ -41,7 +41,7 @@ class ScheduleDelhiveryPickupJob implements ShouldQueue
 
         $delhiveryShipmentService->processPickupBatch($this->pickupLocation, $this->pickupDate);
 
-        Log::info('Delhivery job: schedule pickup completed', [
+        Log::channel('thirdparty')->info('Delhivery job: schedule pickup completed', [
             'pickup_location' => $this->pickupLocation,
             'pickup_date' => $this->pickupDate,
         ]);
@@ -49,7 +49,7 @@ class ScheduleDelhiveryPickupJob implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        Log::error('Delhivery job: schedule pickup failed', [
+        Log::channel('thirdparty')->error('Delhivery job: schedule pickup failed', [
             'pickup_location' => $this->pickupLocation,
             'pickup_date' => $this->pickupDate,
             'error' => $exception->getMessage(),

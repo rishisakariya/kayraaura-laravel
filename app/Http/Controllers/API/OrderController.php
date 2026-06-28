@@ -129,13 +129,13 @@ class OrderController extends Controller
             if ($order->payment_method === 'cod') {
                 CreateDelhiveryShipmentJob::dispatch($order->id);
 
-                Log::info('Order flow: COD order placed, shipment job dispatched', [
+                Log::channel('thirdparty')->info('Order flow: COD order placed, shipment job dispatched', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                 ]);
             }
 
-            Log::info('Order flow: order placed', [
+            Log::channel('thirdparty')->info('Order flow: order placed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'payment_method' => $order->payment_method,
@@ -306,7 +306,7 @@ class OrderController extends Controller
         }
 
         try {
-            Log::info('Order cancellation flow: API request received', [
+            Log::channel('thirdparty')->info('Order cancellation flow: API request received', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'user_id' => $order->user_id,
@@ -320,7 +320,7 @@ class OrderController extends Controller
             if ($shipmentToCancel) {
                 CancelDelhiveryShipmentJob::dispatch($shipmentToCancel->id);
 
-                Log::info('Order cancellation flow: cancel shipment job dispatched', [
+                Log::channel('thirdparty')->info('Order cancellation flow: cancel shipment job dispatched', [
                     'order_id' => $order->id,
                     'shipment_id' => $shipmentToCancel->id,
                 ]);
@@ -414,7 +414,7 @@ class OrderController extends Controller
         }
 
         try {
-            Log::info('Return flow: return request received', [
+            Log::channel('thirdparty')->info('Return flow: return request received', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'payment_method' => $order->payment_method,
@@ -446,7 +446,7 @@ class OrderController extends Controller
             } catch (\Throwable $e) {
                 $this->orderReturnService->deleteProductImages($imageUrls);
 
-                Log::error('Return flow: reverse pickup or return request failed', [
+                Log::channel('thirdparty')->error('Return flow: reverse pickup or return request failed', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'error' => $e->getMessage(),
@@ -455,7 +455,7 @@ class OrderController extends Controller
                 throw $e;
             }
 
-            Log::info('Return flow: return request accepted', [
+            Log::channel('thirdparty')->info('Return flow: return request accepted', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'refund_amount' => $refundCalculation['refund_amount'],

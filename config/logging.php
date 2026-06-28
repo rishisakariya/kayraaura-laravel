@@ -65,6 +65,29 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+        | Dedicated channel for ALL third-party integration activity
+        | (Delhivery, Shiprocket, Razorpay/RazorpayX, MSG91/WhatsApp SMS),
+        | every queued Job and every scheduled (cron) command.
+        |
+        | It is a "stack" so each message is written to BOTH a dedicated
+        | rotating file (storage/logs/thirdparty-YYYY-MM-DD.log) AND the
+        | normal application log, so nothing that used to be logged is lost.
+        */
+        'thirdparty' => [
+            'driver' => 'stack',
+            'channels' => ['thirdparty_file', 'single'],
+            'ignore_exceptions' => false,
+        ],
+
+        'thirdparty_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/thirdparty.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_THIRDPARTY_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

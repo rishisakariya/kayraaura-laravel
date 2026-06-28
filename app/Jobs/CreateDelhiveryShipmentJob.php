@@ -41,7 +41,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
         ShippingProviderResolver $providerResolver
     ): void
     {
-        Log::info('Delhivery job: create shipment started', [
+        Log::channel('thirdparty')->info('Delhivery job: create shipment started', [
             'order_id' => $this->orderId,
             'attempt' => $this->attempts(),
         ]);
@@ -56,7 +56,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
 
             $shiprocketService->createShipment($order);
 
-            Log::info('Delhivery job: create shipment completed via Shiprocket', [
+            Log::channel('thirdparty')->info('Delhivery job: create shipment completed via Shiprocket', [
                 'order_id' => $this->orderId,
             ]);
 
@@ -69,7 +69,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
 
         $shipment = $delhiveryService->createShipment($order);
 
-        Log::info('Delhivery job: create shipment completed', [
+        Log::channel('thirdparty')->info('Delhivery job: create shipment completed', [
             'order_id' => $this->orderId,
             'shipment_id' => $shipment->id,
             'waybill' => $shipment->waybill,
@@ -78,7 +78,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        Log::error('Delhivery job: create shipment failed', [
+        Log::channel('thirdparty')->error('Delhivery job: create shipment failed', [
             'order_id' => $this->orderId,
             'attempt' => $this->attempts(),
             'error' => $exception->getMessage(),

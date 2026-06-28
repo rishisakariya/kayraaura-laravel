@@ -36,7 +36,7 @@ class OrderShipmentController extends Controller
 
     public function create(string $id): JsonResponse
     {
-        Log::info('Delhivery flow: admin shipment create requested', [
+        Log::channel('thirdparty')->info('Delhivery flow: admin shipment create requested', [
             'order_id' => $id,
         ]);
 
@@ -77,7 +77,7 @@ class OrderShipmentController extends Controller
         if (!$shipment->waybill) {
             CreateDelhiveryShipmentJob::dispatch((int) $id);
 
-            Log::info('Delhivery flow: admin shipment create job dispatched', [
+            Log::channel('thirdparty')->info('Delhivery flow: admin shipment create job dispatched', [
                 'order_id' => $id,
             ]);
         }
@@ -93,7 +93,7 @@ class OrderShipmentController extends Controller
 
     public function sync(string $id): JsonResponse
     {
-        Log::info('Delhivery flow: admin shipment sync requested', [
+        Log::channel('thirdparty')->info('Delhivery flow: admin shipment sync requested', [
             'order_id' => $id,
         ]);
 
@@ -110,7 +110,7 @@ class OrderShipmentController extends Controller
         if (!in_array($order->shipment->shipment_status, OrderShipment::TERMINAL_STATUSES, true)) {
             SyncDelhiveryShipmentStatusJob::dispatch($order->shipment->id);
 
-            Log::info('Delhivery flow: admin shipment sync job dispatched', [
+            Log::channel('thirdparty')->info('Delhivery flow: admin shipment sync job dispatched', [
                 'order_id' => $id,
                 'shipment_id' => $order->shipment->id,
             ]);
@@ -152,7 +152,7 @@ class OrderShipmentController extends Controller
         }
 
         try {
-            Log::info('Delhivery flow: admin order cancel requested', [
+            Log::channel('thirdparty')->info('Delhivery flow: admin order cancel requested', [
                 'order_id' => $id,
                 'reason' => $request->input('reason'),
             ]);
@@ -166,7 +166,7 @@ class OrderShipmentController extends Controller
             if ($shipmentToCancel) {
                 CancelDelhiveryShipmentJob::dispatch($shipmentToCancel->id, ShipmentStatusHistory::SOURCE_ADMIN);
 
-                Log::info('Delhivery flow: admin cancel shipment job dispatched', [
+                Log::channel('thirdparty')->info('Delhivery flow: admin cancel shipment job dispatched', [
                     'order_id' => $id,
                     'shipment_id' => $shipmentToCancel->id,
                 ]);

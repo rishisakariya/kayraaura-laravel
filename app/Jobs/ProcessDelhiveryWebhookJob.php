@@ -36,14 +36,14 @@ class ProcessDelhiveryWebhookJob implements ShouldQueue
             ?? $this->payload['AWB']
             ?? null;
 
-        Log::info('Delhivery job: webhook processing started', [
+        Log::channel('thirdparty')->info('Delhivery job: webhook processing started', [
             'waybill' => $waybill,
             'attempt' => $this->attempts(),
         ]);
 
         $shipment = $shipmentService->applyWebhookPayload($this->payload);
 
-        Log::info('Delhivery job: webhook processing completed', [
+        Log::channel('thirdparty')->info('Delhivery job: webhook processing completed', [
             'waybill' => $waybill,
             'shipment_id' => $shipment?->id,
             'matched' => $shipment !== null,
@@ -52,7 +52,7 @@ class ProcessDelhiveryWebhookJob implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        Log::error('Delhivery job: webhook processing failed', [
+        Log::channel('thirdparty')->error('Delhivery job: webhook processing failed', [
             'payload' => $this->payload,
             'error' => $exception->getMessage(),
         ]);

@@ -13,7 +13,7 @@ class DelhiveryClient
     {
         $orderReference = $payload['shipments'][0]['order'] ?? null;
 
-        Log::info('Delhivery API: create shipment requested', [
+        Log::channel('thirdparty')->info('Delhivery API: create shipment requested', [
             'order_reference' => $orderReference,
             'payment_mode' => $payload['shipments'][0]['payment_mode'] ?? null,
         ]);
@@ -21,7 +21,7 @@ class DelhiveryClient
         if ($this->mockEnabled()) {
             $response = $this->mockCreateShipmentResponse($payload);
 
-            Log::info('Delhivery API: create shipment mock response', [
+            Log::channel('thirdparty')->info('Delhivery API: create shipment mock response', [
                 'order_reference' => $orderReference,
                 'waybill' => $response['packages'][0]['waybill'] ?? null,
             ]);
@@ -39,7 +39,7 @@ class DelhiveryClient
 
         $decoded = $this->decodeResponse($response, 'Delhivery shipment creation failed');
 
-        Log::info('Delhivery API: create shipment response', [
+        Log::channel('thirdparty')->info('Delhivery API: create shipment response', [
             'order_reference' => $orderReference,
             'http_status' => $response->status(),
             'waybill' => $decoded['packages'][0]['waybill'] ?? $decoded['packages'][0]['wbn'] ?? null,
@@ -94,14 +94,14 @@ class DelhiveryClient
 
     public function cancelShipment(string $waybill): array
     {
-        Log::info('Delhivery API: cancel shipment requested', [
+        Log::channel('thirdparty')->info('Delhivery API: cancel shipment requested', [
             'waybill' => $waybill,
         ]);
 
         if ($this->mockEnabled()) {
             $response = $this->mockCancelShipmentResponse($waybill);
 
-            Log::info('Delhivery API: cancel shipment mock response', [
+            Log::channel('thirdparty')->info('Delhivery API: cancel shipment mock response', [
                 'waybill' => $waybill,
             ]);
 
@@ -118,7 +118,7 @@ class DelhiveryClient
 
         $decoded = $this->decodeResponse($response, 'Delhivery shipment cancellation failed');
 
-        Log::info('Delhivery API: cancel shipment response', [
+        Log::channel('thirdparty')->info('Delhivery API: cancel shipment response', [
             'waybill' => $waybill,
             'http_status' => $response->status(),
         ]);
@@ -170,7 +170,7 @@ class DelhiveryClient
         try {
             return $this->decodeResponse($response, 'Delhivery pickup request creation failed', [201]);
         } catch (DomainException $e) {
-            Log::error('Delhivery pickup request HTTP error', [
+            Log::channel('thirdparty')->error('Delhivery pickup request HTTP error', [
                 'url' => $url,
                 'payload' => $payload,
                 'status' => $response->status(),

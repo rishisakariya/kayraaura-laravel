@@ -40,7 +40,7 @@ class CancelDelhiveryShipmentJob implements ShouldQueue
         ShiprocketShipmentService $shiprocketShipmentService
     ): void
     {
-        Log::info('Delhivery job: cancel shipment started', [
+        Log::channel('thirdparty')->info('Delhivery job: cancel shipment started', [
             'shipment_id' => $this->shipmentId,
             'audit_source' => $this->auditSource,
             'attempt' => $this->attempts(),
@@ -51,7 +51,7 @@ class CancelDelhiveryShipmentJob implements ShouldQueue
         if ($shipment->provider === OrderShipment::PROVIDER_SHIPROCKET) {
             $shiprocketShipmentService->cancelShipment($shipment, $this->auditSource);
 
-            Log::info('Delhivery job: cancel shipment completed via Shiprocket', [
+            Log::channel('thirdparty')->info('Delhivery job: cancel shipment completed via Shiprocket', [
                 'shipment_id' => $this->shipmentId,
             ]);
 
@@ -60,7 +60,7 @@ class CancelDelhiveryShipmentJob implements ShouldQueue
 
         $delhiveryShipmentService->cancelShipmentAndVerify($shipment, $this->auditSource);
 
-        Log::info('Delhivery job: cancel shipment completed', [
+        Log::channel('thirdparty')->info('Delhivery job: cancel shipment completed', [
             'shipment_id' => $this->shipmentId,
             'waybill' => $shipment->waybill,
         ]);
@@ -68,7 +68,7 @@ class CancelDelhiveryShipmentJob implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        Log::error('Delhivery job: cancel shipment failed', [
+        Log::channel('thirdparty')->error('Delhivery job: cancel shipment failed', [
             'shipment_id' => $this->shipmentId,
             'error' => $exception->getMessage(),
         ]);

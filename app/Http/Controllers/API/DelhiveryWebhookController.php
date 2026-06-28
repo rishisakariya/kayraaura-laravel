@@ -15,7 +15,7 @@ class DelhiveryWebhookController extends Controller
         $secret = config('delhivery.webhook_secret');
 
         if ($secret && !hash_equals($secret, (string) $request->header('X-Delhivery-Webhook-Secret'))) {
-            Log::warning('Delhivery flow: webhook rejected due to invalid secret');
+            Log::channel('thirdparty')->warning('Delhivery flow: webhook rejected due to invalid secret');
 
             return response()->json([
                 'status' => false,
@@ -25,7 +25,7 @@ class DelhiveryWebhookController extends Controller
 
         ProcessDelhiveryWebhookJob::dispatch($request->all());
 
-        Log::info('Delhivery flow: webhook accepted and queued', [
+        Log::channel('thirdparty')->info('Delhivery flow: webhook accepted and queued', [
             'waybill' => $request->input('waybill') ?? $request->input('awb'),
         ]);
 

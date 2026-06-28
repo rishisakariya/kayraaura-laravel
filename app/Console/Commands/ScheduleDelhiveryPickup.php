@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\OrderShipment;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ScheduleDelhiveryPickup extends Command
 {
@@ -50,10 +51,22 @@ class ScheduleDelhiveryPickup extends Command
         $this->line('Delhivery env: ' . config('delhivery.env'));
         $this->line('Pickup location must exactly match your Delhivery warehouse name.');
 
+        Log::channel('thirdparty')->info('Delhivery cron: schedule-pickup started', [
+            'pickup_location' => $pickupLocation,
+            'pickup_date' => $pickupDate,
+            'pending_count' => $pendingCount,
+        ]);
+
         try {
             $delhiveryShipmentService->processPickupBatch($pickupLocation, $pickupDate, force: true);
         } catch (\Throwable $e) {
             $this->error('Pickup scheduling failed: ' . $e->getMessage());
+
+            Log::channel('thirdparty')->error('Delhivery cron: schedule-pickup failed', [
+                'pickup_location' => $pickupLocation,
+                'pickup_date' => $pickupDate,
+                'error' => $e->getMessage(),
+            ]);
 
             return self::FAILURE;
         }
@@ -66,6 +79,12 @@ class ScheduleDelhiveryPickup extends Command
             ->count();
 
         $this->info("Done. {$scheduledCount} shipment(s) marked pickup_scheduled.");
+
+        Log::channel('thirdparty')->info('Delhivery cron: schedule-pickup completed', [
+            'pickup_location' => $pickupLocation,
+            'pickup_date' => $pickupDate,
+            'scheduled_count' => $scheduledCount,
+        ]);
 
         return self::SUCCESS;
     }

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Order;
 use App\Services\Delhivery\DelhiveryShipmentService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ReconcileFailedDelhiveryShipments extends Command
 {
@@ -16,8 +17,15 @@ class ReconcileFailedDelhiveryShipments extends Command
 
     public function handle(DelhiveryShipmentService $delhiveryShipmentService): int
     {
+        Log::channel('thirdparty')->info('Delhivery cron: reconcile-failed-shipments started', [
+            'order_id_option' => $this->option('order-id'),
+            'order_number_option' => $this->option('order-number'),
+        ]);
+
         if (!$delhiveryShipmentService->isConfigured()) {
             $this->error('Delhivery is not configured.');
+
+            Log::channel('thirdparty')->warning('Delhivery cron: reconcile-failed-shipments aborted, not configured');
 
             return self::FAILURE;
         }
@@ -41,6 +49,10 @@ class ReconcileFailedDelhiveryShipments extends Command
         );
 
         $this->info("Reconciled {$reconciled} Delhivery shipment(s).");
+
+        Log::channel('thirdparty')->info('Delhivery cron: reconcile-failed-shipments completed', [
+            'reconciled' => $reconciled,
+        ]);
 
         if ($orderId) {
             $order = Order::with('shipment')->find($orderId);

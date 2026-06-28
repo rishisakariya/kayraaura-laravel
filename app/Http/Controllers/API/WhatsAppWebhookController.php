@@ -28,7 +28,7 @@ class WhatsAppWebhookController extends Controller
                 ->header('Content-Type', 'text/plain');
         }
 
-        Log::warning('WhatsApp flow: webhook verification rejected', [
+        Log::channel('thirdparty')->warning('WhatsApp flow: webhook verification rejected', [
             'mode' => $mode,
             'token_matched' => false,
         ]);
@@ -43,7 +43,7 @@ class WhatsAppWebhookController extends Controller
      */
     public function handle(Request $request): JsonResponse
     {
-        Log::info('WhatsApp flow: webhook event received', [
+        Log::channel('thirdparty')->info('WhatsApp flow: webhook event received', [
             'payload' => $request->all(),
         ]);
 

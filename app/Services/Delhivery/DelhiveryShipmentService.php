@@ -267,14 +267,14 @@ class DelhiveryShipmentService
             $rawStatus = strtolower((string) ($this->extractRawStatus($tracking) ?? ''));
 
             if (!str_contains($rawStatus, 'cancel')) {
-                Log::warning('Delhivery cancellation requested but tracking is not cancelled yet', [
+                Log::channel('thirdparty')->warning('Delhivery cancellation requested but tracking is not cancelled yet', [
                     'shipment_id' => $shipment->id,
                     'waybill' => $shipment->waybill,
                     'raw_status' => $rawStatus,
                 ]);
             }
         } catch (\Throwable $e) {
-            Log::warning('Delhivery cancellation verification tracking failed', [
+            Log::channel('thirdparty')->warning('Delhivery cancellation verification tracking failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -379,7 +379,7 @@ class DelhiveryShipmentService
                     null,
                 );
 
-                Log::info('Delhivery shipments linked to existing pickup request', [
+                Log::channel('thirdparty')->info('Delhivery shipments linked to existing pickup request', [
                     'pickup_location' => $pickupLocation,
                     'pickup_date' => $pickupDate,
                     'pickup_request_id' => $batchContext['existing_pickup_id'],
@@ -414,14 +414,14 @@ class DelhiveryShipmentService
                 $responsePayload,
             );
 
-            Log::info('Delhivery pickup request created', [
+            Log::channel('thirdparty')->info('Delhivery pickup request created', [
                 'pickup_location' => $pickupLocation,
                 'pickup_date' => $pickupDate,
                 'pickup_request_id' => $pickupRequestId,
                 'shipment_count' => $batchContext['package_count'],
             ]);
         } catch (\Throwable $e) {
-            Log::error('Delhivery pickup request failed', [
+            Log::channel('thirdparty')->error('Delhivery pickup request failed', [
                 'pickup_location' => $pickupLocation,
                 'pickup_date' => $pickupDate,
                 'delhivery_env' => config('delhivery.env'),
@@ -505,7 +505,7 @@ class DelhiveryShipmentService
             $shipment->save();
             $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
-            Log::info('Delhivery tracking sync completed', [
+            Log::channel('thirdparty')->info('Delhivery tracking sync completed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'shipment_status' => $normalizedStatus,
@@ -519,7 +519,7 @@ class DelhiveryShipmentService
                 'last_synced_at' => now(),
             ])->save();
 
-            Log::warning('Delhivery tracking sync failed', [
+            Log::channel('thirdparty')->warning('Delhivery tracking sync failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -570,7 +570,7 @@ class DelhiveryShipmentService
 
             $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
 
-            Log::info('Delhivery reverse tracking sync completed', [
+            Log::channel('thirdparty')->info('Delhivery reverse tracking sync completed', [
                 'shipment_id' => $shipment->id,
                 'reverse_waybill' => $shipment->reverse_waybill,
                 'reverse_status' => $normalizedStatus,
@@ -584,7 +584,7 @@ class DelhiveryShipmentService
                 'last_synced_at' => now(),
             ])->save();
 
-            Log::warning('Delhivery reverse tracking sync failed', [
+            Log::channel('thirdparty')->warning('Delhivery reverse tracking sync failed', [
                 'shipment_id' => $shipment->id,
                 'reverse_waybill' => $shipment->reverse_waybill,
                 'error' => $e->getMessage(),
@@ -619,7 +619,7 @@ class DelhiveryShipmentService
                 'failed_reason' => null,
             ])->save();
 
-            Log::info('Delhivery shipment cancelled', [
+            Log::channel('thirdparty')->info('Delhivery shipment cancelled', [
                 'shipment_id' => $shipment->id,
                 'order_id' => $shipment->order_id,
                 'waybill' => $shipment->waybill,
@@ -630,7 +630,7 @@ class DelhiveryShipmentService
         } catch (\Throwable $e) {
             $shipment->fill(['failed_reason' => $e->getMessage()])->save();
 
-            Log::warning('Delhivery shipment cancellation failed', [
+            Log::channel('thirdparty')->warning('Delhivery shipment cancellation failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -689,7 +689,7 @@ class DelhiveryShipmentService
         } catch (\Throwable $e) {
             $shipment->fill(['failed_reason' => $e->getMessage()])->save();
 
-            Log::warning('Delhivery shipping label generation failed', [
+            Log::channel('thirdparty')->warning('Delhivery shipping label generation failed', [
                 'shipment_id' => $shipment->id,
                 'waybill' => $shipment->waybill,
                 'error' => $e->getMessage(),
@@ -767,13 +767,13 @@ class DelhiveryShipmentService
                 return $this->pdfMerger->mergeBinaries($pdfBinaries, $labelsPerPage);
             }
 
-            Log::info('Delhivery bulk label did not return a link for every waybill, merging individually', [
+            Log::channel('thirdparty')->info('Delhivery bulk label did not return a link for every waybill, merging individually', [
                 'waybills' => $waybills,
                 'links_found' => $orderedLinks->count(),
                 'expected' => $shipments->count(),
             ]);
         } catch (\Throwable $e) {
-            Log::info('Delhivery bulk label request failed, falling back to individual labels', [
+            Log::channel('thirdparty')->info('Delhivery bulk label request failed, falling back to individual labels', [
                 'waybills' => $waybills,
                 'error' => $e->getMessage(),
             ]);
@@ -859,7 +859,7 @@ class DelhiveryShipmentService
                 'reverse_failed_reason' => null,
             ])->save();
 
-            Log::info('Delhivery reverse pickup created', [
+            Log::channel('thirdparty')->info('Delhivery reverse pickup created', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'shipment_id' => $shipment->id,
@@ -874,7 +874,7 @@ class DelhiveryShipmentService
                 'reverse_failed_reason' => $e->getMessage(),
             ])->save();
 
-            Log::error('Delhivery reverse pickup creation failed', [
+            Log::channel('thirdparty')->error('Delhivery reverse pickup creation failed', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'waybill' => $shipment->waybill,
@@ -894,7 +894,7 @@ class DelhiveryShipmentService
             ?? null;
 
         if (!$waybill) {
-            Log::info('Delhivery webhook received without AWB', ['payload' => $payload]);
+            Log::channel('thirdparty')->info('Delhivery webhook received without AWB', ['payload' => $payload]);
 
             return null;
         }
@@ -904,7 +904,7 @@ class DelhiveryShipmentService
             ->first();
 
         if (!$shipment) {
-            Log::info('Delhivery webhook received for unknown AWB', [
+            Log::channel('thirdparty')->info('Delhivery webhook received for unknown AWB', [
                 'waybill' => $waybill,
                 'payload' => $payload,
             ]);
@@ -929,7 +929,7 @@ class DelhiveryShipmentService
 
             $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
 
-            Log::info('Delhivery webhook processed for reverse shipment', [
+            Log::channel('thirdparty')->info('Delhivery webhook processed for reverse shipment', [
                 'shipment_id' => $shipment->id,
                 'order_id' => $shipment->order_id,
                 'reverse_waybill' => $waybill,
@@ -952,7 +952,7 @@ class DelhiveryShipmentService
         $shipment->save();
         $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
-        Log::info('Delhivery webhook processed for forward shipment', [
+        Log::channel('thirdparty')->info('Delhivery webhook processed for forward shipment', [
             'shipment_id' => $shipment->id,
             'order_id' => $shipment->order_id,
             'waybill' => $waybill,
@@ -1577,7 +1577,7 @@ class DelhiveryShipmentService
         }
 
         if ($shipment->waybill && $shipment->waybill !== $waybill) {
-            Log::warning('Delhivery recovery AWB differs from local shipment AWB', [
+            Log::channel('thirdparty')->warning('Delhivery recovery AWB differs from local shipment AWB', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'local_waybill' => $shipment->waybill,
@@ -1670,7 +1670,7 @@ class DelhiveryShipmentService
      */
     private function logShipmentCreation(Order $order, string $stage, array $context = []): void
     {
-        Log::info('Delhivery shipment creation trace', array_merge([
+        Log::channel('thirdparty')->info('Delhivery shipment creation trace', array_merge([
             'stage' => $stage,
             'order_id' => $order->id,
             'order_number' => $order->order_number,
