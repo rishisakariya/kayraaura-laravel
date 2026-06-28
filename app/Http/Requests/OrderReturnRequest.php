@@ -119,3 +119,4 @@ class OrderReturnRequest extends FormRequest
             ->find($this->route('id'));
     }
 }
+
