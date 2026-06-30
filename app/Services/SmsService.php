@@ -205,15 +205,14 @@ class SmsService
     private function whatsAppTemplateComponents(string $otp, string $purpose, int $expiryMinutes): array
     {
         $parameters = [
-            'otp' => $otp,
-            'purpose' => $this->purposeLabel($purpose),
-            'expiry' => (string) $expiryMinutes,
+            'code' => $otp,
+            'text' => $this->purposeLabel($purpose),
         ];
 
         $components = [
             [
                 'type' => 'body',
-                'parameters' => collect(config('services.sms.whatsapp.body_parameters', ['otp']))
+                'parameters' => collect(config('services.sms.whatsapp.body_parameters', ['code', 'text']))
                     ->map(fn (string $parameter): array => [
                         'type' => 'text',
                         'text' => $parameters[$parameter] ?? '',

@@ -54,7 +54,7 @@ return [
             'country_code' => env('WHATSAPP_CLOUD_COUNTRY_CODE', '91'),
             'body_parameters' => array_values(array_filter(array_map(
                 'trim',
-                explode(',', env('WHATSAPP_CLOUD_BODY_PARAMETERS', 'otp'))
+                explode(',', env('WHATSAPP_CLOUD_BODY_PARAMETERS', 'code,text'))
             ))),
             'button' => [
                 'enabled' => env('WHATSAPP_CLOUD_OTP_BUTTON_ENABLED', true),
@@ -62,7 +62,7 @@ return [
                 'index' => env('WHATSAPP_CLOUD_OTP_BUTTON_INDEX', '0'),
             ],
             'templates' => [
-                'default' => env('WHATSAPP_CLOUD_DEFAULT_TEMPLATE'),
+                'default' => env('WHATSAPP_CLOUD_DEFAULT_TEMPLATE', 'kayraaura_auth_otp'),
                 'forgot_password' => env('WHATSAPP_CLOUD_FORGOT_PASSWORD_TEMPLATE'),
                 'cod_order' => env('WHATSAPP_CLOUD_COD_ORDER_TEMPLATE'),
             ],
