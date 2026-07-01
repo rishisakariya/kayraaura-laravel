@@ -260,9 +260,10 @@ class SmsService
 
     private function purposeLabel(string $purpose): string
     {
+        // Meta auth template {{text}} body variable is limited to 15 characters.
         return match ($purpose) {
-            OtpService::PURPOSE_COD_ORDER => 'COD order confirmation',
-            OtpService::PURPOSE_FORGOT_PASSWORD => 'password reset',
+            OtpService::PURPOSE_COD_ORDER => 'COD order',
+            OtpService::PURPOSE_FORGOT_PASSWORD => 'Login',
             default => 'verification',
         };
     }
