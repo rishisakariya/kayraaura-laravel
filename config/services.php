@@ -66,6 +66,7 @@ return [
                 'forgot_password' => env('WHATSAPP_CLOUD_FORGOT_PASSWORD_TEMPLATE'),
                 'cod_order' => env('WHATSAPP_CLOUD_COD_ORDER_TEMPLATE'),
                 'register' => env('WHATSAPP_CLOUD_REGISTER_TEMPLATE'),
+                'update_phone' => env('WHATSAPP_CLOUD_UPDATE_PHONE_TEMPLATE'),
             ],
         ],
         'msg91' => [

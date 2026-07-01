@@ -265,6 +265,7 @@ class SmsService
             OtpService::PURPOSE_COD_ORDER => 'COD order',
             OtpService::PURPOSE_FORGOT_PASSWORD => 'password reset',
             OtpService::PURPOSE_REGISTER => 'registration',
+            OtpService::PURPOSE_UPDATE_PHONE => 'phone update',
             default => 'verification',
         };
     }

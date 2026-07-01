@@ -11,6 +11,7 @@ class OtpService
     public const PURPOSE_FORGOT_PASSWORD = 'forgot_password';
     public const PURPOSE_COD_ORDER = 'cod_order';
     public const PURPOSE_REGISTER = 'register';
+    public const PURPOSE_UPDATE_PHONE = 'update_phone';
 
     private const EXPIRY_MINUTES = 5;
     private const RESEND_SECONDS = 60;
