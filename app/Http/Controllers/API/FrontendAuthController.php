@@ -80,6 +80,8 @@ class FrontendAuthController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
+                'requires_otp' => false,
+                'step' => 'registered',
                 'user' => new UserResource($user),
                 'token' => $token,
                 'token_type' => 'Bearer'
@@ -195,8 +197,8 @@ class FrontendAuthController extends Controller
     }
 
     /**
-     * Update authenticated user profile.
-     * Phone changes require a prior OTP (send-phone-otp) and otp on this request.
+     * Update profile. If phone differs from current and no otp → sends OTP.
+     * Call again with the same phone + otp to complete the update.
      */
     public function updateProfile(Request $request): JsonResponse
     {
@@ -207,7 +209,7 @@ class FrontendAuthController extends Controller
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
             'gender' => 'sometimes|required|in:male,female',
             'phone' => 'sometimes|required|string|max:12',
-            'otp' => 'required_with:phone|string|digits:6',
+            'otp' => 'nullable|string|digits:6',
         ]);
 
         if ($validator->fails()) {
@@ -225,42 +227,61 @@ class FrontendAuthController extends Controller
             ->filter(fn ($value) => $value !== null)
             ->all();
 
+        $phoneChanging = false;
+        $newPhone = null;
+
         if ($request->filled('phone')) {
-            $phone = $this->otpService->normalizeMobile($request->phone);
+            $newPhone = $this->otpService->normalizeMobile($request->phone);
 
-            if ($phone === $user->phone) {
-                return response()->json([
-                    'success' => false,
-                    'error' => [
-                        'code' => 'VALIDATION_ERROR',
-                        'message' => 'Validation failed',
-                        'details' => ['phone' => ['This is already your current mobile number.']],
-                    ],
-                ], 422);
+            if ($newPhone !== $user->phone) {
+                $phoneChanging = true;
+
+                if ($phoneTaken = $this->phoneTakenByAnotherUserResponse($newPhone, $user->id)) {
+                    return $phoneTaken;
+                }
+
+                if (!$request->filled('otp')) {
+                    try {
+                        $this->otpService->send($newPhone, OtpService::PURPOSE_UPDATE_PHONE);
+                    } catch (DomainException $e) {
+                        return response()->json([
+                            'success' => false,
+                            'error' => [
+                                'code' => 'OTP_SEND_FAILED',
+                                'message' => $e->getMessage(),
+                            ],
+                        ], 429);
+                    }
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'OTP sent to your new mobile number',
+                        'data' => [
+                            'requires_otp' => true,
+                            'step' => 'otp_required',
+                        ],
+                    ]);
+                }
+
+                try {
+                    $this->otpService->verifyAndConsume(
+                        $newPhone,
+                        OtpService::PURPOSE_UPDATE_PHONE,
+                        $request->otp
+                    );
+                } catch (DomainException $e) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => [
+                            'code' => 'OTP_VERIFICATION_FAILED',
+                            'message' => $e->getMessage(),
+                        ],
+                    ], 422);
+                }
+
+                $updates['phone'] = $newPhone;
+                $updates['is_verified'] = true;
             }
-
-            if ($phoneTaken = $this->phoneTakenByAnotherUserResponse($phone, $user->id)) {
-                return $phoneTaken;
-            }
-
-            try {
-                $this->otpService->verifyAndConsume(
-                    $phone,
-                    OtpService::PURPOSE_UPDATE_PHONE,
-                    $request->otp
-                );
-            } catch (DomainException $e) {
-                return response()->json([
-                    'success' => false,
-                    'error' => [
-                        'code' => 'OTP_VERIFICATION_FAILED',
-                        'message' => $e->getMessage(),
-                    ],
-                ], 422);
-            }
-
-            $updates['phone'] = $phone;
-            $updates['is_verified'] = true;
         }
 
         if ($updates === []) {
@@ -268,7 +289,9 @@ class FrontendAuthController extends Controller
                 'success' => false,
                 'error' => [
                     'code' => 'VALIDATION_ERROR',
-                    'message' => 'No profile fields provided to update',
+                    'message' => $phoneChanging
+                        ? 'OTP is required to update your mobile number'
+                        : 'No profile fields provided to update',
                 ],
             ], 422);
         }
@@ -278,67 +301,12 @@ class FrontendAuthController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
+                'requires_otp' => false,
+                'step' => 'profile_updated',
                 'user' => new UserResource($user->fresh()),
             ],
             'message' => 'Profile updated successfully',
         ]);
-    }
-
-    /**
-     * Send OTP to verify a new mobile number before profile update.
-     */
-    public function sendUpdatePhoneOtp(Request $request): JsonResponse
-    {
-        $user = $request->user();
-
-        $validator = Validator::make($request->all(), [
-            'phone' => 'required|string|max:12',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'VALIDATION_ERROR',
-                    'message' => 'Validation failed',
-                    'details' => $validator->errors(),
-                ],
-            ], 422);
-        }
-
-        $phone = $this->otpService->normalizeMobile($request->phone);
-
-        if ($phone === $user->phone) {
-            return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'VALIDATION_ERROR',
-                    'message' => 'Validation failed',
-                    'details' => ['phone' => ['This is already your current mobile number.']],
-                ],
-            ], 422);
-        }
-
-        if ($phoneTaken = $this->phoneTakenByAnotherUserResponse($phone, $user->id)) {
-            return $phoneTaken;
-        }
-
-        try {
-            $this->otpService->send($phone, OtpService::PURPOSE_UPDATE_PHONE);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'OTP sent to your new mobile number',
-            ]);
-        } catch (DomainException $e) {
-            return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'OTP_SEND_FAILED',
-                    'message' => $e->getMessage(),
-                ],
-            ], 429);
-        }
     }
 
     /**
@@ -358,6 +326,10 @@ class FrontendAuthController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Registration OTP sent to your mobile number',
+                'data' => [
+                    'requires_otp' => true,
+                    'step' => 'otp_required',
+                ],
             ]);
         } catch (DomainException $e) {
             return response()->json([
