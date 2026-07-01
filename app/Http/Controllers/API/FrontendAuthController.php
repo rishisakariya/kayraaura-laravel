@@ -448,7 +448,7 @@ class FrontendAuthController extends Controller
         $purpose = $request->input('purpose');
 
         try {
-            if (in_array($purpose, [OtpService::PURPOSE_COD_ORDER, OtpService::PURPOSE_UPDATE_PHONE], true) && !Auth::check()) {
+            if (in_array($purpose, [OtpService::PURPOSE_COD_ORDER, OtpService::PURPOSE_UPDATE_PHONE], true) && !Auth::guard('sanctum')->check()) {
                 throw new DomainException('Invalid or expired OTP');
             }
 
@@ -466,7 +466,7 @@ class FrontendAuthController extends Controller
             }
 
             if ($purpose === OtpService::PURPOSE_UPDATE_PHONE) {
-                $user = Auth::user();
+                $user = Auth::guard('sanctum')->user();
 
                 if ($mobile === $user->phone) {
                     throw new DomainException('This is already your current mobile number');
@@ -496,13 +496,13 @@ class FrontendAuthController extends Controller
 
     private function resolveCodOtpMobile(int $addressId): string
     {
-        $address = UserAddress::where('user_id', Auth::id())->find($addressId);
+        $address = UserAddress::where('user_id', Auth::guard('sanctum')->id())->find($addressId);
 
         if (!$address) {
             throw new DomainException('Selected address was not found');
         }
 
-        return $address->phone;
+        return $this->otpService->normalizeMobile($address->phone);
     }
 
     /**
