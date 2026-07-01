@@ -30,7 +30,15 @@ class OtpService
             ->first();
 
         if ($latestOtp?->last_sent_at?->gt(now()->subSeconds(self::RESEND_SECONDS))) {
-            throw new DomainException('Please wait before requesting another OTP');
+            // A valid OTP was sent recently for this purpose. Treat repeat calls as
+            // success so checkout auto-send + manual resend within 60s do not 429.
+            if ($latestOtp->expires_at->isFuture()) {
+                return;
+            }
+
+            $retryAfter = self::RESEND_SECONDS - $latestOtp->last_sent_at->diffInSeconds(now());
+
+            throw new DomainException("Please wait {$retryAfter} seconds before requesting another OTP");
         }
 
         MobileOtp::where('mobile', $mobile)
@@ -85,7 +93,14 @@ class OtpService
 
     public function normalizeMobile(string $mobile): string
     {
-        return preg_replace('/[\s\-()]/', '', trim($mobile)) ?? trim($mobile);
+        $mobile = preg_replace('/[\s\-()]/', '', trim($mobile)) ?? trim($mobile);
+        $mobile = ltrim($mobile, '+');
+
+        if (str_starts_with($mobile, '91') && strlen($mobile) === 12) {
+            $mobile = substr($mobile, 2);
+        }
+
+        return $mobile;
     }
 
 }
