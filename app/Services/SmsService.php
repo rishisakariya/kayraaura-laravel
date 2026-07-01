@@ -118,6 +118,8 @@ class SmsService
             throw new DomainException('WhatsApp Cloud API credentials or template are not configured');
         }
 
+        $components = $this->whatsAppTemplateComponents($otp, $purpose, $expiryMinutes);
+
         $response = Http::timeout(15)
             ->withToken($accessToken)
             ->acceptJson()
@@ -132,7 +134,7 @@ class SmsService
                     'language' => [
                         'code' => config('services.sms.whatsapp.language', 'en_US'),
                     ],
-                    'components' => $this->whatsAppTemplateComponents($otp, $purpose, $expiryMinutes),
+                    'components' => $components,
                 ],
             ]);
 
@@ -140,6 +142,8 @@ class SmsService
             Log::channel('thirdparty')->warning('WhatsApp OTP send failed', [
                 'status' => $response->status(),
                 'response' => $response->json() ?? $response->body(),
+                'template' => $templateName,
+                'components' => $components,
             ]);
 
             throw new DomainException('Failed to send WhatsApp OTP');
@@ -206,19 +210,34 @@ class SmsService
     {
         $parameters = [
             'code' => $otp,
+            'otp' => $otp,
             'text' => $this->purposeLabel($purpose),
+            'purpose' => $this->purposeLabel($purpose),
+            'expiry' => (string) $expiryMinutes,
         ];
+
+        $bodyParameters = collect(config('services.sms.whatsapp.body_parameters', ['code', 'text']))
+            ->map(function (string $parameter) use ($parameters): array {
+                $value = $parameters[$parameter] ?? '';
+
+                if ($value === '') {
+                    throw new DomainException(
+                        "WhatsApp template parameter \"{$parameter}\" is empty; check WHATSAPP_CLOUD_BODY_PARAMETERS"
+                    );
+                }
+
+                return [
+                    'type' => 'text',
+                    'text' => $value,
+                ];
+            })
+            ->values()
+            ->all();
 
         $components = [
             [
                 'type' => 'body',
-                'parameters' => collect(config('services.sms.whatsapp.body_parameters', ['code', 'text']))
-                    ->map(fn (string $parameter): array => [
-                        'type' => 'text',
-                        'text' => $parameters[$parameter] ?? '',
-                    ])
-                    ->values()
-                    ->all(),
+                'parameters' => $bodyParameters,
             ],
         ];
 
