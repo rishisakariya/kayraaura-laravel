@@ -65,6 +65,7 @@ return [
                 'default' => env('WHATSAPP_CLOUD_DEFAULT_TEMPLATE', 'kayraaura_auth_otp'),
                 'forgot_password' => env('WHATSAPP_CLOUD_FORGOT_PASSWORD_TEMPLATE'),
                 'cod_order' => env('WHATSAPP_CLOUD_COD_ORDER_TEMPLATE'),
+                'register' => env('WHATSAPP_CLOUD_REGISTER_TEMPLATE'),
             ],
         ],
         'msg91' => [

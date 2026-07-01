@@ -25,22 +25,42 @@ class FrontendAuthController extends Controller
      */
     public function register(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255',
-            'password' => 'required|string|min:8|confirmed',
-            'phone' => 'required|string|max:12|unique:users,phone',
-            'gender' => 'required|in:male,female',
+        $validated = $this->validateRegistrationFields($request);
+
+        if ($validated instanceof JsonResponse) {
+            return $validated;
+        }
+
+        $otpValidator = Validator::make($request->all(), [
+            'otp' => 'required|string|digits:6',
         ]);
 
-        if ($validator->fails()) {
+        if ($otpValidator->fails()) {
             return response()->json([
                 'success' => false,
                 'error' => [
                     'code' => 'VALIDATION_ERROR',
                     'message' => 'Validation failed',
-                    'details' => $validator->errors()
-                ]
+                    'details' => $otpValidator->errors(),
+                ],
+            ], 422);
+        }
+
+        $phone = $validated['phone'];
+
+        try {
+            $this->otpService->verifyAndConsume(
+                $phone,
+                OtpService::PURPOSE_REGISTER,
+                $request->otp
+            );
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'OTP_VERIFICATION_FAILED',
+                    'message' => $e->getMessage(),
+                ],
             ], 422);
         }
 
@@ -48,7 +68,7 @@ class FrontendAuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'phone' => $request->phone,
+            'phone' => $phone,
             'gender' => $request->gender,
             'role' => 'customer'
         ]);
@@ -174,6 +194,35 @@ class FrontendAuthController extends Controller
     }
 
     /**
+     * Send registration OTP after validating all registration fields.
+     */
+    public function sendRegisterOtp(Request $request): JsonResponse
+    {
+        $validated = $this->validateRegistrationFields($request);
+
+        if ($validated instanceof JsonResponse) {
+            return $validated;
+        }
+
+        try {
+            $this->otpService->send($validated['phone'], OtpService::PURPOSE_REGISTER);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Registration OTP sent to your mobile number',
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'OTP_SEND_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 429);
+        }
+    }
+
+    /**
      * Send password reset OTP.
      */
     public function forgotPassword(Request $request): JsonResponse
@@ -213,14 +262,20 @@ class FrontendAuthController extends Controller
     }
 
     /**
-     * Verify OTP without consuming it (forgot password or COD order).
+     * Verify OTP without consuming it (register, forgot password, or COD order).
      */
     public function verifyOtp(Request $request): JsonResponse
     {
+        $purposes = implode(',', [
+            OtpService::PURPOSE_REGISTER,
+            OtpService::PURPOSE_FORGOT_PASSWORD,
+            OtpService::PURPOSE_COD_ORDER,
+        ]);
+
         $validator = Validator::make($request->all(), [
-            'purpose' => 'required|in:' . OtpService::PURPOSE_FORGOT_PASSWORD . ',' . OtpService::PURPOSE_COD_ORDER,
+            'purpose' => 'required|in:' . $purposes,
             'otp' => 'required|string|digits:6',
-            'phone' => 'required_if:purpose,' . OtpService::PURPOSE_FORGOT_PASSWORD . '|string|exists:users,phone',
+            'phone' => 'required_if:purpose,' . OtpService::PURPOSE_REGISTER . ',' . OtpService::PURPOSE_FORGOT_PASSWORD . '|string',
             'address_id' => 'required_if:purpose,' . OtpService::PURPOSE_COD_ORDER . '|integer|exists:user_addresses,id',
         ]);
 
@@ -248,9 +303,18 @@ class FrontendAuthController extends Controller
         }
 
         try {
-            $mobile = $purpose === OtpService::PURPOSE_COD_ORDER
-                ? $this->resolveCodOtpMobile($request->integer('address_id'))
-                : $request->input('phone');
+            $mobile = match ($purpose) {
+                OtpService::PURPOSE_COD_ORDER => $this->resolveCodOtpMobile($request->integer('address_id')),
+                default => $this->otpService->normalizeMobile($request->input('phone')),
+            };
+
+            if ($purpose === OtpService::PURPOSE_REGISTER && User::where('phone', $mobile)->exists()) {
+                throw new DomainException('This phone number is already registered');
+            }
+
+            if ($purpose === OtpService::PURPOSE_FORGOT_PASSWORD && !User::where('phone', $mobile)->exists()) {
+                throw new DomainException('No account found for this mobile number');
+            }
 
             $this->otpService->verify($mobile, $purpose, $request->input('otp'));
 
@@ -359,5 +423,59 @@ class FrontendAuthController extends Controller
             'success' => true,
             'message' => 'Email verified successfully'
         ]);
+    }
+
+    /**
+     * @return array{name: string, email: string, password: string, phone: string, gender: string}|JsonResponse
+     */
+    private function validateRegistrationFields(Request $request): array|JsonResponse
+    {
+        $validator = Validator::make($request->all(), $this->registrationFieldRules());
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'VALIDATION_ERROR',
+                    'message' => 'Validation failed',
+                    'details' => $validator->errors(),
+                ],
+            ], 422);
+        }
+
+        $phone = $this->otpService->normalizeMobile($request->phone);
+
+        if (User::where('phone', $phone)->exists()) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'VALIDATION_ERROR',
+                    'message' => 'Validation failed',
+                    'details' => ['phone' => ['This phone number is already registered.']],
+                ],
+            ], 422);
+        }
+
+        return [
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => $request->password,
+            'phone' => $phone,
+            'gender' => $request->gender,
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function registrationFieldRules(): array
+    {
+        return [
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
+            'phone' => 'required|string|max:12',
+            'gender' => 'required|in:male,female',
+        ];
     }
 }

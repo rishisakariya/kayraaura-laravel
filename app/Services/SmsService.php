@@ -264,6 +264,7 @@ class SmsService
         return match ($purpose) {
             OtpService::PURPOSE_COD_ORDER => 'COD order',
             OtpService::PURPOSE_FORGOT_PASSWORD => 'password reset',
+            OtpService::PURPOSE_REGISTER => 'registration',
             default => 'verification',
         };
     }

@@ -34,6 +34,7 @@ Route::delete('/media/delete', [MediaController::class, 'destroy']);
 // Frontend Authentication Routes
 Route::prefix('auth')->group(function () {
     Route::post('register', [FrontendAuthController::class, 'register']);
+    Route::post('register/send-otp', [FrontendAuthController::class, 'sendRegisterOtp']);
     Route::post('login', [FrontendAuthController::class, 'login']);
     Route::post('logout', [FrontendAuthController::class, 'logout'])->middleware('auth:sanctum');
     Route::get('profile', [FrontendAuthController::class, 'profile'])->middleware('auth:sanctum');
