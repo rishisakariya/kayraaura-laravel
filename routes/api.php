@@ -38,6 +38,7 @@ Route::prefix('auth')->group(function () {
     Route::post('logout', [FrontendAuthController::class, 'logout'])->middleware('auth:sanctum');
     Route::get('profile', [FrontendAuthController::class, 'profile'])->middleware('auth:sanctum');
     Route::post('forgot-password', [FrontendAuthController::class, 'forgotPassword']);
+    Route::post('verify-otp', [FrontendAuthController::class, 'verifyOtp']);
     Route::post('reset-password', [FrontendAuthController::class, 'resetPassword']);
     Route::post('verify-email', [FrontendAuthController::class, 'verifyEmail']);
 });

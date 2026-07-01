@@ -61,6 +61,31 @@ class OtpService
 
     public function verifyAndConsume(string $mobile, string $purpose, string $otp): void
     {
+        $mobileOtp = $this->findActiveOtp($mobile, $purpose);
+
+        $this->assertOtpMatches($mobileOtp, $otp);
+
+        $mobileOtp->update([
+            'verified_at' => now(),
+            'consumed_at' => now(),
+        ]);
+    }
+
+    /**
+     * Validate an OTP without consuming it. Use before a follow-up action
+     * (e.g. reset password or COD order placement) that will consume it.
+     */
+    public function verify(string $mobile, string $purpose, string $otp): void
+    {
+        $mobileOtp = $this->findActiveOtp($mobile, $purpose);
+
+        $this->assertOtpMatches($mobileOtp, $otp);
+
+        $mobileOtp->update(['verified_at' => now()]);
+    }
+
+    private function findActiveOtp(string $mobile, string $purpose): MobileOtp
+    {
         $mobile = $this->normalizeMobile($mobile);
 
         $mobileOtp = MobileOtp::where('mobile', $mobile)
@@ -79,16 +104,16 @@ class OtpService
             throw new DomainException('Too many invalid OTP attempts. Please request a new OTP');
         }
 
+        return $mobileOtp;
+    }
+
+    private function assertOtpMatches(MobileOtp $mobileOtp, string $otp): void
+    {
         if (!Hash::check($otp, $mobileOtp->otp_hash)) {
             $mobileOtp->increment('attempts');
 
             throw new DomainException('Invalid or expired OTP');
         }
-
-        $mobileOtp->update([
-            'verified_at' => now(),
-            'consumed_at' => now(),
-        ]);
     }
 
     public function normalizeMobile(string $mobile): string

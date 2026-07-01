@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Frontend\UserResource;
 use App\Models\User;
+use App\Models\UserAddress;
 use App\Services\OtpService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -209,6 +210,74 @@ class FrontendAuthController extends Controller
                 ]
             ], 429);
         }
+    }
+
+    /**
+     * Verify OTP without consuming it (forgot password or COD order).
+     */
+    public function verifyOtp(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'purpose' => 'required|in:' . OtpService::PURPOSE_FORGOT_PASSWORD . ',' . OtpService::PURPOSE_COD_ORDER,
+            'otp' => 'required|string|digits:6',
+            'phone' => 'required_if:purpose,' . OtpService::PURPOSE_FORGOT_PASSWORD . '|string|exists:users,phone',
+            'address_id' => 'required_if:purpose,' . OtpService::PURPOSE_COD_ORDER . '|integer|exists:user_addresses,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'VALIDATION_ERROR',
+                    'message' => 'Validation failed',
+                    'details' => $validator->errors(),
+                ],
+            ], 422);
+        }
+
+        $purpose = $request->input('purpose');
+
+        if ($purpose === OtpService::PURPOSE_COD_ORDER && !Auth::check()) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'UNAUTHORIZED',
+                    'message' => 'Authentication required for COD OTP verification',
+                ],
+            ], 401);
+        }
+
+        try {
+            $mobile = $purpose === OtpService::PURPOSE_COD_ORDER
+                ? $this->resolveCodOtpMobile($request->integer('address_id'))
+                : $request->input('phone');
+
+            $this->otpService->verify($mobile, $purpose, $request->input('otp'));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'OTP verified successfully',
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'OTP_VERIFICATION_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 422);
+        }
+    }
+
+    private function resolveCodOtpMobile(int $addressId): string
+    {
+        $address = UserAddress::where('user_id', Auth::id())->find($addressId);
+
+        if (!$address) {
+            throw new DomainException('Selected address was not found');
+        }
+
+        return $address->phone;
     }
 
     /**
