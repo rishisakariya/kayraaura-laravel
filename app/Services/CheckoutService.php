@@ -31,7 +31,7 @@ class CheckoutService
      * Email (lowercase) => fixed total amount in ₹.
      */
     private const FIXED_TOTAL_TEST_ACCOUNTS = [
-        'ajradadiya129@gmail.com' => 2.00,
+        'ajradadiya12999@gmail.com' => 2.00,
         'rishi.sakriya@gmail.com' => 2.00,
     ];
 
