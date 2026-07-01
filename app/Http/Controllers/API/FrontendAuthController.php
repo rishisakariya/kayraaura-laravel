@@ -634,9 +634,20 @@ class FrontendAuthController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => [
-                    'code' => 'VALIDATION_ERROR',
-                    'message' => 'Validation failed',
+                    'code' => 'PHONE_ALREADY_REGISTERED',
+                    'message' => 'This phone number is already registered',
                     'details' => ['phone' => ['This phone number is already registered.']],
+                ],
+            ], 422);
+        }
+
+        if (User::where('email', $request->email)->exists()) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'EMAIL_ALREADY_REGISTERED',
+                    'message' => 'This email address is already registered',
+                    'details' => ['email' => ['This email address is already registered.']],
                 ],
             ], 422);
         }
@@ -657,7 +668,7 @@ class FrontendAuthController extends Controller
     {
         return [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
+            'email' => 'required|string|email|max:255',
             'password' => 'required|string|min:8|confirmed',
             'phone' => 'required|string|max:12',
             'gender' => 'required|in:male,female',
