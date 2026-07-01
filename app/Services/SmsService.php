@@ -263,7 +263,7 @@ class SmsService
         // Meta auth template {{text}} body variable is limited to 15 characters.
         return match ($purpose) {
             OtpService::PURPOSE_COD_ORDER => 'COD order',
-            OtpService::PURPOSE_FORGOT_PASSWORD => 'Login',
+            OtpService::PURPOSE_FORGOT_PASSWORD => 'password reset',
             default => 'verification',
         };
     }
