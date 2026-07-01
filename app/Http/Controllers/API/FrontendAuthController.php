@@ -447,19 +447,11 @@ class FrontendAuthController extends Controller
 
         $purpose = $request->input('purpose');
 
-        if (in_array($purpose, [OtpService::PURPOSE_COD_ORDER, OtpService::PURPOSE_UPDATE_PHONE], true) && !Auth::check()) {
-            return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'UNAUTHORIZED',
-                    'message' => $purpose === OtpService::PURPOSE_COD_ORDER
-                        ? 'Authentication required for COD OTP verification'
-                        : 'Authentication required for phone update OTP verification',
-                ],
-            ], 401);
-        }
-
         try {
+            if (in_array($purpose, [OtpService::PURPOSE_COD_ORDER, OtpService::PURPOSE_UPDATE_PHONE], true) && !Auth::check()) {
+                throw new DomainException('Invalid or expired OTP');
+            }
+
             $mobile = match ($purpose) {
                 OtpService::PURPOSE_COD_ORDER => $this->resolveCodOtpMobile($request->integer('address_id')),
                 default => $this->otpService->normalizeMobile($request->input('phone')),
