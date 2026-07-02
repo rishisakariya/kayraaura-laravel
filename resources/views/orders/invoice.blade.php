@@ -467,11 +467,6 @@
         </tr>
     </table>
 
-    <div class="footer">
-        <p>This is a system generated invoice for order {{ $order->order_number }}.</p>
-        <p>Thank you for shopping with <span class="brand-name">{{ config('app.name', 'kayraaura') }}</span>.</p>
-    </div>
-
     <div class="perks-section">
         <table class="perks-grid">
             <tr>
@@ -502,6 +497,11 @@
             </tr>
         </table>
         <div class="delivery-banner">{{ $deliveryBanner }}</div>
+    </div>
+
+    <div class="footer">
+        <p>This is a system generated invoice for order {{ $order->order_number }}.</p>
+        <p>Thank you for shopping with <span class="brand-name">{{ config('app.name', 'kayraaura') }}</span>.</p>
     </div>
 </div>
 </body>
