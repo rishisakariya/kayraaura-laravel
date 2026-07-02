@@ -216,85 +216,46 @@
         /* Collections footer */
         .collections-section {
             background-color: #ffffff;
-            border: 1px solid #d9d9d9;
+            border: 0;
             border-bottom: 2px solid #c6a055;
-            border-top: 2px solid #111111;
-            margin-top: 14px;
-            padding: 10px 8px 8px;
+            bottom: 22mm;
+            left: 20mm;
+            padding: 8px 0 6px;
+            position: fixed;
+            right: 20mm;
             text-align: center;
-        }
-        .collections-divider {
-            color: #c6a055;
-            font-size: 8px;
-            letter-spacing: 2px;
-            margin-bottom: 6px;
         }
         .collections-title {
             color: #111111;
             font-size: 10px;
             font-weight: bold;
             letter-spacing: 1.4px;
-            margin-bottom: 3px;
+            margin-bottom: 8px;
             text-transform: uppercase;
         }
-        .collections-tagline {
-            color: #888888;
-            font-size: 8px;
-            font-style: italic;
-            margin-bottom: 10px;
-        }
         .collections-grid {
-            margin: 0 auto 10px;
-            width: 96%;
+            margin: 0 auto 8px;
+            width: 100%;
         }
         .collections-grid td {
             color: #333333;
-            font-size: 8.5px;
+            font-size: 7.5px;
             font-weight: bold;
-            line-height: 1.6;
-            padding: 3px 6px;
-            text-align: left;
+            line-height: 1.4;
+            padding: 0 2px;
+            text-align: center;
             vertical-align: middle;
-            width: 25%;
+            white-space: nowrap;
         }
         .collections-grid .cat-bullet {
             color: #c6a055;
-            padding-right: 5px;
+            padding-right: 4px;
         }
-        .collections-cta {
-            background-color: #f3f3f3;
-            border: 1px solid #d9d9d9;
-            margin-top: 4px;
-            width: 100%;
-        }
-        .collections-cta td {
-            color: #333333;
-            font-size: 8.5px;
-            padding: 7px 6px;
-            vertical-align: middle;
-            width: 50%;
-        }
-        .collections-cta .cta-left {
-            border-right: 1px solid #d9d9d9;
-            text-align: left;
-        }
-        .collections-cta .cta-label {
-            color: #111111;
-            font-size: 9px;
-            font-weight: bold;
-        }
-        .collections-cta .cta-sub {
-            color: #888888;
-            font-size: 7.5px;
-            margin-top: 1px;
-        }
-        .collections-cta .cta-right {
-            text-align: center;
-        }
-        .collections-cta .website {
+        .collections-website {
             color: #c6a055;
             font-size: 9.5px;
             font-weight: bold;
+            text-align: center;
         }
 
         /* Footer */
@@ -366,9 +327,7 @@
     $deliveryBanner = $webSetting->offer_line4 ?: 'Get it delivered in 3-6 days';
 
     $collectionCategories = [
-        'Rings', 'Bangles', 'Bracelets', 'Earrings',
-        'Necklaces', 'Mangalsutra', 'Pendants', 'Chains',
-        'Anklets', 'Nose Pins', 'Toe Rings', 'Daily Wear',
+        'Rings', 'Bangles', 'Bracelets', 'Earrings', 'Necklaces', 'Chains', 'Anklets',
     ];
 @endphp
 
@@ -547,33 +506,18 @@
         </tr>
     </table>
 
-
     <div class="collections-section">
-        <div class="collections-divider">&#9472;&#9472;&#9472; &#9670; &#9472;&#9472;&#9472;</div>
         <div class="collections-title">Discover Our Collections</div>
-        <div class="collections-tagline">Timeless designs, crafted for every you.</div>
 
         <table class="collections-grid" align="center">
-            @foreach(array_chunk($collectionCategories, 4) as $row)
-                <tr>
-                    @foreach($row as $category)
-                        <td><span class="cat-bullet">&#9670;</span>{{ $category }}</td>
-                    @endforeach
-                </tr>
-            @endforeach
-        </table>
-
-        <table class="collections-cta">
             <tr>
-                <td class="cta-left">
-                    <div class="cta-label">Shop More</div>
-                    <div class="cta-sub">Explore our complete range online</div>
-                </td>
-                <td class="cta-right">
-                    <div class="website">www.kayraaura.com</div>
-                </td>
+                @foreach($collectionCategories as $category)
+                    <td><span class="cat-bullet">&#9670;</span>{{ $category }}</td>
+                @endforeach
             </tr>
         </table>
+
+        <div class="collections-website">www.kayraaura.com</div>
     </div>
 
     <div class="footer">
