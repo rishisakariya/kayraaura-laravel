@@ -517,7 +517,7 @@
             </tr>
         </table>
 
-        <div class="collections-website">www.kayraaura.com</div>
+        <!-- <div class="collections-website">www.kayraaura.com</div> -->
 
         <div class="footer">
             <p>This is a system generated invoice for order {{ $order->order_number }}.</p>
