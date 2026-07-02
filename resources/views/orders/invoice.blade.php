@@ -262,7 +262,7 @@
             color: #888888;
             font-size: 8.5px;
             margin: 0;
-            padding: 0;
+            padding: 0 0 4px;
             text-align: center;
         }
         .collections-section .footer p { line-height: 1.35; margin: 0; }
