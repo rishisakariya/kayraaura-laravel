@@ -213,13 +213,47 @@
             text-align: center;
         }
 
+        /* Collections footer */
+        .collections-section {
+            border-top: 1px solid #e8dcc4;
+            border-bottom: 1px solid #e8dcc4;
+            margin-top: 14px;
+            padding: 12px 10px 10px;
+            text-align: center;
+        }
+        .collections-title {
+            color: #111111;
+            font-size: 9.5px;
+            font-weight: bold;
+            letter-spacing: 1.2px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .collections-grid {
+            margin: 0 auto 10px;
+            width: 72%;
+        }
+        .collections-grid td {
+            color: #333333;
+            font-size: 9px;
+            padding: 2px 0;
+            text-align: left;
+            width: 50%;
+        }
+        .collections-grid .bullet { color: #c6a055; padding-right: 4px; }
+        .collections-shop {
+            color: #111111;
+            font-size: 9px;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+        .collections-shop .website { color: #c6a055; }
+
         /* Footer */
         .footer {
-            border-top: 1px solid #e8dcc4;
             color: #888888;
             font-size: 8.5px;
-            margin-top: 12px;
-            padding-top: 8px;
+            margin-top: 10px;
             text-align: center;
         }
         .footer p { line-height: 1.4; margin: 0; }
@@ -477,6 +511,37 @@
             </tr>
         </table>
         <div class="delivery-banner">{{ $deliveryBanner }}</div>
+    </div>
+
+    <div class="collections-section">
+        <div class="collections-title">Discover Our Collections</div>
+        <table class="collections-grid" align="center">
+            <tr>
+                <td><span class="bullet">&#8226;</span> Rings</td>
+                <td><span class="bullet">&#8226;</span> Bangles</td>
+            </tr>
+            <tr>
+                <td><span class="bullet">&#8226;</span> Bracelets</td>
+                <td><span class="bullet">&#8226;</span> Earrings</td>
+            </tr>
+            <tr>
+                <td><span class="bullet">&#8226;</span> Necklaces</td>
+                <td><span class="bullet">&#8226;</span> Mangalsutra</td>
+            </tr>
+            <tr>
+                <td><span class="bullet">&#8226;</span> Pendants</td>
+                <td><span class="bullet">&#8226;</span> Chains</td>
+            </tr>
+            <tr>
+                <td><span class="bullet">&#8226;</span> Anklets</td>
+                <td><span class="bullet">&#8226;</span> Nose Pins</td>
+            </tr>
+            <tr>
+                <td><span class="bullet">&#8226;</span> Toe Rings</td>
+                <td><span class="bullet">&#8226;</span> Daily Wear</td>
+            </tr>
+        </table>
+        <div class="collections-shop">Shop More: <span class="website">www.kayraaura.com</span></div>
     </div>
 
     <div class="footer">
