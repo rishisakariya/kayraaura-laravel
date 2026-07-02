@@ -218,9 +218,9 @@
             background-color: #ffffff;
             border: 0;
             border-bottom: 2px solid #c6a055;
-            bottom: 22mm;
+            bottom: 0;
             left: 20mm;
-            padding: 8px 0 6px;
+            padding: 8px 0 0;
             position: fixed;
             right: 20mm;
             text-align: center;
@@ -262,7 +262,7 @@
             color: #888888;
             font-size: 8.5px;
             margin: 0;
-            padding: 0 0 4px;
+            padding: 0;
             text-align: center;
         }
         .collections-section .footer p { line-height: 1.35; margin: 0; }
