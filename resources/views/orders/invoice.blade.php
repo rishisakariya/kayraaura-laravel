@@ -215,9 +215,10 @@
 
         /* Collections footer */
         .collections-section {
-            background-color: #faf8f4;
-            border: 1px solid #e8dcc4;
-            border-top: 2px solid #c6a055;
+            background-color: #ffffff;
+            border: 1px solid #d9d9d9;
+            border-bottom: 2px solid #c6a055;
+            border-top: 2px solid #111111;
             margin-top: 14px;
             padding: 10px 8px 8px;
             text-align: center;
@@ -261,9 +262,9 @@
             padding-right: 5px;
         }
         .collections-cta {
-            background-color: #ffffff;
-            border: 1px solid #e8dcc4;
-            margin-top: 2px;
+            background-color: #f3f3f3;
+            border: 1px solid #d9d9d9;
+            margin-top: 4px;
             width: 100%;
         }
         .collections-cta td {
@@ -274,7 +275,7 @@
             width: 50%;
         }
         .collections-cta .cta-left {
-            border-right: 1px solid #e8dcc4;
+            border-right: 1px solid #d9d9d9;
             text-align: left;
         }
         .collections-cta .cta-label {
