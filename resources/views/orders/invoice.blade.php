@@ -255,18 +255,18 @@
             color: #c6a055;
             font-size: 9.5px;
             font-weight: bold;
+            margin-bottom: 6px;
             text-align: center;
         }
-
-        /* Footer */
-        .footer {
+        .collections-section .footer {
             color: #888888;
             font-size: 8.5px;
-            margin-top: 10px;
+            margin: 0;
+            padding: 0 0 4px;
             text-align: center;
         }
-        .footer p { line-height: 1.4; margin: 0; }
-        .footer .brand-name { color: #c6a055; font-weight: bold; }
+        .collections-section .footer p { line-height: 1.35; margin: 0; }
+        .collections-section .footer .brand-name { color: #c6a055; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -518,11 +518,11 @@
         </table>
 
         <div class="collections-website">www.kayraaura.com</div>
-    </div>
 
-    <div class="footer">
-        <p>This is a system generated invoice for order {{ $order->order_number }}.</p>
-        <p>Thank you for shopping with <span class="brand-name">{{ config('app.name', 'kayraaura') }}</span>.</p>
+        <div class="footer">
+            <p>This is a system generated invoice for order {{ $order->order_number }}.</p>
+            <p>Thank you for shopping with <span class="brand-name">{{ config('app.name', 'kayraaura') }}</span>.</p>
+        </div>
     </div>
 </div>
 </body>
