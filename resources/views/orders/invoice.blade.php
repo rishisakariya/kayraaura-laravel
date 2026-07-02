@@ -215,39 +215,97 @@
 
         /* Collections footer */
         .collections-section {
-            border-top: 1px solid #e8dcc4;
-            border-bottom: 1px solid #e8dcc4;
+            background-color: #faf8f4;
+            border: 1px solid #e8dcc4;
+            border-top: 2px solid #c6a055;
             margin-top: 14px;
-            padding: 12px 10px 10px;
+            padding: 10px 8px 8px;
             text-align: center;
+        }
+        .collections-divider {
+            color: #c6a055;
+            font-size: 8px;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
         }
         .collections-title {
             color: #111111;
-            font-size: 9.5px;
+            font-size: 10px;
             font-weight: bold;
-            letter-spacing: 1.2px;
-            margin-bottom: 10px;
+            letter-spacing: 1.4px;
+            margin-bottom: 3px;
             text-transform: uppercase;
         }
+        .collections-tagline {
+            color: #888888;
+            font-size: 8px;
+            font-style: italic;
+            margin-bottom: 10px;
+        }
         .collections-grid {
-            margin: 0 auto 10px;
-            width: 72%;
+            margin-bottom: 10px;
+            width: 100%;
         }
         .collections-grid td {
+            padding: 6px 2px;
+            text-align: center;
+            vertical-align: top;
+            width: 25%;
+        }
+        .cat-icon-wrap {
+            background-color: #ffffff;
+            border: 1px solid #e8dcc4;
+            border-radius: 50%;
+            color: #c6a055;
+            display: inline-block;
+            font-size: 11px;
+            height: 28px;
+            line-height: 28px;
+            margin-bottom: 4px;
+            text-align: center;
+            width: 28px;
+        }
+        .cat-name {
             color: #333333;
-            font-size: 9px;
-            padding: 2px 0;
-            text-align: left;
+            font-size: 8px;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+        .collections-cta {
+            background-color: #ffffff;
+            border: 1px solid #e8dcc4;
+            margin-top: 2px;
+            width: 100%;
+        }
+        .collections-cta td {
+            color: #333333;
+            font-size: 8.5px;
+            padding: 7px 6px;
+            vertical-align: middle;
             width: 50%;
         }
-        .collections-grid .bullet { color: #c6a055; padding-right: 4px; }
-        .collections-shop {
+        .collections-cta .cta-left {
+            border-right: 1px solid #e8dcc4;
+            text-align: left;
+        }
+        .collections-cta .cta-label {
             color: #111111;
             font-size: 9px;
             font-weight: bold;
-            margin-top: 4px;
         }
-        .collections-shop .website { color: #c6a055; }
+        .collections-cta .cta-sub {
+            color: #888888;
+            font-size: 7.5px;
+            margin-top: 1px;
+        }
+        .collections-cta .cta-right {
+            text-align: center;
+        }
+        .collections-cta .website {
+            color: #c6a055;
+            font-size: 9.5px;
+            font-weight: bold;
+        }
 
         /* Footer */
         .footer {
@@ -316,6 +374,21 @@
     $perkLine2 = $webSetting->offer_line2 ?: 'Return or Exchange within ' . \App\Models\Order::RETURN_WINDOW_DAYS . ' days';
     $perkLine3 = $webSetting->offer_line3 ?: 'Free delivery on orders above ₹1000.';
     $deliveryBanner = $webSetting->offer_line4 ?: 'Get it delivered in 3-6 days';
+
+    $collectionCategories = [
+        ['icon' => '&#9670;', 'name' => 'Rings'],
+        ['icon' => '&#9675;', 'name' => 'Bangles'],
+        ['icon' => '&#8857;', 'name' => 'Bracelets'],
+        ['icon' => '&#9830;', 'name' => 'Earrings'],
+        ['icon' => '&#9671;', 'name' => 'Necklaces'],
+        ['icon' => '&#10022;', 'name' => 'Mangalsutra'],
+        ['icon' => '&#9661;', 'name' => 'Pendants'],
+        ['icon' => '&#8776;', 'name' => 'Chains'],
+        ['icon' => '&#9711;', 'name' => 'Anklets'],
+        ['icon' => '&#8226;', 'name' => 'Nose Pins'],
+        ['icon' => '&#8728;', 'name' => 'Toe Rings'],
+        ['icon' => '&#9733;', 'name' => 'Daily Wear'],
+    ];
 @endphp
 
 <div class="page">
@@ -493,55 +566,36 @@
         </tr>
     </table>
 
-    <div class="perks-section">
-        <table class="perks-grid">
-            <tr>
-                <td>
-                    <div class="perks-icon">&#8377;</div>
-                    <div class="perks-text">{{ $perkLine1 }}</div>
-                </td>
-                <td>
-                    <div class="perks-icon">&#8634;</div>
-                    <div class="perks-text underlined">{{ $perkLine2 }}</div>
-                </td>
-                <td>
-                    <div class="perks-icon">&#9951;</div>
-                    <div class="perks-text">{{ $perkLine3 }}</div>
-                </td>
-            </tr>
-        </table>
-        <div class="delivery-banner">{{ $deliveryBanner }}</div>
-    </div>
 
     <div class="collections-section">
+        <div class="collections-divider">&#9472;&#9472;&#9472; &#9670; &#9472;&#9472;&#9472;</div>
         <div class="collections-title">Discover Our Collections</div>
-        <table class="collections-grid" align="center">
+        <div class="collections-tagline">Timeless designs, crafted for every you.</div>
+
+        <table class="collections-grid">
+            @foreach(array_chunk($collectionCategories, 4) as $row)
+                <tr>
+                    @foreach($row as $category)
+                        <td>
+                            <div class="cat-icon-wrap">{!! $category['icon'] !!}</div>
+                            <div class="cat-name">{{ $category['name'] }}</div>
+                        </td>
+                    @endforeach
+                </tr>
+            @endforeach
+        </table>
+
+        <table class="collections-cta">
             <tr>
-                <td><span class="bullet">&#8226;</span> Rings</td>
-                <td><span class="bullet">&#8226;</span> Bangles</td>
-            </tr>
-            <tr>
-                <td><span class="bullet">&#8226;</span> Bracelets</td>
-                <td><span class="bullet">&#8226;</span> Earrings</td>
-            </tr>
-            <tr>
-                <td><span class="bullet">&#8226;</span> Necklaces</td>
-                <td><span class="bullet">&#8226;</span> Mangalsutra</td>
-            </tr>
-            <tr>
-                <td><span class="bullet">&#8226;</span> Pendants</td>
-                <td><span class="bullet">&#8226;</span> Chains</td>
-            </tr>
-            <tr>
-                <td><span class="bullet">&#8226;</span> Anklets</td>
-                <td><span class="bullet">&#8226;</span> Nose Pins</td>
-            </tr>
-            <tr>
-                <td><span class="bullet">&#8226;</span> Toe Rings</td>
-                <td><span class="bullet">&#8226;</span> Daily Wear</td>
+                <td class="cta-left">
+                    <div class="cta-label"><span style="color: #c6a055;">&#9670;</span> Shop More</div>
+                    <div class="cta-sub">Explore our complete range online</div>
+                </td>
+                <td class="cta-right">
+                    <div class="website">www.kayraaura.com</div>
+                </td>
             </tr>
         </table>
-        <div class="collections-shop">Shop More: <span class="website">www.kayraaura.com</span></div>
     </div>
 
     <div class="footer">
