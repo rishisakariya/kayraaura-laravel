@@ -169,6 +169,58 @@
             padding: 7px 10px;
         }
 
+        /* Perks footer */
+        .perks-section {
+            margin-top: 20px;
+            width: 100%;
+        }
+        .perks-grid {
+            background-color: #f3f3f3;
+            width: 100%;
+        }
+        .perks-grid td {
+            padding: 14px 8px 12px;
+            text-align: center;
+            vertical-align: top;
+            width: 33.33%;
+        }
+        .perks-icon {
+            background-color: #ffffff;
+            border-radius: 50%;
+            display: inline-block;
+            height: 38px;
+            line-height: 38px;
+            margin-bottom: 8px;
+            text-align: center;
+            width: 38px;
+        }
+        .perks-icon svg {
+            display: inline-block;
+            margin-top: 10px;
+            vertical-align: top;
+        }
+        .perks-icon .rupee {
+            color: #444444;
+            font-size: 17px;
+            font-weight: bold;
+            line-height: 38px;
+        }
+        .perks-text {
+            color: #111111;
+            font-size: 9px;
+            font-weight: bold;
+            line-height: 1.35;
+        }
+        .perks-text.underlined { text-decoration: underline; }
+        .delivery-banner {
+            background-color: #e4e4e4;
+            color: #111111;
+            font-size: 9.5px;
+            font-weight: bold;
+            padding: 8px 10px;
+            text-align: center;
+        }
+
         /* Footer */
         .footer {
             border-top: 1px solid #e8dcc4;
@@ -233,6 +285,11 @@
         'refunded' => 'refunded',
         default => '',
     };
+
+    $perkLine1 = $webSetting->offer_line1 ?: 'Cash on Delivery';
+    $perkLine2 = $webSetting->offer_line2 ?: 'Return or Exchange within ' . \App\Models\Order::RETURN_WINDOW_DAYS . ' days';
+    $perkLine3 = $webSetting->offer_line3 ?: 'Free delivery on orders above ₹1000.';
+    $deliveryBanner = $webSetting->offer_line4 ?: 'Get it delivered in 3-6 days';
 @endphp
 
 <div class="page">
@@ -413,6 +470,38 @@
     <div class="footer">
         <p>This is a system generated invoice for order {{ $order->order_number }}.</p>
         <p>Thank you for shopping with <span class="brand-name">{{ config('app.name', 'kayraaura') }}</span>.</p>
+    </div>
+
+    <div class="perks-section">
+        <table class="perks-grid">
+            <tr>
+                <td>
+                    <div class="perks-icon"><span class="rupee">&#8377;</span></div>
+                    <div class="perks-text">{{ $perkLine1 }}</div>
+                </td>
+                <td>
+                    <div class="perks-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 12a8 8 0 0 1 13.66-5.66M20 12a8 8 0 0 1-13.66 5.66" stroke="#444444" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M17 7h3v3M7 17H4v-3" stroke="#444444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="perks-text underlined">{{ $perkLine2 }}</div>
+                </td>
+                <td>
+                    <div class="perks-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="1" y="7" width="13" height="9" rx="1" stroke="#444444" stroke-width="2"/>
+                            <path d="M14 10h4l3 4v2h-7v-6z" stroke="#444444" stroke-width="2" stroke-linejoin="round"/>
+                            <circle cx="6" cy="18" r="2" stroke="#444444" stroke-width="2"/>
+                            <circle cx="18" cy="18" r="2" stroke="#444444" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="perks-text">{{ $perkLine3 }}</div>
+                </td>
+            </tr>
+        </table>
+        <div class="delivery-banner">{{ $deliveryBanner }}</div>
     </div>
 </div>
 </body>
