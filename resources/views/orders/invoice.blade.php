@@ -218,7 +218,7 @@
             background-color: #ffffff;
             border: 0;
             border-bottom: 2px solid #c6a055;
-            bottom: 0;
+            bottom: 5mm;
             left: 20mm;
             padding: 8px 0 0;
             position: fixed;
