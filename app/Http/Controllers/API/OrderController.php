@@ -537,15 +537,13 @@ class OrderController extends Controller
     {
         $path = 'invoices/' . $order->id . '/' . $this->invoiceFileName($order);
 
-        if (!PublicStorage::exists($path)) {
-            $pdf = Pdf::loadView('orders.invoice', [
-                'order' => $order,
-                'webSetting' => WebSetting::current(),
-                'invoiceNumber' => 'INV-' . $order->order_number,
-            ])->setPaper('a4');
+        $pdf = Pdf::loadView('orders.invoice', [
+            'order' => $order,
+            'webSetting' => WebSetting::current(),
+            'invoiceNumber' => 'INV-' . $order->order_number,
+        ])->setPaper('a4');
 
-            PublicStorage::put($path, $pdf->output());
-        }
+        PublicStorage::put($path, $pdf->output());
 
         return $path;
     }

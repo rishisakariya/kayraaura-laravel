@@ -243,33 +243,22 @@
             margin-bottom: 10px;
         }
         .collections-grid {
-            margin-bottom: 10px;
-            width: 100%;
+            margin: 0 auto 10px;
+            width: 96%;
         }
         .collections-grid td {
-            padding: 6px 2px;
-            text-align: center;
-            vertical-align: top;
+            color: #333333;
+            font-size: 8.5px;
+            font-weight: bold;
+            line-height: 1.6;
+            padding: 3px 6px;
+            text-align: left;
+            vertical-align: middle;
             width: 25%;
         }
-        .cat-icon-wrap {
-            background-color: #ffffff;
-            border: 1px solid #e8dcc4;
-            border-radius: 50%;
+        .collections-grid .cat-bullet {
             color: #c6a055;
-            display: inline-block;
-            font-size: 11px;
-            height: 28px;
-            line-height: 28px;
-            margin-bottom: 4px;
-            text-align: center;
-            width: 28px;
-        }
-        .cat-name {
-            color: #333333;
-            font-size: 8px;
-            font-weight: bold;
-            line-height: 1.2;
+            padding-right: 5px;
         }
         .collections-cta {
             background-color: #ffffff;
@@ -376,18 +365,9 @@
     $deliveryBanner = $webSetting->offer_line4 ?: 'Get it delivered in 3-6 days';
 
     $collectionCategories = [
-        ['icon' => '&#9670;', 'name' => 'Rings'],
-        ['icon' => '&#9675;', 'name' => 'Bangles'],
-        ['icon' => '&#8857;', 'name' => 'Bracelets'],
-        ['icon' => '&#9830;', 'name' => 'Earrings'],
-        ['icon' => '&#9671;', 'name' => 'Necklaces'],
-        ['icon' => '&#10022;', 'name' => 'Mangalsutra'],
-        ['icon' => '&#9661;', 'name' => 'Pendants'],
-        ['icon' => '&#8776;', 'name' => 'Chains'],
-        ['icon' => '&#9711;', 'name' => 'Anklets'],
-        ['icon' => '&#8226;', 'name' => 'Nose Pins'],
-        ['icon' => '&#8728;', 'name' => 'Toe Rings'],
-        ['icon' => '&#9733;', 'name' => 'Daily Wear'],
+        'Rings', 'Bangles', 'Bracelets', 'Earrings',
+        'Necklaces', 'Mangalsutra', 'Pendants', 'Chains',
+        'Anklets', 'Nose Pins', 'Toe Rings', 'Daily Wear',
     ];
 @endphp
 
@@ -572,14 +552,11 @@
         <div class="collections-title">Discover Our Collections</div>
         <div class="collections-tagline">Timeless designs, crafted for every you.</div>
 
-        <table class="collections-grid">
+        <table class="collections-grid" align="center">
             @foreach(array_chunk($collectionCategories, 4) as $row)
                 <tr>
                     @foreach($row as $category)
-                        <td>
-                            <div class="cat-icon-wrap">{!! $category['icon'] !!}</div>
-                            <div class="cat-name">{{ $category['name'] }}</div>
-                        </td>
+                        <td><span class="cat-bullet">&#9670;</span>{{ $category }}</td>
                     @endforeach
                 </tr>
             @endforeach
@@ -588,7 +565,7 @@
         <table class="collections-cta">
             <tr>
                 <td class="cta-left">
-                    <div class="cta-label"><span style="color: #c6a055;">&#9670;</span> Shop More</div>
+                    <div class="cta-label">Shop More</div>
                     <div class="cta-sub">Explore our complete range online</div>
                 </td>
                 <td class="cta-right">
