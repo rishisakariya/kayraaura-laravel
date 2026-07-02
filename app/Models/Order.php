@@ -174,4 +174,30 @@ class Order extends Model
         $this->return_request = $returnRequest;
         $this->save();
     }
+
+    public function returnDisplayStatus(): ?string
+    {
+        $returnStatus = $this->relationLoaded('shipment')
+            ? $this->shipment?->reverse_status
+            : $this->shipment()->value('reverse_status');
+        $orderStatus = $this->status;
+
+        if ($orderStatus === 'returned' || $returnStatus === OrderShipment::STATUS_DELIVERED) {
+            return 'returned';
+        }
+
+        if (in_array($returnStatus, [
+            OrderShipment::STATUS_PICKED_UP,
+            OrderShipment::STATUS_IN_TRANSIT,
+            OrderShipment::STATUS_OUT_FOR_DELIVERY,
+        ], true)) {
+            return 'return_processing';
+        }
+
+        if ($orderStatus === 'return_requested') {
+            return 'return_requested';
+        }
+
+        return null;
+    }
 }

@@ -18,6 +18,8 @@ class OrderReturnEntryResource extends JsonResource
             'order_number' => $this->resource['order_number'] ?? null,
             'payment_method' => $this->resource['payment_method'] ?? null,
             'order_status' => $this->resource['order_status'] ?? null,
+            'return_display_status' => $this->resource['return_display_status'] ?? null,
+            'shipment_return_status' => $this->resource['shipment_return_status'] ?? null,
             'payment_status' => $this->resource['payment_status'] ?? null,
             'order_total_amount' => $this->resource['order_total_amount'] ?? null,
             'customer' => $this->resource['customer'] ?? null,

@@ -21,7 +21,7 @@ class OrderReturnListingService
     public function paginate(string $paymentMethod, array $filters = []): LengthAwarePaginator
     {
         $orders = Order::query()
-            ->with(['user'])
+            ->with(['user', 'shipment'])
             ->where('payment_method', $paymentMethod)
             ->whereNotNull('return_request')
             ->when(
@@ -117,6 +117,8 @@ class OrderReturnListingService
             'order_number' => $order->order_number,
             'payment_method' => $order->payment_method,
             'order_status' => $order->status,
+            'return_display_status' => $order->returnDisplayStatus(),
+            'shipment_return_status' => $order->shipment?->reverse_status,
             'payment_status' => $order->payment_status,
             'order_total_amount' => (float) $order->total_amount,
             'customer' => [

@@ -54,6 +54,7 @@ class OrderResource extends JsonResource
             'notes' => $this->notes,
             'can_be_returned' => $this->canBeReturned(),
             'can_pay_return_refund' => $this->canPayReturnRefundForAdmin(),
+            'return_display_status' => $this->returnDisplayStatus(),
             'return_request' => $this->returnRequestPayload(),
             'return_summary' => $this->returnSummaryPayload(),
             'invoice_download_url' => $this->invoiceDownloadUrl(),
@@ -101,7 +102,7 @@ class OrderResource extends JsonResource
             ], $this->returnRequestSummary()),
         ];
 
-        if ($request->is('cpanel/orders/*') || $request->is('api/cpanel/orders/*')) {
+        if ($this->isAdminOrderDetailRequest($request)) {
             $payload = array_merge($payload, [
                 'status_location' => $shipment?->status_location,
                 'status_instructions' => $shipment?->status_instructions,
@@ -214,7 +215,7 @@ class OrderResource extends JsonResource
 
     private function canPayReturnRefundForAdmin(): bool
     {
-        if (!request()->is('cpanel/*')) {
+        if (!$this->isAdminPanelRequest()) {
             return false;
         }
 
@@ -226,11 +227,22 @@ class OrderResource extends JsonResource
      */
     private function isAdminRefundContext(array $request): bool
     {
-        if (!request()->is('cpanel/*')) {
+        if (!$this->isAdminPanelRequest()) {
             return false;
         }
 
         return app(OrderReturnService::class)->canPayReturnRefundForRequest($this->resource, $request);
+    }
+
+    private function isAdminPanelRequest(): bool
+    {
+        return request()->is('cpanel/*') || request()->is('api/cpanel/*');
+    }
+
+    private function isAdminOrderDetailRequest(Request $request): bool
+    {
+        return $request->is('cpanel/orders/*')
+            || $request->is('api/cpanel/orders/*');
     }
 
     private function trackingTimeline(array $trackingPayload): array
