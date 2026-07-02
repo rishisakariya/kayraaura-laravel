@@ -171,65 +171,46 @@
 
         /* Perks footer */
         .perks-section {
-            margin-top: 24px;
+            margin-top: 16px;
             width: 100%;
         }
         .perks-grid {
             background-color: #f3f3f3;
-            border-collapse: collapse;
             width: 100%;
         }
         .perks-grid td {
-            padding: 18px 10px 16px;
+            padding: 14px 8px 12px;
             text-align: center;
             vertical-align: top;
             width: 33.33%;
         }
-        .perks-icon-wrap {
-            margin: 0 auto 10px;
-            text-align: center;
-        }
         .perks-icon {
             background-color: #ffffff;
             border-radius: 50%;
+            color: #444444;
             display: inline-block;
-            height: 42px;
-            line-height: 42px;
-            text-align: center;
-            vertical-align: middle;
-            width: 42px;
-        }
-        .perks-icon img {
-            display: block;
-            height: 22px;
-            margin: 10px auto 0;
-            width: 22px;
-        }
-        .perks-icon .rupee {
-            color: #333333;
-            display: inline-block;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: bold;
-            line-height: 42px;
+            height: 38px;
+            line-height: 38px;
+            margin-bottom: 8px;
+            text-align: center;
+            width: 38px;
         }
         .perks-text {
             color: #111111;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: bold;
-            line-height: 1.4;
-            margin: 0 auto;
-            max-width: 170px;
+            line-height: 1.35;
         }
         .perks-text.underlined { text-decoration: underline; }
         .delivery-banner {
             background-color: #e4e4e4;
             color: #111111;
-            font-size: 10px;
+            font-size: 9.5px;
             font-weight: bold;
-            letter-spacing: 0.2px;
-            padding: 10px 12px;
+            padding: 8px 10px;
             text-align: center;
-            width: 100%;
         }
 
         /* Footer */
@@ -297,9 +278,10 @@
         default => '',
     };
 
-    $returnIconPath = public_path('images/invoice/return.png');
-    $truckIconPath = public_path('images/invoice/truck.png');
-    $freeDeliveryMin = 1000;
+    $perkLine1 = $webSetting->offer_line1 ?: 'Cash on Delivery';
+    $perkLine2 = $webSetting->offer_line2 ?: 'Return or Exchange within ' . \App\Models\Order::RETURN_WINDOW_DAYS . ' days';
+    $perkLine3 = $webSetting->offer_line3 ?: 'Free delivery on orders above ₹1000.';
+    $deliveryBanner = $webSetting->offer_line4 ?: 'Get it delivered in 3-6 days';
 @endphp
 
 <div class="page">
@@ -477,47 +459,25 @@
         </tr>
     </table>
 
-    <table class="perks-section" cellpadding="0" cellspacing="0">
-        <tr>
-            <td>
-                <table class="perks-grid" cellpadding="0" cellspacing="0">
-                    <tr>
-                        <td>
-                            <div class="perks-icon-wrap">
-                                <div class="perks-icon"><span class="rupee">&#8377;</span></div>
-                            </div>
-                            <div class="perks-text">Cash on Delivery</div>
-                        </td>
-                        <td>
-                            <div class="perks-icon-wrap">
-                                <div class="perks-icon">
-                                    @if(file_exists($returnIconPath))
-                                        <img src="{{ $returnIconPath }}" alt="">
-                                    @else
-                                        <span class="rupee" style="font-size: 18px;">&#8635;</span>
-                                    @endif
-                                </div>
-                            </div>
-                            <div class="perks-text underlined">Return or Exchange within {{ \App\Models\Order::RETURN_WINDOW_DAYS }} days</div>
-                        </td>
-                        <td>
-                            <div class="perks-icon-wrap">
-                                <div class="perks-icon">
-                                    @if(file_exists($truckIconPath))
-                                        <img src="{{ $truckIconPath }}" alt="">
-                                    @else
-                                        <span class="rupee" style="font-size: 14px;">DEL</span>
-                                    @endif
-                                </div>
-                            </div>
-                            <div class="perks-text">Free delivery on orders above &#8377;{{ number_format($freeDeliveryMin) }}.</div>
-                        </td>
-                    </tr>
-                </table>
-                <div class="delivery-banner">Get it delivered in 3-6 days</div>
-            </td>
-        </tr>
-    </table>
+    <div class="perks-section">
+        <table class="perks-grid">
+            <tr>
+                <td>
+                    <div class="perks-icon">&#8377;</div>
+                    <div class="perks-text">{{ $perkLine1 }}</div>
+                </td>
+                <td>
+                    <div class="perks-icon">&#8634;</div>
+                    <div class="perks-text underlined">{{ $perkLine2 }}</div>
+                </td>
+                <td>
+                    <div class="perks-icon">&#9951;</div>
+                    <div class="perks-text">{{ $perkLine3 }}</div>
+                </td>
+            </tr>
+        </table>
+        <div class="delivery-banner">{{ $deliveryBanner }}</div>
+    </div>
 
     <div class="footer">
         <p>This is a system generated invoice for order {{ $order->order_number }}.</p>
