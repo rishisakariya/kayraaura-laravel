@@ -22,7 +22,7 @@ class CheckoutService
     ) {
     }
 
-    private const COD_CHARGE_RATE = 0.10;
+    private const COD_CHARGE_AMOUNT = 50.00;
 
     private const GST_RATE = 0.03;
 
@@ -98,7 +98,7 @@ class CheckoutService
             ? round($baseTotalAfterFirstOrderDiscount * ($configuredOnlinePaymentDiscountPercent / 100), 2)
             : 0.0;
         $baseTotalAfterOnlineDiscount = round(max($baseTotalAfterFirstOrderDiscount - $onlinePaymentDiscountAmount, 0), 2);
-        $codCharge = $isCod ? round($baseTotalAfterFirstOrderDiscount * self::COD_CHARGE_RATE, 2) : 0.0;
+        $codCharge = $isCod ? self::COD_CHARGE_AMOUNT : 0.0;
         $totalAmount = $isCod
             ? round($baseTotalAfterFirstOrderDiscount + $codCharge, 2)
             : $baseTotalAfterOnlineDiscount;
