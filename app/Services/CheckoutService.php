@@ -770,11 +770,23 @@ class CheckoutService
         ];
     }
 
+    /**
+     * Orders that genuinely consume the first-order discount.
+     *
+     * Online orders awaiting payment do not consume it: the discount is only
+     * reserved once payment succeeds (or immediately for COD). If the customer
+     * closes the Razorpay modal without paying, they can place another order
+     * and still receive the first-order discount.
+     */
     public function userQualifiesForFirstOrderDiscount(User $user): bool
     {
         return !Order::where('user_id', $user->id)
             ->where('status', '!=', 'cancelled')
-            ->where('payment_status', '!=', 'failed')
+            ->whereNotIn('payment_status', ['failed'])
+            ->where(function ($query) {
+                $query->where('payment_method', '!=', 'online')
+                    ->orWhere('payment_status', '!=', 'pending');
+            })
             ->exists();
     }
 
