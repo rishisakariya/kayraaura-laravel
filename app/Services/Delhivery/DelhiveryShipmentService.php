@@ -561,13 +561,18 @@ class DelhiveryShipmentService
 
             $normalizedStatus = $this->normalizeStatus($rawStatus, $this->extractStatusType($payload));
 
+            $mergedReversePayload = array_merge($shipment->reverse_response_payload ?? [], [
+                'tracking' => $payload,
+            ]);
+
             $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYNC)->fill([
                 'reverse_status' => $normalizedStatus,
-                'reverse_response_payload' => array_merge($shipment->reverse_response_payload ?? [], [
-                    'tracking' => $payload,
-                ]),
+                'reverse_response_payload' => $mergedReversePayload,
                 'last_synced_at' => now(),
-            ])->save();
+            ]);
+
+            $this->refreshEstimatedReturn($shipment, $payload);
+            $shipment->save();
 
             $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
 
@@ -860,6 +865,8 @@ class DelhiveryShipmentService
                 'reverse_failed_reason' => null,
             ])->save();
 
+            $this->refreshEstimatedReturn($shipment->refresh());
+
             Log::channel('thirdparty')->info('Delhivery reverse pickup created', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
@@ -926,7 +933,10 @@ class DelhiveryShipmentService
                 'reverse_status' => $normalizedStatus,
                 'reverse_response_payload' => array_merge($shipment->reverse_response_payload ?? [], ['webhook' => $payload]),
                 'last_synced_at' => now(),
-            ])->save();
+            ]);
+
+            $this->refreshEstimatedReturn($shipment, $payload);
+            $shipment->save();
 
             $this->lifecycle->completeReturnIfReceived($shipment, $normalizedStatus);
 
@@ -986,6 +996,7 @@ class DelhiveryShipmentService
                 'status' => $shipment->reverse_status,
                 'tracking_url' => $shipment->reverse_tracking_url,
                 'requested_at' => $shipment->reverse_requested_at?->format('Y-m-d H:i:s'),
+                'estimated_return_at' => $shipment->estimated_return_at?->format('Y-m-d H:i:s'),
                 'failed_reason' => $shipment->reverse_failed_reason,
             ],
         ];
@@ -1006,6 +1017,7 @@ class DelhiveryShipmentService
                 'status' => $shipment?->reverse_status,
                 'tracking_url' => $shipment?->reverse_tracking_url,
                 'requested_at' => $shipment?->reverse_requested_at?->format('Y-m-d H:i:s'),
+                'estimated_return_at' => $shipment?->estimated_return_at?->format('Y-m-d H:i:s'),
             ],
         ];
     }
@@ -1772,12 +1784,94 @@ class DelhiveryShipmentService
             return null;
         }
 
+        return $this->fetchEstimatedDateFromTat(
+            $shipment,
+            $originPin,
+            $destinationPin,
+            $shipment->manifested_at ?? $shipment->created_at ?? now(),
+            'Delhivery expected TAT lookup failed',
+        );
+    }
+
+    private function refreshEstimatedReturn(OrderShipment $shipment, ?array $trackingPayload = null): void
+    {
+        if ($shipment->provider !== OrderShipment::PROVIDER_DELHIVERY || !$shipment->reverse_waybill) {
+            return;
+        }
+
+        $estimatedAt = $this->resolveEstimatedReturnDate($shipment, $trackingPayload);
+
+        if (!$estimatedAt) {
+            return;
+        }
+
+        if ($shipment->estimated_return_at?->equalTo($estimatedAt)) {
+            return;
+        }
+
+        $shipment->estimated_return_at = $estimatedAt;
+
+        if ($shipment->exists) {
+            $shipment->save();
+        }
+    }
+
+    private function resolveEstimatedReturnDate(OrderShipment $shipment, ?array $trackingPayload = null): ?Carbon
+    {
+        foreach (array_filter([
+            $trackingPayload,
+            Arr::get($shipment->reverse_response_payload ?? [], 'tracking'),
+            $shipment->reverse_response_payload,
+        ]) as $payload) {
+            if (!is_array($payload)) {
+                continue;
+            }
+
+            if ($date = $this->extractEstimatedDeliveryDate($payload)) {
+                return $date;
+            }
+        }
+
+        return $this->fetchEstimatedReturnFromTat($shipment);
+    }
+
+    private function fetchEstimatedReturnFromTat(OrderShipment $shipment): ?Carbon
+    {
+        $destinationPin = trim((string) config('delhivery.origin_pin', ''));
+
+        if ($destinationPin === '') {
+            return null;
+        }
+
+        $shipment->loadMissing('order');
+        $originPin = trim((string) ($shipment->order?->shipping_address['postal_code'] ?? ''));
+
+        if ($originPin === '') {
+            return null;
+        }
+
+        return $this->fetchEstimatedDateFromTat(
+            $shipment,
+            $originPin,
+            $destinationPin,
+            $shipment->reverse_requested_at ?? now(),
+            'Delhivery reverse expected TAT lookup failed',
+        );
+    }
+
+    private function fetchEstimatedDateFromTat(
+        OrderShipment $shipment,
+        string $originPin,
+        string $destinationPin,
+        Carbon $baseDate,
+        string $logMessage,
+    ): ?Carbon {
         try {
             $response = $this->client->expectedTat($originPin, $destinationPin);
 
-            return $this->parseEstimatedDeliveryFromTatResponse($response, $shipment);
+            return $this->parseEstimatedDeliveryFromTatResponse($response, $shipment, $baseDate);
         } catch (\Throwable $e) {
-            Log::channel('thirdparty')->warning('Delhivery expected TAT lookup failed', [
+            Log::channel('thirdparty')->warning($logMessage, [
                 'shipment_id' => $shipment->id,
                 'order_id' => $shipment->order_id,
                 'origin_pin' => $originPin,
@@ -1792,8 +1886,11 @@ class DelhiveryShipmentService
     /**
      * @param  array<string, mixed>  $response
      */
-    private function parseEstimatedDeliveryFromTatResponse(array $response, OrderShipment $shipment): ?Carbon
-    {
+    private function parseEstimatedDeliveryFromTatResponse(
+        array $response,
+        OrderShipment $shipment,
+        ?Carbon $baseDate = null,
+    ): ?Carbon {
         $dateCandidates = [
             Arr::get($response, 'data.expected_delivery_date'),
             Arr::get($response, 'expected_delivery_date'),
@@ -1813,7 +1910,7 @@ class DelhiveryShipmentService
             return null;
         }
 
-        $baseDate = $shipment->manifested_at ?? $shipment->created_at ?? now();
+        $baseDate = $baseDate ?? $shipment->manifested_at ?? $shipment->created_at ?? now();
 
         return $baseDate->copy()->addDays((int) $tat)->endOfDay();
     }

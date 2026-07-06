@@ -100,6 +100,7 @@ class OrderResource extends JsonResource
                 'status' => $shipment?->reverse_status,
                 'tracking_url' => $shipment?->reverse_tracking_url,
                 'requested_at' => $shipment?->reverse_requested_at?->format('Y-m-d H:i:s'),
+                'estimated_return_at' => $shipment?->estimated_return_at?->format('Y-m-d H:i:s'),
             ], $this->returnRequestSummary()),
         ];
 

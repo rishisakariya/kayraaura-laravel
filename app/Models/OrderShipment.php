@@ -77,6 +77,7 @@ class OrderShipment extends Model
         'reverse_status',
         'reverse_tracking_url',
         'reverse_requested_at',
+        'estimated_return_at',
         'reverse_failed_reason',
         'provider_reference',
         'delhivery_order_id',
@@ -126,6 +127,7 @@ class OrderShipment extends Model
         'cancelled_at' => 'datetime',
         'rto_at' => 'datetime',
         'reverse_requested_at' => 'datetime',
+        'estimated_return_at' => 'datetime',
         'reverse_request_payload' => 'array',
         'reverse_response_payload' => 'array',
     ];
