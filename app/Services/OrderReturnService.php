@@ -153,7 +153,7 @@ class OrderReturnService
             }
 
             $requestId = $awaitingRequest['id'] ?? null;
-            $refundAmount = round((float) ($awaitingRequest['refund_amount'] ?? 0), 2);
+            $refundAmount = $this->resolveReturnRefundAmount($order, $awaitingRequest);
 
             if ($refundAmount <= 0) {
                 throw new DomainException('Refund amount must be greater than zero');
@@ -229,7 +229,7 @@ class OrderReturnService
             }
 
             $requestId = $awaitingRequest['id'] ?? null;
-            $refundAmount = round((float) ($awaitingRequest['refund_amount'] ?? 0), 2);
+            $refundAmount = $this->resolveReturnRefundAmount($order, $awaitingRequest);
 
             if ($refundAmount <= 0) {
                 throw new DomainException('Refund amount must be greater than zero');
@@ -297,11 +297,7 @@ class OrderReturnService
 
     public function canPayReturnRefund(Order $order): bool
     {
-        if (!$this->refundCalculator->hasAwaitingRefundReturnRequest($order)) {
-            return false;
-        }
-
-        $request = $this->refundCalculator->latestAwaitingRefundReturnRequest($order);
+        $request = $this->latestPayableReturnRequest($order);
 
         return $request && $this->canPayReturnRefundForRequest($order, $request);
     }
@@ -311,7 +307,7 @@ class OrderReturnService
      */
     public function canPayReturnRefundForRequest(Order $order, array $returnRequest): bool
     {
-        if (($returnRequest['status'] ?? '') !== 'awaiting_refund') {
+        if (!$this->returnRequestIsPayable($returnRequest, $order)) {
             return false;
         }
 
@@ -392,13 +388,54 @@ class OrderReturnService
     private function findAwaitingRefundRequest(Order $order, ?string $returnRequestId): ?array
     {
         $requests = $this->refundCalculator->normalizeReturnRequests($order)
-            ->filter(fn (array $request) => ($request['status'] ?? '') === 'awaiting_refund');
+            ->filter(fn (array $request) => $this->returnRequestIsPayable($request, $order));
 
         if ($returnRequestId) {
             return $requests->first(fn (array $request) => ($request['id'] ?? null) === $returnRequestId);
         }
 
         return $requests->first();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function latestPayableReturnRequest(Order $order): ?array
+    {
+        return $this->refundCalculator->normalizeReturnRequests($order)
+            ->first(fn (array $request) => $this->returnRequestIsPayable($request, $order));
+    }
+
+    /**
+     * @param  array<string, mixed>  $returnRequest
+     */
+    private function returnRequestIsPayable(array $returnRequest, Order $order): bool
+    {
+        $status = $returnRequest['status'] ?? '';
+
+        if ($status === 'awaiting_refund') {
+            return true;
+        }
+
+        return $status === 'completed'
+            && empty($returnRequest['refunded_at'])
+            && $this->resolveReturnRefundAmount($order, $returnRequest) > 0;
+    }
+
+    /**
+     * @param  array<string, mixed>  $returnRequest
+     */
+    private function resolveReturnRefundAmount(Order $order, array $returnRequest): float
+    {
+        $stored = round((float) ($returnRequest['refund_amount'] ?? 0), 2);
+
+        if ($stored > 0) {
+            return $stored;
+        }
+
+        $alreadyRefunded = round((float) (($order->return_request ?? [])['total_refunded_amount'] ?? 0), 2);
+
+        return round(max((float) $order->total_amount - $alreadyRefunded, 0), 2);
     }
 
     /**

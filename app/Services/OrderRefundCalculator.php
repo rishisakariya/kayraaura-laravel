@@ -288,7 +288,13 @@ class OrderRefundCalculator
 
     private function assignRefundValues(Collection $units, Order $order): Collection
     {
+        $chargeableUnits = $units->reject(fn (array $unit) => $unit['is_b2g1_free']);
+        $itemsSubtotal = round($chargeableUnits->sum('unit_price'), 2);
         $subtotal = (float) $order->subtotal;
+
+        if ($subtotal <= 0 && $itemsSubtotal > 0) {
+            $subtotal = $itemsSubtotal;
+        }
 
         $preCouponTotal = round(
             $subtotal
@@ -300,11 +306,16 @@ class OrderRefundCalculator
             2
         );
 
-        $scratchDiscount = (float) ($order->discount_amount ?? 0);
+        if ($preCouponTotal <= 0) {
+            $preCouponTotal = round((float) $order->total_amount, 2);
+        }
 
-        return $units->map(function (array $unit) use ($subtotal, $preCouponTotal, $scratchDiscount) {
+        $scratchDiscount = (float) ($order->discount_amount ?? 0);
+        $allocationBase = $subtotal > 0 ? $subtotal : max($itemsSubtotal, 1.0);
+
+        return $units->map(function (array $unit) use ($allocationBase, $preCouponTotal, $scratchDiscount) {
             $contribution = $unit['is_b2g1_free'] ? 0.0 : $unit['unit_price'];
-            $share = $subtotal > 0 ? $contribution / $subtotal : 0.0;
+            $share = $allocationBase > 0 ? $contribution / $allocationBase : 0.0;
             $unit['refund_value'] = round(($share * $preCouponTotal) - ($share * $scratchDiscount), 2);
 
             return $unit;
