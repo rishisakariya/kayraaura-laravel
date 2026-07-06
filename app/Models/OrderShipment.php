@@ -53,6 +53,12 @@ class OrderShipment extends Model
         self::STATUS_FAILED,
     ];
 
+    /** Reverse pickup statuses that mean the parcel is back at the warehouse. */
+    public const REVERSE_RECEIVED_STATUSES = [
+        self::STATUS_DELIVERED,
+        self::STATUS_RTO,
+    ];
+
     public const CANCELLABLE_STATUSES = [
         self::STATUS_NOT_CREATED,
         self::STATUS_MANIFESTED,
@@ -176,6 +182,10 @@ class OrderShipment extends Model
                             $query->whereNull('reverse_status')
                                 ->orWhereIn('reverse_status', self::ACTIVE_STATUSES);
                         });
+                })->orWhere(function (Builder $query) {
+                    $query->whereNotNull('reverse_waybill')
+                        ->whereIn('reverse_status', self::REVERSE_RECEIVED_STATUSES)
+                        ->whereHas('order', fn (Builder $orderQuery) => $orderQuery->where('status', 'return_requested'));
                 });
             });
     }

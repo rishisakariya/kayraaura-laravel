@@ -535,8 +535,8 @@ class DelhiveryShipmentService
             return $shipment;
         }
 
-        if ($shipment->reverse_status === OrderShipment::STATUS_DELIVERED) {
-            $this->lifecycle->completeReturnIfReceived($shipment, OrderShipment::STATUS_DELIVERED);
+        if (in_array($shipment->reverse_status, OrderShipment::REVERSE_RECEIVED_STATUSES, true)) {
+            $this->lifecycle->completeReturnIfReceived($shipment, $shipment->reverse_status);
 
             return $shipment;
         }
@@ -544,7 +544,6 @@ class DelhiveryShipmentService
         if (in_array($shipment->reverse_status, [
             OrderShipment::STATUS_CANCELLED,
             OrderShipment::STATUS_FAILED,
-            OrderShipment::STATUS_RTO,
         ], true)) {
             return $shipment;
         }

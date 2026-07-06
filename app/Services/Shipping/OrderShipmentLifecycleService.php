@@ -60,11 +60,13 @@ class OrderShipmentLifecycleService
     }
 
     /**
-     * Reverse delivered → restore stock → mark return received (online refunds are manual).
+     * Reverse delivered/RTO → restore stock → mark return received (online refunds are manual).
+     *
+     * Delhivery marks successful return pickups as "Returned" (normalized to rto), not delivered.
      */
     public function completeReturnIfReceived(OrderShipment $shipment, string $normalizedStatus): void
     {
-        if ($normalizedStatus !== OrderShipment::STATUS_DELIVERED) {
+        if (!in_array($normalizedStatus, OrderShipment::REVERSE_RECEIVED_STATUSES, true)) {
             return;
         }
 
