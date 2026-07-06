@@ -115,10 +115,8 @@ class OrderShipmentLifecycleService
                 $this->checkoutService->restoreStockForReturnedItems($order, $returnItems);
 
                 $isOnlineRefundDue = $order->payment_method === 'online'
-                    && $refundAmount > 0
                     && $order->payment_status === 'paid';
                 $isCodUpiRefundDue = $order->payment_method === 'cod'
-                    && $refundAmount > 0
                     && !empty($pendingRequest['refund_details']['upi_id']);
                 $receivedStatus = ($isOnlineRefundDue || $isCodUpiRefundDue)
                     ? 'awaiting_refund'
