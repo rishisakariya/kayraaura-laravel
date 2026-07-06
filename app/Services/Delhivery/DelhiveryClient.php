@@ -64,6 +64,24 @@ class DelhiveryClient
         return $this->decodeResponse($response, 'Delhivery tracking failed');
     }
 
+    public function expectedTat(string $originPin, string $destinationPin, string $mot = 'S'): array
+    {
+        if ($this->mockEnabled()) {
+            return $this->mockExpectedTatResponse($originPin, $destinationPin);
+        }
+
+        $response = Http::withHeaders($this->headers())
+            ->timeout(30)
+            ->get($this->url('expected_tat'), [
+                'origin_pin' => $originPin,
+                'destination_pin' => $destinationPin,
+                'mot' => $mot,
+                'pdt' => 'B2C',
+            ]);
+
+        return $this->decodeResponse($response, 'Delhivery expected TAT lookup failed');
+    }
+
     public function trackByOrderReference(string $orderReference): array
     {
         if ($this->mockEnabled()) {
@@ -237,6 +255,7 @@ class DelhiveryClient
                             'StatusLocation' => 'Local Mock',
                             'Instructions' => 'Mock shipment created for local testing',
                         ],
+                        'PromisedDeliveryDate' => now()->addDays(4)->endOfDay()->format('Y-m-d\TH:i:s'),
                         'Scans' => [
                             [
                                 'ScanDetail' => [
@@ -310,6 +329,21 @@ class DelhiveryClient
             'pickup_date' => $payload['pickup_date'],
             'pickup_time' => $payload['pickup_time'],
             'expected_package_count' => $payload['expected_package_count'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mockExpectedTatResponse(string $originPin, string $destinationPin): array
+    {
+        return [
+            'mock' => true,
+            'success' => true,
+            'origin_pin' => $originPin,
+            'destination_pin' => $destinationPin,
+            'tat' => 4,
+            'expected_delivery_date' => now()->addDays(4)->toDateString(),
         ];
     }
 

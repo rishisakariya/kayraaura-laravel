@@ -19,6 +19,7 @@ return [
     'pickup_batch_delay_seconds' => (int) env('DELHIVERY_PICKUP_BATCH_DELAY_SECONDS', 180),
     'pickup_time' => env('DELHIVERY_PICKUP_TIME', '14:00:00'),
     'pickup_same_day_cutoff' => env('DELHIVERY_PICKUP_SAME_DAY_CUTOFF', '14:00'),
+    'origin_pin' => env('DELHIVERY_ORIGIN_PIN'),
 
     'urls' => [
         'staging' => [
@@ -27,6 +28,7 @@ return [
             'cancel' => 'https://staging-express.delhivery.com/api/p/edit',
             'packing_slip' => 'https://staging-express.delhivery.com/api/p/packing_slip',
             'pickup_request' => 'https://staging-express.delhivery.com/fm/request/new/',
+            'expected_tat' => 'https://staging-express.delhivery.com/api/dc/expected_tat',
         ],
         'production' => [
             'create' => 'https://track.delhivery.com/api/cmu/create.json',
@@ -34,6 +36,7 @@ return [
             'cancel' => 'https://track.delhivery.com/api/p/edit',
             'packing_slip' => 'https://track.delhivery.com/api/p/packing_slip',
             'pickup_request' => 'https://track.delhivery.com/fm/request/new/',
+            'expected_tat' => 'https://track.delhivery.com/api/dc/expected_tat',
         ],
     ],
 ];

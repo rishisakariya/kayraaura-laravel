@@ -12,6 +12,7 @@ use App\Services\Shipping\OrderShipmentLifecycleService;
 use App\Support\PublicStorage;
 use DomainException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -502,6 +503,7 @@ class DelhiveryShipmentService
             ]);
 
             $this->applyForwardShipmentTimestamps($shipment, $normalizedStatus);
+            $this->refreshEstimatedDelivery($shipment, $payload);
             $shipment->save();
             $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
@@ -948,6 +950,7 @@ class DelhiveryShipmentService
         ]);
 
         $this->applyForwardShipmentTimestamps($shipment, $normalizedStatus);
+        $this->refreshEstimatedDelivery($shipment, $shipment->tracking_payload);
         $shipment->save();
         $this->lifecycle->applyForwardStatus($shipment, $normalizedStatus);
 
@@ -971,6 +974,7 @@ class DelhiveryShipmentService
             'waybill' => $shipment->waybill,
             'shipment_status' => $shipment->shipment_status,
             'raw_status' => $shipment->raw_status,
+            'estimated_delivery_at' => $shipment->estimated_delivery_at?->format('Y-m-d H:i:s'),
             'status_location' => $shipment->status_location,
             'status_instructions' => $shipment->status_instructions,
             'courier_tracking_url' => $shipment->courier_tracking_url,
@@ -995,6 +999,7 @@ class DelhiveryShipmentService
             'courier_tracking_url' => $shipment?->courier_tracking_url,
             'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,
             'raw_status' => $shipment?->raw_status,
+            'estimated_delivery_at' => $shipment?->estimated_delivery_at?->format('Y-m-d H:i:s'),
             'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
             'return' => [
                 'waybill' => $shipment?->reverse_waybill,
@@ -1622,6 +1627,8 @@ class DelhiveryShipmentService
             'failed_reason' => null,
         ])->save();
 
+        $this->refreshEstimatedDelivery($shipment->refresh());
+
         return $shipment;
     }
 
@@ -1690,5 +1697,143 @@ class DelhiveryShipmentService
         }
 
         return (string) $awb;
+    }
+
+    private function refreshEstimatedDelivery(OrderShipment $shipment, ?array $trackingPayload = null): void
+    {
+        if ($shipment->provider !== OrderShipment::PROVIDER_DELHIVERY) {
+            return;
+        }
+
+        $estimatedAt = $this->resolveEstimatedDeliveryDate($shipment, $trackingPayload);
+
+        if (!$estimatedAt) {
+            return;
+        }
+
+        if ($shipment->estimated_delivery_at?->equalTo($estimatedAt)) {
+            return;
+        }
+
+        $shipment->estimated_delivery_at = $estimatedAt;
+
+        if ($shipment->exists) {
+            $shipment->save();
+        }
+    }
+
+    private function resolveEstimatedDeliveryDate(OrderShipment $shipment, ?array $trackingPayload = null): ?Carbon
+    {
+        foreach (array_filter([$trackingPayload, $shipment->tracking_payload]) as $payload) {
+            if ($date = $this->extractEstimatedDeliveryDate($payload)) {
+                return $date;
+            }
+        }
+
+        return $this->fetchEstimatedDeliveryFromTat($shipment);
+    }
+
+    private function extractEstimatedDeliveryDate(array $payload): ?Carbon
+    {
+        $candidates = [
+            Arr::get($payload, 'ShipmentData.0.Shipment.PromisedDeliveryDate'),
+            Arr::get($payload, 'Shipment.PromisedDeliveryDate'),
+            Arr::get($payload, 'packages.0.PromisedDeliveryDate'),
+            Arr::get($payload, 'packages.0.promised_delivery_date'),
+            Arr::get($payload, 'PromisedDeliveryDate'),
+            Arr::get($payload, 'promised_delivery_date'),
+            Arr::get($payload, 'ExpectedDeliveryDate'),
+            Arr::get($payload, 'expected_delivery_date'),
+            Arr::get($payload, 'webhook.PromisedDeliveryDate'),
+            Arr::get($payload, 'webhook.expected_delivery_date'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if ($date = $this->parseEstimatedDeliveryValue($candidate)) {
+                return $date;
+            }
+        }
+
+        return null;
+    }
+
+    private function fetchEstimatedDeliveryFromTat(OrderShipment $shipment): ?Carbon
+    {
+        $originPin = trim((string) config('delhivery.origin_pin', ''));
+
+        if ($originPin === '') {
+            return null;
+        }
+
+        $shipment->loadMissing('order');
+        $destinationPin = trim((string) ($shipment->order?->shipping_address['postal_code'] ?? ''));
+
+        if ($destinationPin === '') {
+            return null;
+        }
+
+        try {
+            $response = $this->client->expectedTat($originPin, $destinationPin);
+
+            return $this->parseEstimatedDeliveryFromTatResponse($response, $shipment);
+        } catch (\Throwable $e) {
+            Log::channel('thirdparty')->warning('Delhivery expected TAT lookup failed', [
+                'shipment_id' => $shipment->id,
+                'order_id' => $shipment->order_id,
+                'origin_pin' => $originPin,
+                'destination_pin' => $destinationPin,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function parseEstimatedDeliveryFromTatResponse(array $response, OrderShipment $shipment): ?Carbon
+    {
+        $dateCandidates = [
+            Arr::get($response, 'data.expected_delivery_date'),
+            Arr::get($response, 'expected_delivery_date'),
+            Arr::get($response, 'data.edd'),
+            Arr::get($response, 'edd'),
+        ];
+
+        foreach ($dateCandidates as $candidate) {
+            if ($date = $this->parseEstimatedDeliveryValue($candidate)) {
+                return $date;
+            }
+        }
+
+        $tat = Arr::get($response, 'data.tat') ?? Arr::get($response, 'tat');
+
+        if (!is_numeric($tat) || (int) $tat < 1) {
+            return null;
+        }
+
+        $baseDate = $shipment->manifested_at ?? $shipment->created_at ?? now();
+
+        return $baseDate->copy()->addDays((int) $tat)->endOfDay();
+    }
+
+    private function parseEstimatedDeliveryValue(mixed $value): ?Carbon
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

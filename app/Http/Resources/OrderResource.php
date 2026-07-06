@@ -93,6 +93,7 @@ class OrderResource extends JsonResource
             'courier_tracking_url' => $shipment?->courier_tracking_url,
             'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,
             'raw_status' => $shipment?->raw_status,
+            'estimated_delivery_at' => $shipment?->estimated_delivery_at?->format('Y-m-d H:i:s'),
             'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
             'return' => array_merge([
                 'waybill' => $shipment?->reverse_waybill,
@@ -115,6 +116,7 @@ class OrderResource extends JsonResource
                 'height_cm' => $shipment?->height_cm,
                 'shipping_label_url' => $shipment?->shipping_label_url,
                 'manifested_at' => $shipment?->manifested_at?->format('Y-m-d H:i:s'),
+                'estimated_delivery_at' => $shipment?->estimated_delivery_at?->format('Y-m-d H:i:s'),
                 'delivered_at' => $shipment?->delivered_at?->format('Y-m-d H:i:s'),
                 'cancelled_at' => $shipment?->cancelled_at?->format('Y-m-d H:i:s'),
                 'rto_at' => $shipment?->rto_at?->format('Y-m-d H:i:s'),
