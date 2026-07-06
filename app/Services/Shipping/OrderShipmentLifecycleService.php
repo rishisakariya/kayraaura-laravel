@@ -78,7 +78,7 @@ class OrderShipmentLifecycleService
         }
 
         try {
-            DB::transaction(function () use ($order) {
+            DB::transaction(function () use ($order, $shipment) {
                 $order = Order::query()
                     ->with('orderItems')
                     ->whereKey($order->id)
