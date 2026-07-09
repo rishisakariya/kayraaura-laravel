@@ -66,6 +66,12 @@ class OrderController extends Controller
             ->when($request->input('shipment_created_to'), function ($query, $date) {
                 $query->whereHas('shipment', fn ($query) => $query->whereDate('created_at', '<=', $date));
             })
+            ->when($request->has('is_downloaded'), function ($query) use ($request) {
+                $query->whereHas(
+                    'shipment',
+                    fn ($query) => $query->where('is_downloaded', $request->boolean('is_downloaded'))
+                );
+            })
             ->orderBy('created_at', 'desc')
             ->paginate($request->input('per_page', 15));
 

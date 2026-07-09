@@ -94,6 +94,7 @@ class OrderShipment extends Model
         'width_cm',
         'height_cm',
         'shipping_label_url',
+        'is_downloaded',
         'last_synced_at',
         'manifested_at',
         'pickup_request_id',
@@ -113,6 +114,7 @@ class OrderShipment extends Model
     ];
 
     protected $casts = [
+        'is_downloaded' => 'boolean',
         'cod_amount' => 'decimal:2',
         'request_payload' => 'array',
         'response_payload' => 'array',

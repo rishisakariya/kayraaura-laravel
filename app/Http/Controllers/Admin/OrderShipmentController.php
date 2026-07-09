@@ -197,8 +197,12 @@ class OrderShipmentController extends Controller
         }
     }
 
-    public function label(string $id): JsonResponse
+    public function label(Request $request, string $id): JsonResponse
     {
+        $request->validate([
+            'is_downloaded' => ['sometimes', 'boolean'],
+        ]);
+
         $order = Order::with('shipment')->findOrFail($id);
 
         try {
@@ -210,15 +214,23 @@ class OrderShipmentController extends Controller
             ], $e->getCode() === 409 ? 409 : 422);
         }
 
+        $this->syncLabelDownloadedStatus($order->shipment, $request);
+
         return response()->json([
             'success' => true,
-            'data' => $label['data'],
+            'data' => array_merge($label['data'], [
+                'is_downloaded' => (bool) $order->shipment?->fresh()?->is_downloaded,
+            ]),
             'message' => $label['message'] ?? null,
         ]);
     }
 
-    public function downloadLabel(string $id): BinaryFileResponse|JsonResponse
+    public function downloadLabel(Request $request, string $id): BinaryFileResponse|JsonResponse
     {
+        $request->validate([
+            'is_downloaded' => ['sometimes', 'boolean'],
+        ]);
+
         $order = Order::with('shipment')->findOrFail($id);
 
         try {
@@ -239,6 +251,8 @@ class OrderShipmentController extends Controller
             ], 404);
         }
 
+        $this->syncLabelDownloadedStatus($order->shipment, $request);
+
         return response()->download(
             PublicStorage::absolutePath($path),
             basename($path),
@@ -251,6 +265,7 @@ class OrderShipmentController extends Controller
         $validated = $request->validate([
             'order_ids' => ['required', 'array', 'min:1', 'max:30'],
             'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
+            'is_downloaded' => ['sometimes', 'boolean'],
         ]);
 
         $labelsPerPage = 4;
@@ -336,6 +351,11 @@ class OrderShipmentController extends Controller
 
         $filename = 'delhivery-labels-' . now()->format('Ymd-His') . '.pdf';
 
+        if ($request->has('is_downloaded')) {
+            OrderShipment::whereIn('order_id', $orderedOrders->pluck('id'))
+                ->update(['is_downloaded' => $request->boolean('is_downloaded')]);
+        }
+
         return response($pdfBinary, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
@@ -366,6 +386,17 @@ class OrderShipmentController extends Controller
         return $shipment->provider === OrderShipment::PROVIDER_SHIPROCKET
             ? $this->shiprocketShipmentService
             : $this->delhiveryShipmentService;
+    }
+
+    private function syncLabelDownloadedStatus(?OrderShipment $shipment, Request $request): void
+    {
+        if (!$request->has('is_downloaded') || !$shipment) {
+            return;
+        }
+
+        $shipment->update([
+            'is_downloaded' => $request->boolean('is_downloaded'),
+        ]);
     }
 
     private function downloadLabelUrl(Order $order): string

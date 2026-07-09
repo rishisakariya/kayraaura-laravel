@@ -95,6 +95,7 @@ class OrderResource extends JsonResource
             'raw_status' => $shipment?->raw_status,
             'estimated_delivery_at' => $shipment?->estimated_delivery_at?->format('Y-m-d H:i:s'),
             'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
+            'is_downloaded' => (bool) ($shipment?->is_downloaded ?? false),
             'return' => array_merge([
                 'waybill' => $shipment?->reverse_waybill,
                 'status' => $shipment?->reverse_status,
