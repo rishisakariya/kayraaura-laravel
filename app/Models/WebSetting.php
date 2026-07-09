@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use App\Support\PublicStorage;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class WebSetting extends Model
 {
+    public const CACHE_KEY = 'web_setting:current';
+
+    public const API_RESPONSE_CACHE_KEY = 'web_setting:api_response';
+
     protected $appends = [
         'logo_url',
     ];
@@ -41,32 +46,45 @@ class WebSetting extends Model
         'cod_charge' => 'decimal:2',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(fn () => static::clearCache());
+    }
+
+    public static function clearCache(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+        Cache::forget(self::API_RESPONSE_CACHE_KEY);
+    }
+
     public static function current(): self
     {
-        return static::query()->firstOrCreate(
-            ['id' => 1],
-            [
-                'email' => 'info@kayraaura.com',
-                'address' => 'Kayraaura',
-                'footer_description' => null,
-                'offer_line1' => null,
-                'offer_line2' => null,
-                'offer_line3' => null,
-                'offer_line4' => null,
-                'mobile_number' => '+919999999999',
-                'logo' => null,
-                'instagram_url' => null,
-                'facebook_url' => null,
-                'youtube_url' => null,
-                'whatsapp_url' => null,
-                'linkedin_url' => null,
-                'buy_two_get_one_free_enabled' => false,
-                'first_order_discount_amount' => 50,
-                'online_payment_discount_percent' => 10,
-                'shipping_amount' => 50,
-                'cod_charge' => 50,
-            ]
-        );
+        return Cache::rememberForever(self::CACHE_KEY, function () {
+            return static::query()->firstOrCreate(
+                ['id' => 1],
+                [
+                    'email' => 'info@kayraaura.com',
+                    'address' => 'Kayraaura',
+                    'footer_description' => null,
+                    'offer_line1' => null,
+                    'offer_line2' => null,
+                    'offer_line3' => null,
+                    'offer_line4' => null,
+                    'mobile_number' => '+919999999999',
+                    'logo' => null,
+                    'instagram_url' => null,
+                    'facebook_url' => null,
+                    'youtube_url' => null,
+                    'whatsapp_url' => null,
+                    'linkedin_url' => null,
+                    'buy_two_get_one_free_enabled' => false,
+                    'first_order_discount_amount' => 50,
+                    'online_payment_discount_percent' => 10,
+                    'shipping_amount' => 50,
+                    'cod_charge' => 50,
+                ]
+            );
+        });
     }
 
     public function getLogoUrlAttribute(): ?string
