@@ -29,12 +29,16 @@ class WebSetting extends Model
         'buy_two_get_one_free_enabled',
         'first_order_discount_amount',
         'online_payment_discount_percent',
+        'shipping_amount',
+        'cod_charge',
     ];
 
     protected $casts = [
         'buy_two_get_one_free_enabled' => 'boolean',
         'first_order_discount_amount' => 'decimal:2',
         'online_payment_discount_percent' => 'integer',
+        'shipping_amount' => 'decimal:2',
+        'cod_charge' => 'decimal:2',
     ];
 
     public static function current(): self
@@ -59,6 +63,8 @@ class WebSetting extends Model
                 'buy_two_get_one_free_enabled' => false,
                 'first_order_discount_amount' => 50,
                 'online_payment_discount_percent' => 10,
+                'shipping_amount' => 50,
+                'cod_charge' => 50,
             ]
         );
     }

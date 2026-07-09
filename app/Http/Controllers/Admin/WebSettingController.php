@@ -51,6 +51,8 @@ class WebSettingController extends Controller
             'buy_two_get_one_free_enabled' => ['sometimes', 'boolean'],
             'first_order_discount_amount' => ['required', 'numeric', 'min:0', 'max:999999.99'],
             'online_payment_discount_percent' => ['required', 'integer', 'min:0', 'max:100'],
+            'shipping_amount' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+            'cod_charge' => ['required', 'numeric', 'min:0', 'max:999999.99'],
         ]);
 
         if (!empty($payload['logo'])) {

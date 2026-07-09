@@ -22,8 +22,6 @@ class CheckoutService
     ) {
     }
 
-    private const COD_CHARGE_AMOUNT = 50.00;
-
     private const GST_RATE = 0.03;
 
     /**
@@ -83,7 +81,9 @@ class CheckoutService
             : 0.0;
         $subtotal = round(max($itemsSubtotal - $buyTwoGetOneDiscountAmount, 0), 2);
         $taxAmount = round($subtotal * self::GST_RATE, 2);
-        $shippingAmount = $subtotal > 1000 ? 0.0 : 50.0;
+        $configuredShippingAmount = max((float) ($webSetting->shipping_amount ?? 0), 0);
+        $configuredCodCharge = max((float) ($webSetting->cod_charge ?? 0), 0);
+        $shippingAmount = $subtotal > 1000 ? 0.0 : $configuredShippingAmount;
         $baseTotal = round($subtotal + $taxAmount + $shippingAmount, 2);
         $configuredFirstOrderDiscount = max((float) ($webSetting->first_order_discount_amount ?? 0), 0);
         $configuredOnlinePaymentDiscountPercent = max((int) ($webSetting->online_payment_discount_percent ?? 0), 0);
@@ -98,7 +98,7 @@ class CheckoutService
             ? round($baseTotalAfterFirstOrderDiscount * ($configuredOnlinePaymentDiscountPercent / 100), 2)
             : 0.0;
         $baseTotalAfterOnlineDiscount = round(max($baseTotalAfterFirstOrderDiscount - $onlinePaymentDiscountAmount, 0), 2);
-        $codCharge = $isCod ? self::COD_CHARGE_AMOUNT : 0.0;
+        $codCharge = $isCod ? $configuredCodCharge : 0.0;
         $totalAmount = $isCod
             ? round($baseTotalAfterFirstOrderDiscount + $codCharge, 2)
             : $baseTotalAfterOnlineDiscount;

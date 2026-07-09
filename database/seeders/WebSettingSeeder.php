@@ -24,6 +24,8 @@ class WebSettingSeeder extends Seeder
                 'buy_two_get_one_free_enabled' => false,
                 'first_order_discount_amount' => 50,
                 'online_payment_discount_percent' => 10,
+                'shipping_amount' => 50,
+                'cod_charge' => 50,
             ]
         );
     }

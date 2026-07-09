@@ -29,6 +29,8 @@ class WebSettingResource extends JsonResource
             'buy_two_get_one_free_enabled' => (bool) $this->buy_two_get_one_free_enabled,
             'first_order_discount_amount' => (float) ($this->first_order_discount_amount ?? 0),
             'online_payment_discount_percent' => (int) ($this->online_payment_discount_percent ?? 0),
+            'shipping_amount' => (float) ($this->shipping_amount ?? 0),
+            'cod_charge' => (float) ($this->cod_charge ?? 0),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),
         ];
