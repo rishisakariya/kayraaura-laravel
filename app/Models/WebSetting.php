@@ -59,7 +59,7 @@ class WebSetting extends Model
 
     public static function current(): self
     {
-        return Cache::rememberForever(self::CACHE_KEY, function () {
+        $attributes = Cache::rememberForever(self::CACHE_KEY, function () {
             return static::query()->firstOrCreate(
                 ['id' => 1],
                 [
@@ -83,8 +83,10 @@ class WebSetting extends Model
                     'shipping_amount' => 50,
                     'cod_charge' => 50,
                 ]
-            );
+            )->getAttributes();
         });
+
+        return (new static)->newFromBuilder($attributes);
     }
 
     public function getLogoUrlAttribute(): ?string
