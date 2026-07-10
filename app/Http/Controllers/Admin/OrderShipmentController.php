@@ -199,6 +199,8 @@ class OrderShipmentController extends Controller
 
     public function label(Request $request, string $id): JsonResponse
     {
+        $this->normalizeDownloadedFlag($request);
+
         $request->validate([
             'is_downloaded' => ['sometimes', 'boolean'],
         ]);
@@ -227,6 +229,8 @@ class OrderShipmentController extends Controller
 
     public function downloadLabel(Request $request, string $id): BinaryFileResponse|JsonResponse
     {
+        $this->normalizeDownloadedFlag($request);
+
         $request->validate([
             'is_downloaded' => ['sometimes', 'boolean'],
         ]);
@@ -262,6 +266,8 @@ class OrderShipmentController extends Controller
 
     public function bulkLabels(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\Response
     {
+        $this->normalizeDownloadedFlag($request);
+
         $validated = $request->validate([
             'order_ids' => ['required', 'array', 'min:1', 'max:30'],
             'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
@@ -386,6 +392,15 @@ class OrderShipmentController extends Controller
         return $shipment->provider === OrderShipment::PROVIDER_SHIPROCKET
             ? $this->shiprocketShipmentService
             : $this->delhiveryShipmentService;
+    }
+
+    private function normalizeDownloadedFlag(Request $request): void
+    {
+        if ($request->has('is_downloaded')) {
+            $request->merge([
+                'is_downloaded' => $request->boolean('is_downloaded'),
+            ]);
+        }
     }
 
     private function syncLabelDownloadedStatus(?OrderShipment $shipment, Request $request): void
