@@ -365,7 +365,7 @@ class OrderReturnService
 
         $order->return_request = $returnRequest;
 
-        if ($order->payment_method === 'online'
+        if (in_array($order->payment_method, ['online', 'cod'], true)
             && $returnRequest['total_refunded_amount'] >= (float) $order->total_amount) {
             $order->payment_status = 'refunded';
         }
