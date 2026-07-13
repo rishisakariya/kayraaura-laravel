@@ -38,6 +38,7 @@ class Order extends Model
         'delivered_at',
         'payment_failed_at',
         'cod_verified_at',
+        'refunded_at',
         'shipping_address',
         'billing_address',
         'notes',
@@ -62,6 +63,7 @@ class Order extends Model
         'delivered_at' => 'datetime',
         'payment_failed_at' => 'datetime',
         'cod_verified_at' => 'datetime',
+        'refunded_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

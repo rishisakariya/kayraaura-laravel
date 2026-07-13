@@ -342,7 +342,7 @@ class OrderReturnService
             $returnRequest['requests'] = [];
         }
 
-        $refundedAt = now()->toDateTimeString();
+        $refundedAt = now();
 
         $returnRequest['requests'] = collect($returnRequest['requests'])
             ->map(function (array $request) use ($requestId, $refundedAt, $requestMutator) {
@@ -351,8 +351,8 @@ class OrderReturnService
                 }
 
                 $request['status'] = 'completed';
-                $request['refunded_at'] = $refundedAt;
-                $request['completed_at'] = $request['completed_at'] ?? $refundedAt;
+                $request['refunded_at'] = $refundedAt->toDateTimeString();
+                $request['completed_at'] = $request['completed_at'] ?? $refundedAt->toDateTimeString();
 
                 return $requestMutator($request);
             })
@@ -368,6 +368,7 @@ class OrderReturnService
         if (in_array($order->payment_method, ['online', 'cod'], true)
             && $returnRequest['total_refunded_amount'] >= (float) $order->total_amount) {
             $order->payment_status = 'refunded';
+            $order->refunded_at = $refundedAt;
         }
 
         $order->save();

@@ -75,6 +75,7 @@ class OrderCancellationService
             if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
                 $this->checkoutService->refundRazorpayPayment($order);
                 $order->payment_status = 'refunded';
+                $order->refunded_at = now();
 
                 Log::channel('thirdparty')->info('Order cancellation flow: online refund processed', [
                     'order_id' => $order->id,

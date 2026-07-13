@@ -37,6 +37,7 @@ class OrderResource extends JsonResource
             'paid_at' => $this->paid_at?->format('Y-m-d H:i:s'),
             'delivered_at' => $this->delivered_at?->format('Y-m-d H:i:s'),
             'payment_failed_at' => $this->payment_failed_at?->format('Y-m-d H:i:s'),
+            'refunded_at' => $this->refunded_at?->format('Y-m-d H:i:s'),
             'subtotal' => (float) $this->subtotal,
             'tax_amount' => (float) $this->tax_amount,
             'shipping_amount' => (float) $this->shipping_amount,
