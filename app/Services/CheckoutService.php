@@ -701,6 +701,55 @@ class CheckoutService
         return $order;
     }
 
+    public function settleReturnRefundFromWebhook(Order $order): Order
+    {
+        $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+        if ($order->payment_status !== 'refund_processing') {
+            return $order;
+        }
+
+        $totalRefunded = round((float) (($order->return_request ?? [])['total_refunded_amount'] ?? 0), 2);
+        $isFullRefund = $totalRefunded >= (float) $order->total_amount;
+
+        if ($isFullRefund) {
+            $order->payment_status = 'refunded';
+            $order->refunded_at = now();
+        } else {
+            $order->payment_status = 'paid';
+        }
+
+        $order->save();
+
+        Log::channel('thirdparty')->info('Payment flow: return refund settled from webhook', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'payment_status' => $order->payment_status,
+            'total_refunded_amount' => $totalRefunded,
+        ]);
+
+        return $order;
+    }
+
+    public function failReturnRefundFromWebhook(Order $order): Order
+    {
+        $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+        if ($order->payment_status !== 'refund_processing') {
+            return $order;
+        }
+
+        $order->payment_status = 'paid';
+        $order->save();
+
+        Log::channel('thirdparty')->warning('Payment flow: return refund failed from webhook', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+        ]);
+
+        return $order;
+    }
+
     private function cartItems(User $user, bool $lockProductSizes): Collection
     {
         $cartItems = Cart::forUser($user->id)->get();

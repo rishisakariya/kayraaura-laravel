@@ -175,7 +175,8 @@ class OrderReturnService
                     }
 
                     return $request;
-                }
+                },
+                $razorpayRefund['status'] ?? null
             );
 
             Log::channel('thirdparty')->info('Return refund flow: online refund completed', [
@@ -335,6 +336,7 @@ class OrderReturnService
         ?string $requestId,
         float $refundAmount,
         callable $requestMutator,
+        ?string $razorpayRefundStatus = null,
     ): void {
         $returnRequest = $order->return_request ?? ['requests' => [], 'total_refunded_amount' => 0.0];
 
@@ -365,11 +367,12 @@ class OrderReturnService
 
         $order->return_request = $returnRequest;
 
-        if (in_array($order->payment_method, ['online', 'cod'], true)
-            && $returnRequest['total_refunded_amount'] >= (float) $order->total_amount) {
-            $order->payment_status = 'refunded';
-            $order->refunded_at = $refundedAt;
-        }
+        $this->applyPaymentStatusAfterReturnRefund(
+            $order,
+            $returnRequest,
+            $refundedAt,
+            $razorpayRefundStatus
+        );
 
         $order->save();
 
@@ -381,6 +384,42 @@ class OrderReturnService
             'payment_status' => $order->payment_status,
             'total_refunded_amount' => $returnRequest['total_refunded_amount'],
         ]);
+    }
+
+    /**
+     * @param  array{total_refunded_amount: float}  $returnRequest
+     */
+    private function applyPaymentStatusAfterReturnRefund(
+        Order $order,
+        array $returnRequest,
+        \Illuminate\Support\Carbon $refundedAt,
+        ?string $razorpayRefundStatus = null,
+    ): void {
+        $isFullRefund = $returnRequest['total_refunded_amount'] >= (float) $order->total_amount;
+
+        if ($order->payment_method === 'cod' && $isFullRefund) {
+            $order->payment_status = 'refunded';
+            $order->refunded_at = $refundedAt;
+
+            return;
+        }
+
+        if ($order->payment_method !== 'online') {
+            return;
+        }
+
+        if ($razorpayRefundStatus === 'processed') {
+            if ($isFullRefund) {
+                $order->payment_status = 'refunded';
+                $order->refunded_at = $refundedAt;
+            } else {
+                $order->payment_status = 'paid';
+            }
+
+            return;
+        }
+
+        $order->payment_status = 'refund_processing';
     }
 
     /**

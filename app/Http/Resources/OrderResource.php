@@ -77,7 +77,7 @@ class OrderResource extends JsonResource
             return null;
         }
 
-        if ($this->payment_method !== 'cod' && !in_array($this->payment_status, ['paid', 'refunded'], true)) {
+        if ($this->payment_method !== 'cod' && !in_array($this->payment_status, ['paid', 'refunded', 'refund_processing'], true)) {
             return null;
         }
 

@@ -94,6 +94,11 @@
             border-color: #c6a055;
             color: #111111;
         }
+        .status-badge.refund-processing {
+            background-color: #fffbeb;
+            border-color: #d97706;
+            color: #92400e;
+        }
         .header-divider {
             border: 0;
             border-top: 1px solid #c6a055;
@@ -318,6 +323,7 @@
         'pending' => 'pending',
         'failed' => 'failed',
         'refunded' => 'refunded',
+        'refund_processing' => 'refund-processing',
         default => '',
     };
 

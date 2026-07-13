@@ -558,6 +558,6 @@ class OrderController extends Controller
             return (bool) $order->cod_verified_at;
         }
 
-        return in_array($order->payment_status, ['paid', 'refunded'], true);
+        return in_array($order->payment_status, ['paid', 'refunded', 'refund_processing'], true);
     }
 }

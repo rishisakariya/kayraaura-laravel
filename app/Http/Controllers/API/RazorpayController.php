@@ -152,11 +152,19 @@ class RazorpayController extends Controller
                     ]);
                 }
 
-                if (($webhookPayload['event'] ?? null) === 'payment.failed') {
+                if ($event === 'payment.failed') {
                     $this->checkoutService->markOrderPaymentFailed(
                         $order,
                         $this->razorpayPaymentIdFromWebhookPayload($webhookPayload)
                     );
+                }
+
+                if ($event === 'refund.processed') {
+                    $updatedOrder = $this->checkoutService->settleReturnRefundFromWebhook($order);
+                }
+
+                if ($event === 'refund.failed') {
+                    $updatedOrder = $this->checkoutService->failReturnRefundFromWebhook($order);
                 }
 
                 return $updatedOrder;
@@ -219,6 +227,20 @@ class RazorpayController extends Controller
 
     private function findOrderFromWebhookPayload(array $payload): ?Order
     {
+        $event = $payload['event'] ?? '';
+
+        if (str_starts_with($event, 'refund.')) {
+            $paymentId = $payload['payload']['refund']['entity']['payment_id']
+                ?? $payload['payload']['payment']['entity']['id']
+                ?? null;
+
+            if (!$paymentId) {
+                return null;
+            }
+
+            return Order::where('razorpay_payment_id', $paymentId)->first();
+        }
+
         $razorpayOrderId = $this->razorpayOrderIdFromWebhookPayload($payload);
 
         if (!$razorpayOrderId) {
