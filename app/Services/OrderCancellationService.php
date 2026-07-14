@@ -73,13 +73,21 @@ class OrderCancellationService
             }
 
             if ($order->payment_method === 'online' && $order->payment_status === 'paid') {
-                $this->checkoutService->refundRazorpayPayment($order);
-                $order->payment_status = 'refunded';
-                $order->refunded_at = now();
+                $razorpayRefund = $this->checkoutService->refundRazorpayPayment($order);
 
-                Log::channel('thirdparty')->info('Order cancellation flow: online refund processed', [
+                if (($razorpayRefund['status'] ?? null) === 'processed') {
+                    $order->payment_status = 'refunded';
+                    $order->refunded_at = now();
+                } else {
+                    $order->payment_status = 'refund_processing';
+                }
+
+                Log::channel('thirdparty')->info('Order cancellation flow: online refund initiated', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
+                    'payment_status' => $order->payment_status,
+                    'razorpay_refund_id' => $razorpayRefund['id'] ?? null,
+                    'razorpay_refund_status' => $razorpayRefund['status'] ?? null,
                 ]);
             }
 

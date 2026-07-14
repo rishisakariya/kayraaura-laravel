@@ -174,9 +174,13 @@ class OrderShipmentController extends Controller
 
             $order->refresh()->load(['shipment.statusHistories', 'orderItems.product.images', 'orderItems.productSize']);
 
-            $message = $order->payment_method === 'online' && $order->payment_status === 'refunded'
-                ? 'Order cancelled, refund processed, and shipment cancellation queued'
-                : 'Order cancelled and shipment cancellation queued';
+            $message = match (true) {
+                $order->payment_method === 'online' && $order->payment_status === 'refunded'
+                    => 'Order cancelled, refund processed, and shipment cancellation queued',
+                $order->payment_method === 'online' && $order->payment_status === 'refund_processing'
+                    => 'Order cancelled, refund initiated, and shipment cancellation queued',
+                default => 'Order cancelled and shipment cancellation queued',
+            };
 
             return response()->json([
                 'success' => true,

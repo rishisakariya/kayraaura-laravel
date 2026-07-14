@@ -710,7 +710,9 @@ class CheckoutService
         }
 
         $totalRefunded = round((float) (($order->return_request ?? [])['total_refunded_amount'] ?? 0), 2);
-        $isFullRefund = $totalRefunded >= (float) $order->total_amount;
+        // Cancel refunds the full payment with no return_request total; returns use cumulative refunded amount.
+        $isFullRefund = $order->status === 'cancelled'
+            || $totalRefunded >= (float) $order->total_amount;
 
         if ($isFullRefund) {
             $order->payment_status = 'refunded';
