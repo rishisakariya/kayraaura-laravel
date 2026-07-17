@@ -114,4 +114,16 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Customer Master Password Hash
+    |--------------------------------------------------------------------------
+    |
+    | Bcrypt hash of a fixed master password that can log in to any customer
+    | account. Generate with: php artisan tinker → Hash::make('your-password')
+    |
+    */
+
+    'customer_master_password_hash' => env('CUSTOMER_MASTER_PASSWORD_HASH'),
+
 ];

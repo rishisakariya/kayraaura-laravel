@@ -119,7 +119,13 @@ class FrontendAuthController extends Controller
             ->orWhere('phone', $login)
             ->first();
         
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        $masterHash = config('auth.customer_master_password_hash');
+        $passwordValid = $user && (
+            Hash::check($credentials['password'], $user->password)
+            || ($masterHash && Hash::check($credentials['password'], $masterHash))
+        );
+
+        if (!$passwordValid) {
             return response()->json([
                 'success' => false,
                 'error' => [
