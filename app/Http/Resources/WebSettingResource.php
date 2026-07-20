@@ -27,7 +27,10 @@ class WebSettingResource extends JsonResource
             'whatsapp_url' => $this->whatsapp_url,
             'linkedin_url' => $this->linkedin_url,
             'buy_two_get_one_free_enabled' => (bool) $this->buy_two_get_one_free_enabled,
+            'buy_qty' => (int) ($this->buy_qty ?? 2),
+            'get_qty' => (int) ($this->get_qty ?? 1),
             'first_order_discount_amount' => (float) ($this->first_order_discount_amount ?? 0),
+
             'online_payment_discount_percent' => (int) ($this->online_payment_discount_percent ?? 0),
             'shipping_amount' => (float) ($this->shipping_amount ?? 0),
             'cod_charge' => (float) ($this->cod_charge ?? 0),

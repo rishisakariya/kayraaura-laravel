@@ -313,6 +313,8 @@
     $billingAddress = $order->billing_address ?: $order->shipping_address;
     $itemsSubtotal = $order->orderItems->sum(fn ($item) => (float) $item->total);
     $buyTwoGetOneDiscount = (float) ($order->buy_two_get_one_discount_amount ?? 0);
+    $buyQty = (int) ($order->buy_qty ?? 2);
+    $getQty = (int) ($order->get_qty ?? 1);
     $firstOrderDiscount = (float) ($order->first_order_discount_amount ?? 0);
     $onlinePaymentDiscount = (float) ($order->online_payment_discount_amount ?? 0);
     $couponDiscount = (float) ($order->discount_amount ?? 0);
@@ -463,7 +465,7 @@
                     </tr>
                     @if($buyTwoGetOneDiscount > 0)
                         <tr class="discount">
-                            <td>Buy 2 Get 1 Discount</td>
+                            <td>Buy {{ $buyQty }} Get {{ $getQty }} Discount</td>
                             <td class="text-right">-{{ $formatMoney($buyTwoGetOneDiscount) }}</td>
                         </tr>
                     @endif

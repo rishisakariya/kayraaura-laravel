@@ -43,6 +43,8 @@ class OrderResource extends JsonResource
             'shipping_amount' => (float) $this->shipping_amount,
             'cod_charge' => (float) ($this->cod_charge ?? 0),
             'buy_two_get_one_discount_amount' => (float) ($this->buy_two_get_one_discount_amount ?? 0),
+            'buy_qty' => $this->buy_qty !== null ? (int) $this->buy_qty : null,
+            'get_qty' => $this->get_qty !== null ? (int) $this->get_qty : null,
             'first_order_discount_amount' => (float) ($this->first_order_discount_amount ?? 0),
             'online_payment_discount_amount' => (float) ($this->online_payment_discount_amount ?? 0),
             'scratch_coupon_code' => $this->scratch_coupon_code,

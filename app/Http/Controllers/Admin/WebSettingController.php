@@ -49,7 +49,10 @@ class WebSettingController extends Controller
             'whatsapp_url' => ['nullable', 'url', 'max:2048'],
             'linkedin_url' => ['nullable', 'url', 'max:2048'],
             'buy_two_get_one_free_enabled' => ['sometimes', 'boolean'],
+            'buy_qty' => ['required', 'integer', 'min:1', 'max:10'],
+            'get_qty' => ['required', 'integer', 'min:1', 'max:10'],
             'first_order_discount_amount' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+
             'online_payment_discount_percent' => ['required', 'integer', 'min:0', 'max:100'],
             'shipping_amount' => ['required', 'numeric', 'min:0', 'max:999999.99'],
             'cod_charge' => ['required', 'numeric', 'min:0', 'max:999999.99'],

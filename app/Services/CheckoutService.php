@@ -75,9 +75,11 @@ class CheckoutService
             return (int) data_get($item, 'quantity', 0) * (float) (data_get($item, 'size_price') ?? data_get($item, 'price', 0));
         }), 2);
         $webSetting = WebSetting::current();
+        $buyQty = max((int) ($webSetting->buy_qty ?? 2), 1);
+        $getQty = max((int) ($webSetting->get_qty ?? 1), 1);
         $buyTwoGetOneFreeEnabled = $webSetting->buy_two_get_one_free_enabled;
         $buyTwoGetOneDiscountAmount = $buyTwoGetOneFreeEnabled
-            ? $this->calculateBuyTwoGetOneDiscount($items)
+            ? $this->calculateBuyTwoGetOneDiscount($items, $buyQty, $getQty)
             : 0.0;
         $subtotal = round(max($itemsSubtotal - $buyTwoGetOneDiscountAmount, 0), 2);
         $taxAmount = round($subtotal * self::GST_RATE, 2);
@@ -120,6 +122,8 @@ class CheckoutService
         return [
             'items_subtotal' => $itemsSubtotal,
             'buy_two_get_one_free_enabled' => $buyTwoGetOneFreeEnabled,
+            'buy_qty' => $buyQty,
+            'get_qty' => $getQty,
             'buy_two_get_one_discount_amount' => $buyTwoGetOneDiscountAmount,
             'first_order_discount_eligible' => $firstOrderDiscountEligible,
             'first_order_discount_amount' => $firstOrderDiscountAmount,
@@ -154,6 +158,8 @@ class CheckoutService
             'shipping_amount' => $checkout['shipping_amount'],
             'cod_charge' => $checkout['cod_charge'],
             'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'] ?? 0,
+            'buy_qty' => $checkout['buy_qty'] ?? null,
+            'get_qty' => $checkout['get_qty'] ?? null,
             'first_order_discount_amount' => $firstOrderDiscountAmount,
             'online_payment_discount_amount' => $checkout['online_payment_discount_amount'] ?? 0,
             'scratch_coupon_code' => $checkout['coupon_code'] ?? null,
@@ -841,8 +847,11 @@ class CheckoutService
             ->exists();
     }
 
-    public function calculateBuyTwoGetOneDiscount(Collection $items): float
+    public function calculateBuyTwoGetOneDiscount(Collection $items, int $buyQty = 2, int $getQty = 1): float
     {
+        $buyQty = max($buyQty, 1);
+        $getQty = max($getQty, 1);
+        $groupSize = $buyQty + $getQty;
         $unitPrices = [];
 
         foreach ($items as $item) {
@@ -854,7 +863,7 @@ class CheckoutService
             }
         }
 
-        $freeItemCount = intdiv(count($unitPrices), 3);
+        $freeItemCount = intdiv(count($unitPrices), $groupSize) * $getQty;
 
         if ($freeItemCount < 1) {
             return 0.0;

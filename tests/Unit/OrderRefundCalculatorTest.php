@@ -69,6 +69,57 @@ class OrderRefundCalculatorTest extends TestCase
             'tax_amount' => 24.00,
             'shipping_amount' => 50.00,
             'buy_two_get_one_discount_amount' => 200.00,
+            'buy_qty' => 2,
+            'get_qty' => 1,
+            'total_amount' => 874.00,
+        ]);
+
+        $itemA = $this->makeOrderItem(1, ['size_price' => 500, 'quantity' => 1, 'total' => 500]);
+        $itemB = $this->makeOrderItem(2, ['size_price' => 300, 'quantity' => 1, 'total' => 300]);
+        $itemC = $this->makeOrderItem(3, ['size_price' => 200, 'quantity' => 1, 'total' => 200]);
+        $order->setRelation('orderItems', new Collection([$itemA, $itemB, $itemC]));
+
+        $returnFreeItem = $this->calculator->calculateReturnRefund($order, [3 => 1]);
+        $returnPaidItem = $this->calculator->calculateReturnRefund($order, [1 => 1]);
+
+        $this->assertSame(0.0, $returnFreeItem['refund_amount']);
+        $this->assertSame(546.25, $returnPaidItem['refund_amount']);
+    }
+
+    public function test_buy_three_get_one_free_uses_order_snapshot_rule(): void
+    {
+        $order = $this->makeOrder([
+            'subtotal' => 1500.00,
+            'tax_amount' => 45.00,
+            'shipping_amount' => 0.00,
+            'buy_two_get_one_discount_amount' => 200.00,
+            'buy_qty' => 3,
+            'get_qty' => 1,
+            'total_amount' => 1545.00,
+        ]);
+
+        $itemA = $this->makeOrderItem(1, ['size_price' => 500, 'quantity' => 1, 'total' => 500]);
+        $itemB = $this->makeOrderItem(2, ['size_price' => 400, 'quantity' => 1, 'total' => 400]);
+        $itemC = $this->makeOrderItem(3, ['size_price' => 300, 'quantity' => 1, 'total' => 300]);
+        $itemD = $this->makeOrderItem(4, ['size_price' => 200, 'quantity' => 1, 'total' => 200]);
+        $order->setRelation('orderItems', new Collection([$itemA, $itemB, $itemC, $itemD]));
+
+        $returnFreeItem = $this->calculator->calculateReturnRefund($order, [4 => 1]);
+        $returnPaidItem = $this->calculator->calculateReturnRefund($order, [1 => 1]);
+
+        $this->assertSame(0.0, $returnFreeItem['refund_amount']);
+        $this->assertSame(515.00, $returnPaidItem['refund_amount']);
+    }
+
+    public function test_legacy_orders_without_buy_get_qty_fallback_to_buy_two_get_one(): void
+    {
+        $order = $this->makeOrder([
+            'subtotal' => 800.00,
+            'tax_amount' => 24.00,
+            'shipping_amount' => 50.00,
+            'buy_two_get_one_discount_amount' => 200.00,
+            'buy_qty' => null,
+            'get_qty' => null,
             'total_amount' => 874.00,
         ]);
 

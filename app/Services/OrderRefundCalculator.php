@@ -274,7 +274,10 @@ class OrderRefundCalculator
             ->sortBy('unit_price')
             ->keys();
 
-        $freeCount = intdiv($units->count(), 3);
+        $buyQty = max((int) ($order->buy_qty ?? 2), 1);
+        $getQty = max((int) ($order->get_qty ?? 1), 1);
+        $groupSize = $buyQty + $getQty;
+        $freeCount = intdiv($units->count(), $groupSize) * $getQty;
         $freeIndices = $sortedIndices->take($freeCount)->flip();
 
         return $units->map(function (array $unit, int $index) use ($freeIndices) {

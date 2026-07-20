@@ -65,6 +65,8 @@ class CartController extends Controller
                     'tax_amount' => $summary['tax_amount'],
                     'shipping_amount' => $summary['shipping_amount'],
                     'buy_two_get_one_free_enabled' => $summary['buy_two_get_one_free_enabled'],
+                    'buy_qty' => $summary['buy_qty'],
+                    'get_qty' => $summary['get_qty'],
                     'buy_two_get_one_discount_amount' => $summary['buy_two_get_one_discount_amount'],
                     'first_order_discount_eligible' => $summary['first_order_discount_eligible'],
                     'first_order_discount_amount' => $summary['first_order_discount_amount'],

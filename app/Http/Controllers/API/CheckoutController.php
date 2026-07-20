@@ -40,6 +40,8 @@ class CheckoutController extends Controller
                     'items' => $items,
                     'items_subtotal' => $checkout['items_subtotal'],
                     'buy_two_get_one_free_enabled' => $checkout['buy_two_get_one_free_enabled'],
+                    'buy_qty' => $checkout['buy_qty'],
+                    'get_qty' => $checkout['get_qty'],
                     'buy_two_get_one_discount_amount' => $checkout['buy_two_get_one_discount_amount'],
                     'first_order_discount_eligible' => $checkout['first_order_discount_eligible'],
                     'first_order_discount_amount' => $checkout['first_order_discount_amount'],

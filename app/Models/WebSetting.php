@@ -32,6 +32,8 @@ class WebSetting extends Model
         'whatsapp_url',
         'linkedin_url',
         'buy_two_get_one_free_enabled',
+        'buy_qty',
+        'get_qty',
         'first_order_discount_amount',
         'online_payment_discount_percent',
         'shipping_amount',
@@ -40,6 +42,8 @@ class WebSetting extends Model
 
     protected $casts = [
         'buy_two_get_one_free_enabled' => 'boolean',
+        'buy_qty' => 'integer',
+        'get_qty' => 'integer',
         'first_order_discount_amount' => 'decimal:2',
         'online_payment_discount_percent' => 'integer',
         'shipping_amount' => 'decimal:2',
@@ -78,6 +82,8 @@ class WebSetting extends Model
                     'whatsapp_url' => null,
                     'linkedin_url' => null,
                     'buy_two_get_one_free_enabled' => false,
+                    'buy_qty' => 2,
+                    'get_qty' => 1,
                     'first_order_discount_amount' => 50,
                     'online_payment_discount_percent' => 10,
                     'shipping_amount' => 50,
