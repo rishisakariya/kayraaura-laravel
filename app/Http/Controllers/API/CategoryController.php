@@ -14,13 +14,28 @@ class CategoryController extends Controller
      *
      * @return JsonResponse
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $type = $request->input('type');
+
         $categories = Category::where('is_active', true)
-            ->with(['children' => function ($query) {
-                $query->where('is_active', true)->orderBy('sort_order');
-            }])
-            ->whereNull('parent_id')
+            ->when($request->filled('type'), function ($query) use ($type) {
+                $query->where('type', $type);
+            }, function ($query) {
+                $query->where('type', 'main');
+            })
+            ->when(! $request->filled('type') || $type === 'main', function ($query) {
+                $query->with(['children' => function ($query) {
+                    $query->where('is_active', true)
+                        ->where('type', 'sub')
+                        ->orderBy('sort_order');
+                }]);
+            })
+            ->when($type === 'sub', function ($query) {
+                $query->with(['parent' => function ($query) {
+                    $query->where('is_active', true);
+                }]);
+            })
             ->orderBy('sort_order')
             ->get();
 
@@ -40,7 +55,9 @@ class CategoryController extends Controller
     public function show(string $slug): JsonResponse
     {
         $category = Category::with(['children' => function ($query) {
-                $query->where('is_active', true)->orderBy('sort_order');
+                $query->where('is_active', true)
+                    ->where('type', 'sub')
+                    ->orderBy('sort_order');
             }, 'parent'])
             ->where('slug', $slug)
             ->where('is_active', true)

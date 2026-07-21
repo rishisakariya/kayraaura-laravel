@@ -20,6 +20,7 @@ class CategoryResource extends JsonResource
             'image' => $this->image,
             'image_url' => $this->image_url,
             'parent_id' => $this->parent_id,
+            'type' => $this->type,
             'sort_order' => $this->sort_order,
             'is_active' => $this->is_active,
             'parent' => new CategoryResource($this->whenLoaded('parent')),

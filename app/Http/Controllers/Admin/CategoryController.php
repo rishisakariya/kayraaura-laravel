@@ -28,6 +28,9 @@ class CategoryController extends Controller
             ->when($request->input('is_active') !== null, function ($query, $isActive) {
                 $query->where('is_active', $isActive);
             })
+            ->when($request->filled('type'), function ($query) use ($request) {
+                $query->where('type', $request->input('type'));
+            })
             ->orderBy('sort_order')
             ->orderBy('name')
             ->paginate($request->input('per_page', 15));
@@ -59,7 +62,10 @@ class CategoryController extends Controller
             $category->image = $request->filled('image')
                 ? PublicStorage::storePath($request->input('image'))
                 : null;
-            $category->parent_id = $request->input('parent_id');
+            $category->type = $request->input('type');
+            $category->parent_id = $request->input('type') === 'main'
+                ? null
+                : $request->input('parent_id');
             $category->sort_order = $request->input('sort_order', 0);
             $category->is_active = $request->input('is_active', true);
             $category->save();
@@ -74,13 +80,13 @@ class CategoryController extends Controller
 
         // Update existing category
         try {
-    $category = Category::findOrFail($request->input('edit_value'));
-} catch (ModelNotFoundException $e) {
-    return response()->json([
-        'success' => false,
-        'message' => 'Category not found'
-    ], 404);
-}
+            $category = Category::findOrFail($request->input('edit_value'));
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
 
         DB::beginTransaction();
         $category->name = $request->input('name');
@@ -99,7 +105,13 @@ class CategoryController extends Controller
             $category->image = $newImage;
         }
 
-        $category->parent_id = $request->input('parent_id');
+        // type is immutable after create; main keeps parent_id null, sub can update parent_id
+        if ($category->type === 'sub') {
+            $category->parent_id = $request->input('parent_id');
+        } else {
+            $category->parent_id = null;
+        }
+
         $category->sort_order = $request->input('sort_order', $category->sort_order);
         $category->is_active = $request->input('is_active', $category->is_active);
         $category->save();
