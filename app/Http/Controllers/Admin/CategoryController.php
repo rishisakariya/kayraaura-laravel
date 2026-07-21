@@ -7,7 +7,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CategoryStoreRequest;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
-use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -170,28 +169,29 @@ class CategoryController extends Controller
             ], 404);
         }
 
+        if ($category->type === 'main') {
+            if ($category->children()->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This main category cannot be deleted because it has subcategories. Please move or delete the subcategories first.',
+                ], 422);
+            }
+
+            if ($category->products()->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This main category cannot be deleted because it has products. Please move the products to another category first.',
+                ], 422);
+            }
+        } elseif ($category->products()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This subcategory cannot be deleted because it has products. Please move the products to another category first.',
+            ], 422);
+        }
+
         try {
             DB::transaction(function () use ($category) {
-                if ($category->type === 'main') {
-                    $subcategoryIds = $category->children()->pluck('id');
-
-                    if ($subcategoryIds->isNotEmpty()) {
-                        Category::whereIn('id', $subcategoryIds)->update([
-                            'parent_id' => null,
-                            'is_active' => false,
-                        ]);
-
-                        Product::whereIn('category_id', $subcategoryIds)->update([
-                            'is_active' => false,
-                        ]);
-                    }
-                } else {
-                    Product::where('category_id', $category->id)->update([
-                        'category_id' => null,
-                        'is_active' => false,
-                    ]);
-                }
-
                 if ($category->image) {
                     PublicStorage::delete($category->image);
                 }
@@ -201,8 +201,8 @@ class CategoryController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete category',
-            ], 500);
+                'message' => 'This category cannot be deleted because it is linked to other records.',
+            ], 422);
         }
 
         return response()->json([
