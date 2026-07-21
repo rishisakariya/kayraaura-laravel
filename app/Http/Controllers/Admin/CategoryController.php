@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CategoryStoreRequest;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
+use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -153,41 +154,52 @@ class CategoryController extends Controller
     public function destroy(string $id): JsonResponse
     {
         $category = Category::find($id);
-        
-        if (!$category) {
+
+        if (! $category) {
             return response()->json([
                 'success' => false,
-                'message' => 'Category not found'
+                'message' => 'Category not found',
             ], 404);
         }
 
-        // Check if category has children
-        if ($category->children()->count() > 0) {
+        try {
+            DB::transaction(function () use ($category) {
+                if ($category->type === 'main') {
+                    $subcategoryIds = $category->children()->pluck('id');
+
+                    if ($subcategoryIds->isNotEmpty()) {
+                        Category::whereIn('id', $subcategoryIds)->update([
+                            'parent_id' => null,
+                            'is_active' => false,
+                        ]);
+
+                        Product::whereIn('category_id', $subcategoryIds)->update([
+                            'is_active' => false,
+                        ]);
+                    }
+                } else {
+                    Product::where('category_id', $category->id)->update([
+                        'category_id' => null,
+                        'is_active' => false,
+                    ]);
+                }
+
+                if ($category->image) {
+                    PublicStorage::delete($category->image);
+                }
+
+                $category->delete();
+            });
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot delete category with subcategories'
-            ], 422);
+                'message' => 'Failed to delete category',
+            ], 500);
         }
-
-        // Check if category has products
-        // if ($category->products()->count() > 0) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'Cannot delete category with associated products'
-        //     ], 422);
-        // }
-
-        DB::beginTransaction();
-        if ($category->image) {
-            PublicStorage::delete($category->image);
-        }
-
-        $category->delete();
-        DB::commit();
 
         return response()->json([
             'success' => true,
-            'message' => 'Category deleted successfully'
+            'message' => 'Category deleted successfully',
         ]);
     }
 }
