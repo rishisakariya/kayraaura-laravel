@@ -30,6 +30,7 @@ class ProductController extends Controller
             'min_price' => ['nullable', 'numeric', 'min:0'],
             'max_price' => ['nullable', 'numeric', 'min:0'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'category_type' => ['nullable', 'in:main,sub'],
             'size_id' => ['nullable', 'integer', 'exists:sizes,id'],
             'is_active' => ['nullable', 'boolean'],
             'is_collection' => ['nullable', 'boolean'],
@@ -46,6 +47,7 @@ class ProductController extends Controller
 
         $search = $validated['search'] ?? null;
         $categoryId = $validated['category_id'] ?? null;
+        $categoryType = $validated['category_type'] ?? null;
         $sizeId = $validated['size_id'] ?? null;
 
         $products = Product::with(['category', 'images', 'primaryImage', 'sizes.size'])
@@ -57,6 +59,11 @@ class ProductController extends Controller
             })
             ->when($categoryId, function ($query) use ($categoryId) {
                 $query->where('category_id', $categoryId);
+            })
+            ->when($categoryType, function ($query) use ($categoryType) {
+                $query->whereHas('category', function ($categoryQuery) use ($categoryType) {
+                    $categoryQuery->where('type', $categoryType)->where('is_active', true);
+                });
             })
             ->when($minPrice !== null || $maxPrice !== null || $sizeId, function ($query) use ($minPrice, $maxPrice, $sizeId) {
                 $query->whereHas('sizes', function ($sizeQuery) use ($minPrice, $maxPrice, $sizeId) {

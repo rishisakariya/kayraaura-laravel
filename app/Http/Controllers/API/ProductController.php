@@ -26,7 +26,7 @@ class ProductController extends Controller
             ->tap(fn (Builder $query) => $this->applyProductFilters($query, $filters))
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
-            ->paginate(12);
+            ->paginate($this->perPage($request));
 
         return response()->json([
             'status' => true,
@@ -48,6 +48,7 @@ class ProductController extends Controller
             'min_price' => ['nullable', 'numeric', 'min:0'],
             'max_price' => ['nullable', 'numeric', 'min:0'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'category_type' => ['nullable', 'in:main,sub'],
             'size_id' => ['nullable', 'integer', 'exists:sizes,id'],
         ]);
 
@@ -63,6 +64,7 @@ class ProductController extends Controller
             'min_price' => $minPrice,
             'max_price' => $maxPrice,
             'category_id' => $validated['category_id'] ?? null,
+            'category_type' => $validated['category_type'] ?? null,
             'size_id' => $validated['size_id'] ?? null,
         ];
     }
@@ -72,6 +74,7 @@ class ProductController extends Controller
         $minPrice = $filters['min_price'];
         $maxPrice = $filters['max_price'];
         $categoryId = $filters['category_id'];
+        $categoryType = $filters['category_type'];
         $sizeId = $filters['size_id'];
 
         $query
@@ -86,6 +89,11 @@ class ProductController extends Controller
             ->when($categoryId, function ($productQuery) use ($categoryId) {
                 $productQuery->whereHas('category', function ($categoryQuery) use ($categoryId) {
                     $categoryQuery->where('id', $categoryId)->where('is_active', true);
+                });
+            })
+            ->when($categoryType, function ($productQuery) use ($categoryType) {
+                $productQuery->whereHas('category', function ($categoryQuery) use ($categoryType) {
+                    $categoryQuery->where('type', $categoryType)->where('is_active', true);
                 });
             });
     }
@@ -167,7 +175,7 @@ class ProductController extends Controller
             ->tap(fn (Builder $query) => $this->applyProductFilters($query, $filters))
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
-            ->paginate(12);
+            ->paginate($this->perPage($request));
 
         return response()->json([
             'status' => true,
@@ -188,7 +196,7 @@ class ProductController extends Controller
      * @param int $categoryId
      * @return JsonResponse
      */
-    public function byCategory(int $categoryId): JsonResponse
+    public function byCategory(Request $request, int $categoryId): JsonResponse
     {
         $category = Category::where('id', $categoryId)
             ->where('is_active', true)
@@ -205,7 +213,7 @@ class ProductController extends Controller
             ->where('category_id', $categoryId)
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
-            ->paginate(12);
+            ->paginate($this->perPage($request));
 
         return response()->json([
             'status' => true,
@@ -223,6 +231,15 @@ class ProductController extends Controller
         ]);
     }
 
+    private function perPage(Request $request): int
+    {
+        $validated = validator($request->only('per_page'), [
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ])->validate();
+
+        return $validated['per_page'] ?? 12;
+    }
+
     /**
      * Search products.
      *
@@ -233,11 +250,13 @@ class ProductController extends Controller
     {
         $request->validate([
             'q' => 'required|string|min:2|max:100',
-            'category_id' => 'nullable|integer|exists:categories,id'
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'category_type' => 'nullable|in:main,sub',
         ]);
 
         $query = $request->get('q');
         $categoryId = $request->get('category_id');
+        $categoryType = $request->get('category_type');
 
         $products = Product::where('is_active', true)
             ->where(function ($searchQuery) use ($query) {
@@ -248,9 +267,14 @@ class ProductController extends Controller
             ->when($categoryId, function ($categoryQuery) use ($categoryId) {
                 return $categoryQuery->where('category_id', $categoryId);
             })
+            ->when($categoryType, function ($productQuery) use ($categoryType) {
+                return $productQuery->whereHas('category', function ($categoryQuery) use ($categoryType) {
+                    $categoryQuery->where('type', $categoryType)->where('is_active', true);
+                });
+            })
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
             ->orderBy('created_at', 'desc')
-            ->paginate(12);
+            ->paginate($this->perPage($request));
 
         return response()->json([
             'status' => true,

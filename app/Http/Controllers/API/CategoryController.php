@@ -16,15 +16,18 @@ class CategoryController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $type = $request->input('type');
+        $validated = $request->validate([
+            'type' => ['nullable', 'in:main,sub'],
+        ]);
+        $type = $validated['type'] ?? null;
 
         $categories = Category::where('is_active', true)
-            ->when($request->filled('type'), function ($query) use ($type) {
+            ->when($type, function ($query) use ($type) {
                 $query->where('type', $type);
             }, function ($query) {
                 $query->where('type', 'main');
             })
-            ->when(! $request->filled('type') || $type === 'main', function ($query) {
+            ->when(! $type || $type === 'main', function ($query) {
                 $query->with(['children' => function ($query) {
                     $query->where('is_active', true)
                         ->where('type', 'sub')

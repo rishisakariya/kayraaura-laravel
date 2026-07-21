@@ -20,21 +20,29 @@ class CategoryController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'is_active' => ['nullable', 'boolean'],
+            'type' => ['nullable', 'in:main,sub'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $categories = Category::with(['parent', 'children'])
             // ->withCount('products')
-            ->when($request->input('search'), function ($query, $search) {
+            ->when($validated['search'] ?? null, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                       ->orWhere('description', 'like', "%{$search}%");
             })
-            ->when($request->input('is_active') !== null, function ($query, $isActive) {
+            ->when(array_key_exists('is_active', $validated), function ($query) use ($validated) {
+                $isActive = $validated['is_active'];
                 $query->where('is_active', $isActive);
             })
-            ->when($request->filled('type'), function ($query) use ($request) {
-                $query->where('type', $request->input('type'));
+            ->when($validated['type'] ?? null, function ($query, $type) {
+                $query->where('type', $type);
             })
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->paginate($request->input('per_page', 15));
+            ->paginate($validated['per_page'] ?? 15);
 
         return response()->json([
             'success' => true,
