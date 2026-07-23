@@ -81,6 +81,7 @@ Route::prefix('cpanel')->group(function () {
         Route::get('orders/{id}', [OrderController::class, 'show']);
         Route::post('orders/{id}/return/refund', [OrderController::class, 'payReturnRefund']);
         Route::post('orders/{id}/shipment/create', [OrderShipmentController::class, 'create']);
+        Route::post('orders/{id}/retry-shipment', [OrderShipmentController::class, 'retryShipment']);
         Route::post('orders/{id}/shipment/sync', [OrderShipmentController::class, 'sync']); //this is used to delivery ststus latest sync from delhivery api
         Route::post('orders/{id}/shipment/cancel', [OrderShipmentController::class, 'cancel']);
         Route::get('orders/{id}/shipment/label', [OrderShipmentController::class, 'label']); //this is used to get the shipment label

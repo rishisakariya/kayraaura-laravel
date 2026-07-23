@@ -149,9 +149,28 @@ class DelhiveryShipmentService
             if ($shipment) {
                 if ($this->errorClassifier->isRetryable($e)) {
                     $this->markShipmentRetryPending($shipment, $e);
-                } else {
-                    $this->markShipmentPermanentFailed($shipment, $e);
+                    $this->logShipmentCreation($order, 'failed', [
+                        'error' => $e->getMessage(),
+                        'retryable' => true,
+                        'recoverable_duplicate' => $this->errorClassifier->isRecoverableDuplicate($e->getMessage()),
+                        'request_payload' => $payload,
+                        'response_payload' => $responsePayload,
+                    ]);
+
+                    throw $e;
                 }
+
+                $this->markShipmentCreationFailed($shipment, $e);
+                $this->logShipmentCreation($order, 'creation_failed', [
+                    'error' => $e->getMessage(),
+                    'retryable' => false,
+                    'recoverable_duplicate' => $this->errorClassifier->isRecoverableDuplicate($e->getMessage()),
+                    'request_payload' => $payload,
+                    'response_payload' => $responsePayload,
+                ]);
+
+                // Permanent create failure (e.g. low wallet): keep order intact, admin can retry.
+                return $shipment->refresh();
             }
 
             $this->logShipmentCreation($order, 'failed', [
@@ -184,10 +203,16 @@ class DelhiveryShipmentService
 
         $statusBefore = $shipment->shipment_status;
 
-        if ($shipment->hasWaybill() && $shipment->shipment_status === OrderShipment::STATUS_FAILED) {
+        if ($shipment->hasWaybill() && in_array($shipment->shipment_status, [
+            OrderShipment::STATUS_FAILED,
+            OrderShipment::STATUS_CREATION_FAILED,
+        ], true)) {
             $this->ensureManifestedState($shipment);
 
-            if ($shipment->refresh()->shipment_status !== OrderShipment::STATUS_FAILED) {
+            if (!in_array($shipment->refresh()->shipment_status, [
+                OrderShipment::STATUS_FAILED,
+                OrderShipment::STATUS_CREATION_FAILED,
+            ], true)) {
                 return true;
             }
 
@@ -197,14 +222,20 @@ class DelhiveryShipmentService
                 $this->ensureManifestedState($shipment->refresh());
             }
 
-            if ($shipment->refresh()->shipment_status !== OrderShipment::STATUS_FAILED) {
+            if (!in_array($shipment->refresh()->shipment_status, [
+                OrderShipment::STATUS_FAILED,
+                OrderShipment::STATUS_CREATION_FAILED,
+            ], true)) {
                 return true;
             }
         }
 
         if ($shipment->hasWaybill()
             && filled($shipment->failed_reason)
-            && $shipment->shipment_status !== OrderShipment::STATUS_FAILED) {
+            && !in_array($shipment->shipment_status, [
+                OrderShipment::STATUS_FAILED,
+                OrderShipment::STATUS_CREATION_FAILED,
+            ], true)) {
             $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
                 'failed_reason' => null,
                 'raw_status' => $shipment->raw_status ?? 'Manifested',
@@ -215,6 +246,7 @@ class DelhiveryShipmentService
 
         if ($shipment->hasWaybill() && !in_array($shipment->shipment_status, [
             OrderShipment::STATUS_FAILED,
+            OrderShipment::STATUS_CREATION_FAILED,
             OrderShipment::STATUS_RETRY_PENDING,
             OrderShipment::STATUS_NOT_CREATED,
         ], true)) {
@@ -299,28 +331,38 @@ class DelhiveryShipmentService
 
     public function schedulePickupIfNeeded(OrderShipment $shipment): void
     {
-        if (!config('delhivery.auto_schedule_pickup', true)) {
-            return;
+        try {
+            if (!config('delhivery.auto_schedule_pickup', true)) {
+                return;
+            }
+
+            if ($shipment->provider !== OrderShipment::PROVIDER_DELHIVERY) {
+                return;
+            }
+
+            if (!$shipment->hasWaybill() || filled($shipment->pickup_request_id)) {
+                return;
+            }
+
+            if ($shipment->shipment_status !== OrderShipment::STATUS_MANIFESTED) {
+                return;
+            }
+
+            $pickupLocation = $shipment->pickup_location ?: $this->delhiverySettings()->pickup_location;
+            $schedule = $this->resolvePickupSchedule();
+            $delaySeconds = max(0, (int) config('delhivery.pickup_batch_delay_seconds', 180));
+
+            ScheduleDelhiveryPickupJob::dispatch($pickupLocation, $schedule['pickup_date'])
+                ->delay(now()->addSeconds($delaySeconds));
+        } catch (\Throwable $e) {
+            // Pickup must never fail order/shipment creation. Retry via delhivery:schedule-pickup.
+            Log::channel('thirdparty')->warning('Delhivery pickup scheduling deferred after error', [
+                'order_id' => $shipment->order_id,
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+                'error' => $e->getMessage(),
+            ]);
         }
-
-        if ($shipment->provider !== OrderShipment::PROVIDER_DELHIVERY) {
-            return;
-        }
-
-        if (!$shipment->hasWaybill() || filled($shipment->pickup_request_id)) {
-            return;
-        }
-
-        if ($shipment->shipment_status !== OrderShipment::STATUS_MANIFESTED) {
-            return;
-        }
-
-        $pickupLocation = $shipment->pickup_location ?: $this->delhiverySettings()->pickup_location;
-        $schedule = $this->resolvePickupSchedule();
-        $delaySeconds = max(0, (int) config('delhivery.pickup_batch_delay_seconds', 180));
-
-        ScheduleDelhiveryPickupJob::dispatch($pickupLocation, $schedule['pickup_date'])
-            ->delay(now()->addSeconds($delaySeconds));
     }
 
     public function processPickupBatch(string $pickupLocation, string $pickupDate, bool $force = false): void
@@ -415,12 +457,18 @@ class DelhiveryShipmentService
                 $responsePayload,
             );
 
-            Log::channel('thirdparty')->info('Delhivery pickup request created', [
-                'pickup_location' => $pickupLocation,
-                'pickup_date' => $pickupDate,
-                'pickup_request_id' => $pickupRequestId,
-                'shipment_count' => $batchContext['package_count'],
-            ]);
+            Log::channel('thirdparty')->info(
+                !empty($responsePayload['already_existed'])
+                    ? 'Delhivery shipments linked to existing pickup request'
+                    : 'Delhivery pickup request created',
+                [
+                    'pickup_location' => $pickupLocation,
+                    'pickup_date' => $pickupDate,
+                    'pickup_request_id' => $pickupRequestId,
+                    'shipment_count' => $batchContext['package_count'],
+                    'already_existed' => (bool) ($responsePayload['already_existed'] ?? false),
+                ]
+            );
         } catch (\Throwable $e) {
             Log::channel('thirdparty')->error('Delhivery pickup request failed', [
                 'pickup_location' => $pickupLocation,
@@ -1652,6 +1700,7 @@ class DelhiveryShipmentService
 
         if (in_array($shipment->shipment_status, [
             OrderShipment::STATUS_FAILED,
+            OrderShipment::STATUS_CREATION_FAILED,
             OrderShipment::STATUS_RETRY_PENDING,
             OrderShipment::STATUS_NOT_CREATED,
         ], true)) {
@@ -1672,7 +1721,7 @@ class DelhiveryShipmentService
         ])->save();
     }
 
-    private function markShipmentPermanentFailed(OrderShipment $shipment, \Throwable $e): void
+    private function markShipmentCreationFailed(OrderShipment $shipment, \Throwable $e): void
     {
         if ($shipment->hasWaybill()) {
             $this->ensureManifestedState($shipment);
@@ -1681,7 +1730,7 @@ class DelhiveryShipmentService
         }
 
         $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
-            'shipment_status' => OrderShipment::STATUS_FAILED,
+            'shipment_status' => OrderShipment::STATUS_CREATION_FAILED,
             'failed_reason' => $e->getMessage(),
         ])->save();
     }

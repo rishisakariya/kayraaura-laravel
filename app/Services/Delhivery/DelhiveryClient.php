@@ -185,9 +185,57 @@ class DelhiveryClient
             ->timeout(30)
             ->post($url, $payload);
 
+        $json = $response->json();
+        $json = is_array($json) ? $json : [];
+
+        // Delhivery allows only one pickup per location + date + slot.
+        // Reuse the existing pickup id instead of treating this as a hard failure.
+        if ($existingPickupId = $this->extractExistingPickupRequestId($json, $response->body())) {
+            Log::channel('thirdparty')->info('Delhivery pickup request already exists, reusing', [
+                'pickup_location' => $payload['pickup_location'] ?? null,
+                'pickup_date' => $payload['pickup_date'] ?? null,
+                'pickup_id' => $existingPickupId,
+                'http_status' => $response->status(),
+            ]);
+
+            return [
+                'success' => true,
+                'status' => true,
+                'pickup_id' => $existingPickupId,
+                'already_existed' => true,
+                'pickup_location_name' => $payload['pickup_location'],
+                'pickup_date' => $payload['pickup_date'],
+                'pickup_time' => $payload['pickup_time'],
+                'message' => $json['message'] ?? $response->body(),
+            ];
+        }
+
         try {
             return $this->decodeResponse($response, 'Delhivery pickup request creation failed', [201]);
         } catch (DomainException $e) {
+            if ($existingPickupId = $this->extractExistingPickupRequestId(
+                array_merge($json, ['message' => $e->getMessage()]),
+                $e->getMessage(),
+            )) {
+                Log::channel('thirdparty')->info('Delhivery pickup request already exists, reusing', [
+                    'pickup_location' => $payload['pickup_location'] ?? null,
+                    'pickup_date' => $payload['pickup_date'] ?? null,
+                    'pickup_id' => $existingPickupId,
+                    'http_status' => $response->status(),
+                ]);
+
+                return [
+                    'success' => true,
+                    'status' => true,
+                    'pickup_id' => $existingPickupId,
+                    'already_existed' => true,
+                    'pickup_location_name' => $payload['pickup_location'],
+                    'pickup_date' => $payload['pickup_date'],
+                    'pickup_time' => $payload['pickup_time'],
+                    'message' => $e->getMessage(),
+                ];
+            }
+
             Log::channel('thirdparty')->error('Delhivery pickup request HTTP error', [
                 'url' => $url,
                 'payload' => $payload,
@@ -197,6 +245,26 @@ class DelhiveryClient
 
             throw $e;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function extractExistingPickupRequestId(array $payload, string $body = ''): ?string
+    {
+        $message = (string) ($payload['message'] ?? $payload['rmk'] ?? $body);
+
+        if ($message === '' || !preg_match('/already exist/i', $message)) {
+            return null;
+        }
+
+        if (preg_match('/pickup request\s+(\d+)/i', $message, $matches) === 1) {
+            return $matches[1];
+        }
+
+        $pickupId = $payload['pickup_id'] ?? $payload['pickup_request_id'] ?? null;
+
+        return $pickupId !== null && $pickupId !== '' ? (string) $pickupId : null;
     }
 
     public function downloadBinary(string $url): string

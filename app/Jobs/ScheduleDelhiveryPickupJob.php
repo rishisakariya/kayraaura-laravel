@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Services\Delhivery\DelhiveryShipmentService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -11,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class ScheduleDelhiveryPickupJob implements ShouldQueue
+class ScheduleDelhiveryPickupJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -20,10 +21,17 @@ class ScheduleDelhiveryPickupJob implements ShouldQueue
 
     public int $tries = 3;
 
+    public int $uniqueFor = 300;
+
     public function __construct(
         public readonly string $pickupLocation,
         public readonly string $pickupDate,
     ) {
+    }
+
+    public function uniqueId(): string
+    {
+        return $this->pickupLocation . ':' . $this->pickupDate;
     }
 
     public function backoff(): array
@@ -39,7 +47,22 @@ class ScheduleDelhiveryPickupJob implements ShouldQueue
             'attempt' => $this->attempts(),
         ]);
 
-        $delhiveryShipmentService->processPickupBatch($this->pickupLocation, $this->pickupDate);
+        try {
+            $delhiveryShipmentService->processPickupBatch($this->pickupLocation, $this->pickupDate);
+        } catch (Throwable $e) {
+            // Duplicate pickup for same location/date/slot is expected; treat as success.
+            if (preg_match('/already exist/i', $e->getMessage()) === 1) {
+                Log::channel('thirdparty')->info('Delhivery job: schedule pickup already exists, treated as success', [
+                    'pickup_location' => $this->pickupLocation,
+                    'pickup_date' => $this->pickupDate,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return;
+            }
+
+            throw $e;
+        }
 
         Log::channel('thirdparty')->info('Delhivery job: schedule pickup completed', [
             'pickup_location' => $this->pickupLocation,

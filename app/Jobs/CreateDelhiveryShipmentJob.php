@@ -39,8 +39,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
         DelhiveryShipmentService $delhiveryService,
         ShiprocketShipmentService $shiprocketService,
         ShippingProviderResolver $providerResolver
-    ): void
-    {
+    ): void {
         Log::channel('thirdparty')->info('Delhivery job: create shipment started', [
             'order_id' => $this->orderId,
             'attempt' => $this->attempts(),
@@ -67,12 +66,29 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
             throw new DomainException('Delhivery is enabled but API token is not configured.');
         }
 
+        // Recover AWB first if Delhivery already created it (avoids duplicates on retry).
+        try {
+            if ($delhiveryService->reconcileOrderShipment($order)) {
+                Log::channel('thirdparty')->info('Delhivery job: create shipment recovered existing AWB', [
+                    'order_id' => $this->orderId,
+                ]);
+
+                return;
+            }
+        } catch (Throwable $e) {
+            Log::channel('thirdparty')->warning('Delhivery job: AWB recovery check failed before create', [
+                'order_id' => $this->orderId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $shipment = $delhiveryService->createShipment($order);
 
         Log::channel('thirdparty')->info('Delhivery job: create shipment completed', [
             'order_id' => $this->orderId,
             'shipment_id' => $shipment->id,
             'waybill' => $shipment->waybill,
+            'shipment_status' => $shipment->shipment_status,
         ]);
     }
 
@@ -91,7 +107,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
                 return;
             }
         } catch (Throwable) {
-            // Continue to failed-state handling below.
+            // Continue to creation_failed handling below.
         }
 
         $shipment = OrderShipment::where('order_id', $this->orderId)->first();
@@ -106,11 +122,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
             return;
         }
 
-        if (!$shipment || $shipment->shipment_status === OrderShipment::STATUS_FAILED) {
-            return;
-        }
-
-        if ($shipment->shipment_status !== OrderShipment::STATUS_RETRY_PENDING) {
+        if (!$shipment || $shipment->shipment_status === OrderShipment::STATUS_CREATION_FAILED) {
             return;
         }
 
@@ -124,7 +136,7 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
 
         $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
             'provider' => $provider,
-            'shipment_status' => OrderShipment::STATUS_FAILED,
+            'shipment_status' => OrderShipment::STATUS_CREATION_FAILED,
             'failed_reason' => $exception->getMessage(),
             'pickup_location' => $pickupLocation,
         ])->save();

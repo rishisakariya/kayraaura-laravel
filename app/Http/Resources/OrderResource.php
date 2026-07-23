@@ -89,13 +89,33 @@ class OrderResource extends JsonResource
     private function shipmentPayload(Request $request): array
     {
         $shipment = $this->relationLoaded('shipment') ? $this->shipment : null;
+        $isAdminDetail = $this->isAdminOrderDetailRequest($request);
+
+        $shipmentStatus = $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED;
+
+        // Customers must never see operational Delhivery create failures.
+        if (!$isAdminDetail && in_array($shipmentStatus, [
+            OrderShipment::STATUS_CREATION_FAILED,
+            OrderShipment::STATUS_RETRY_PENDING,
+            OrderShipment::STATUS_FAILED,
+        ], true) && !$shipment?->hasWaybill()) {
+            $shipmentStatus = OrderShipment::STATUS_NOT_CREATED;
+        }
 
         $payload = [
             'provider' => $shipment?->provider ?? app(ShippingProviderResolver::class)->activeProvider(),
             'waybill' => $shipment?->waybill,
             'courier_tracking_url' => $shipment?->courier_tracking_url,
-            'shipment_status' => $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED,
-            'raw_status' => $shipment?->raw_status,
+            'shipment_status' => $shipmentStatus,
+            'raw_status' => $isAdminDetail ? $shipment?->raw_status : (
+                in_array($shipment?->shipment_status, [
+                    OrderShipment::STATUS_CREATION_FAILED,
+                    OrderShipment::STATUS_RETRY_PENDING,
+                    OrderShipment::STATUS_FAILED,
+                ], true) && !$shipment?->hasWaybill()
+                    ? null
+                    : $shipment?->raw_status
+            ),
             'estimated_delivery_at' => $shipment?->estimated_delivery_at?->format('Y-m-d H:i:s'),
             'last_synced_at' => $shipment?->last_synced_at?->format('Y-m-d H:i:s'),
             'is_downloaded' => (bool) ($shipment?->is_downloaded ?? false),
@@ -108,7 +128,7 @@ class OrderResource extends JsonResource
             ], $this->returnRequestSummary()),
         ];
 
-        if ($this->isAdminOrderDetailRequest($request)) {
+        if ($isAdminDetail) {
             $payload = array_merge($payload, [
                 'status_location' => $shipment?->status_location,
                 'status_instructions' => $shipment?->status_instructions,
@@ -126,6 +146,12 @@ class OrderResource extends JsonResource
                 'cancelled_at' => $shipment?->cancelled_at?->format('Y-m-d H:i:s'),
                 'rto_at' => $shipment?->rto_at?->format('Y-m-d H:i:s'),
                 'failed_reason' => $shipment?->failed_reason,
+                'can_retry_shipment' => !$shipment?->hasWaybill()
+                    && in_array($shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED, [
+                        OrderShipment::STATUS_CREATION_FAILED,
+                        OrderShipment::STATUS_FAILED,
+                        OrderShipment::STATUS_NOT_CREATED,
+                    ], true),
                 'request_payload' => $shipment?->request_payload,
                 'response_payload' => $shipment?->response_payload,
                 'tracking_payload' => $shipment?->tracking_payload,

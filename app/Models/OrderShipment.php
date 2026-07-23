@@ -35,6 +35,8 @@ class OrderShipment extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_CREATION_FAILED = 'creation_failed';
+
     public const STATUS_RETRY_PENDING = 'retry_pending';
 
     public const ACTIVE_STATUSES = [
@@ -61,9 +63,17 @@ class OrderShipment extends Model
 
     public const CANCELLABLE_STATUSES = [
         self::STATUS_NOT_CREATED,
+        self::STATUS_CREATION_FAILED,
         self::STATUS_MANIFESTED,
         self::STATUS_PICKUP_PENDING,
         self::STATUS_PICKUP_SCHEDULED,
+    ];
+
+    public const RETRYABLE_CREATION_STATUSES = [
+        self::STATUS_CREATION_FAILED,
+        self::STATUS_FAILED,
+        self::STATUS_RETRY_PENDING,
+        self::STATUS_NOT_CREATED,
     ];
 
     public ?string $auditSource = null;
@@ -165,6 +175,7 @@ class OrderShipment extends Model
             ->where(function (Builder $query) {
                 $query->whereIn('shipment_status', [
                     self::STATUS_FAILED,
+                    self::STATUS_CREATION_FAILED,
                     self::STATUS_RETRY_PENDING,
                     self::STATUS_NOT_CREATED,
                 ])->orWhere(function (Builder $query) {

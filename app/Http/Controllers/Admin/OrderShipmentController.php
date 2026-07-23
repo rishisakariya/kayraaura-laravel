@@ -91,6 +91,115 @@ class OrderShipmentController extends Controller
         ]);
     }
 
+    public function retryShipment(string $id): JsonResponse
+    {
+        Log::channel('thirdparty')->info('Delhivery flow: admin retry shipment requested', [
+            'order_id' => $id,
+        ]);
+
+        $order = Order::with(['shipment', 'orderItems.product.images', 'orderItems.productSize'])
+            ->findOrFail($id);
+
+        if ($order->payment_method === 'online' && $order->payment_status !== 'paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Online order payment must be verified before shipment retry',
+            ], 409);
+        }
+
+        if ($order->status === 'cancelled') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cancelled orders cannot be shipped',
+            ], 409);
+        }
+
+        $shipment = $order->shipment;
+
+        if ($shipment?->hasWaybill()) {
+            try {
+                if ($shipment->provider === OrderShipment::PROVIDER_SHIPROCKET) {
+                    // Keep Shiprocket AWB as-is.
+                } else {
+                    $this->delhiveryShipmentService->reconcileOrderShipment($order);
+                }
+            } catch (\Throwable) {
+                // Ignore reconcile errors when AWB already exists locally.
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => new OrderResource($order->refresh()->load(['shipment', 'orderItems.product.images', 'orderItems.productSize'])),
+                'message' => 'Shipment already exists for this order',
+            ]);
+        }
+
+        $status = $shipment?->shipment_status ?? OrderShipment::STATUS_NOT_CREATED;
+
+        if (!in_array($status, [
+            OrderShipment::STATUS_CREATION_FAILED,
+            OrderShipment::STATUS_FAILED,
+            OrderShipment::STATUS_RETRY_PENDING,
+            OrderShipment::STATUS_NOT_CREATED,
+        ], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Shipment retry is only allowed when creation failed or is not created yet',
+            ], 409);
+        }
+
+        // Recover AWB from Delhivery before creating again.
+        if (($shipment?->provider ?? OrderShipment::PROVIDER_DELHIVERY) === OrderShipment::PROVIDER_DELHIVERY) {
+            try {
+                if ($this->delhiveryShipmentService->reconcileOrderShipment($order)) {
+                    return response()->json([
+                        'success' => true,
+                        'data' => new OrderResource($order->refresh()->load(['shipment', 'orderItems.product.images', 'orderItems.productSize'])),
+                        'message' => 'Existing Delhivery AWB recovered; shipment marked manifested',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::channel('thirdparty')->warning('Delhivery flow: retry shipment AWB recovery failed', [
+                    'order_id' => $id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        DB::transaction(function () use ($order) {
+            $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $provider = $this->shippingProviderResolver->activeProvider();
+
+            $shipment = OrderShipment::firstOrCreate(
+                ['order_id' => $order->id],
+                [
+                    'provider' => $provider,
+                    'shipment_status' => OrderShipment::STATUS_RETRY_PENDING,
+                    'pickup_location' => $this->shippingProviderResolver->pickupLocation(),
+                ]
+            );
+
+            $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_ADMIN)->forceFill([
+                'provider' => $provider,
+                'shipment_status' => OrderShipment::STATUS_RETRY_PENDING,
+                'failed_reason' => null,
+                'pickup_location' => $this->shippingProviderResolver->pickupLocation(),
+            ])->save();
+        });
+
+        CreateDelhiveryShipmentJob::dispatch((int) $id);
+
+        Log::channel('thirdparty')->info('Delhivery flow: admin retry shipment job dispatched', [
+            'order_id' => $id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => new OrderResource($order->refresh()->load(['shipment', 'orderItems.product.images', 'orderItems.productSize'])),
+            'message' => 'Shipment retry queued',
+        ]);
+    }
+
     public function sync(string $id): JsonResponse
     {
         Log::channel('thirdparty')->info('Delhivery flow: admin shipment sync requested', [
