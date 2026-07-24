@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductResource;
 use App\Models\Category;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -50,7 +52,7 @@ class CategoryController extends Controller
     }
 
     /**
-     * Display all active subcategories for a main category.
+     * Display subcategories and products for a main category.
      */
     public function subcategories(int $category_id): JsonResponse
     {
@@ -66,16 +68,30 @@ class CategoryController extends Controller
             ], 404);
         }
 
-        $subcategories = Category::where('parent_id', $mainCategory->id)
+        $subCategories = Category::where('parent_id', $mainCategory->id)
             ->where('type', 'sub')
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->get();
 
+        $categoryIds = $subCategories->pluck('id')
+            ->push($mainCategory->id)
+            ->unique()
+            ->values();
+
+        $products = Product::where('is_active', true)
+            ->whereIn('category_id', $categoryIds)
+            ->with(['category', 'images', 'primaryImage', 'sizes.size'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
         return response()->json([
             'status' => true,
-            'data' => $subcategories,
-            'message' => 'Subcategories retrieved successfully',
+            'data' => [
+                'sub_category' => $subCategories,
+                'product' => ProductResource::collection($products),
+            ],
+            'message' => 'Subcategories and products retrieved successfully',
         ]);
     }
 
