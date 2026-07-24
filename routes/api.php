@@ -47,6 +47,7 @@ Route::prefix('auth')->group(function () {
 
 // Frontend Category Routes (Public)
 Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/subcategories/{category_id}', [CategoryController::class, 'subcategories']);
 Route::get('/categories/{slug}', [CategoryController::class, 'show']);
 
 // Frontend Size Routes (Public)
