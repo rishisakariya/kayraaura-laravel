@@ -6,6 +6,7 @@ use App\Models\DelhiverySetting;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\ShipmentStatusHistory;
+use App\Jobs\CancelDelhiveryShipmentJob;
 use App\Jobs\ScheduleDelhiveryPickupJob;
 use App\Services\PdfMerger;
 use App\Services\Shipping\OrderShipmentLifecycleService;
@@ -68,6 +69,21 @@ class DelhiveryShipmentService
                     return $shipment;
                 }
 
+                // Order/shipment already cancelled (e.g. cancel before create job ran).
+                if ($order->status === 'cancelled'
+                    || $shipment->shipment_status === OrderShipment::STATUS_CANCELLED) {
+                    if ($shipment->shipment_status !== OrderShipment::STATUS_CANCELLED) {
+                        $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+                            'shipment_status' => OrderShipment::STATUS_CANCELLED,
+                            'raw_status' => 'Cancelled',
+                            'cancelled_at' => $shipment->cancelled_at ?? now(),
+                            'failed_reason' => null,
+                        ])->save();
+                    }
+
+                    return $shipment;
+                }
+
                 $weight = $this->calculateWeight($order);
                 $payload = $this->buildCreatePayload($order);
 
@@ -88,7 +104,19 @@ class DelhiveryShipmentService
                 return $shipment;
             });
 
+            if ($shipment->shipment_status === OrderShipment::STATUS_CANCELLED && !$shipment->hasWaybill()) {
+                $this->logShipmentCreation($order, 'skipped_order_cancelled', [
+                    'shipment_id' => $shipment->id,
+                ]);
+
+                return $shipment;
+            }
+
             if ($shipment->hasWaybill()) {
+                if ($this->cancelShipmentIfOrderCancelled($order, $shipment)) {
+                    return $shipment->refresh();
+                }
+
                 $this->ensureManifestedState($shipment);
                 $this->schedulePickupIfNeeded($shipment->refresh());
 
@@ -111,6 +139,10 @@ class DelhiveryShipmentService
 
             if ($responseError = $this->extractCreateError($responsePayload)) {
                 if ($recovered = $this->recoverFromOrderReference($order, $shipment, $responsePayload)) {
+                    if ($this->cancelShipmentIfOrderCancelled($order, $recovered)) {
+                        return $recovered->refresh();
+                    }
+
                     return $recovered;
                 }
 
@@ -121,6 +153,10 @@ class DelhiveryShipmentService
 
             if (!$waybill) {
                 if ($recovered = $this->recoverFromOrderReference($order, $shipment, $responsePayload)) {
+                    if ($this->cancelShipmentIfOrderCancelled($order, $recovered)) {
+                        return $recovered->refresh();
+                    }
+
                     return $recovered;
                 }
 
@@ -128,6 +164,16 @@ class DelhiveryShipmentService
             }
 
             $shipment = $this->applyManifestFromCreateResponse($shipment, $responsePayload, $waybill);
+
+            if ($this->cancelShipmentIfOrderCancelled($order, $shipment)) {
+                $this->logShipmentCreation($order, 'cancelled_after_create', [
+                    'waybill' => $shipment->waybill,
+                    'shipment_status' => $shipment->refresh()->shipment_status,
+                ]);
+
+                return $shipment->refresh();
+            }
+
             $this->schedulePickupIfNeeded($shipment->refresh());
 
             $this->logShipmentCreation($order, 'manifested', [
@@ -142,6 +188,10 @@ class DelhiveryShipmentService
                     'waybill' => $recovered->waybill,
                     'original_error' => $e->getMessage(),
                 ]);
+
+                if ($this->cancelShipmentIfOrderCancelled($order, $recovered)) {
+                    return $recovered->refresh();
+                }
 
                 return $recovered;
             }
@@ -340,6 +390,12 @@ class DelhiveryShipmentService
                 return;
             }
 
+            $shipment->loadMissing('order');
+
+            if ($shipment->order?->status === 'cancelled') {
+                return;
+            }
+
             if (!$shipment->hasWaybill() || filled($shipment->pickup_request_id)) {
                 return;
             }
@@ -387,6 +443,7 @@ class DelhiveryShipmentService
                     ->whereNotNull('waybill')
                     ->whereNull('pickup_request_id')
                     ->where('shipment_status', OrderShipment::STATUS_MANIFESTED)
+                    ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
                     ->lockForUpdate()
                     ->get();
 
@@ -501,6 +558,7 @@ class DelhiveryShipmentService
                 ->whereIn('id', $shipmentIds)
                 ->whereNull('pickup_request_id')
                 ->where('shipment_status', OrderShipment::STATUS_MANIFESTED)
+                ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
                 ->lockForUpdate()
                 ->get();
 
@@ -1711,6 +1769,58 @@ class DelhiveryShipmentService
                 'manifested_at' => $shipment->manifested_at ?? now(),
             ])->save();
         }
+    }
+
+    /**
+     * If the order was cancelled while create was in-flight, cancel the carrier shipment.
+     *
+     * @return bool true when create side-effects (pickup etc.) must be skipped
+     */
+    private function cancelShipmentIfOrderCancelled(Order $order, OrderShipment $shipment): bool
+    {
+        $order->refresh();
+
+        if ($order->status !== 'cancelled') {
+            return false;
+        }
+
+        if (!$shipment->hasWaybill()) {
+            if ($shipment->shipment_status !== OrderShipment::STATUS_CANCELLED) {
+                $shipment->withAuditSource(ShipmentStatusHistory::SOURCE_SYSTEM)->fill([
+                    'shipment_status' => OrderShipment::STATUS_CANCELLED,
+                    'raw_status' => 'Cancelled',
+                    'cancelled_at' => $shipment->cancelled_at ?? now(),
+                    'failed_reason' => null,
+                ])->save();
+            }
+
+            return true;
+        }
+
+        if ($shipment->shipment_status === OrderShipment::STATUS_CANCELLED) {
+            return true;
+        }
+
+        try {
+            $this->cancelShipmentAndVerify($shipment, ShipmentStatusHistory::SOURCE_SYSTEM);
+
+            Log::channel('thirdparty')->info('Delhivery shipment auto-cancelled after create: order already cancelled', [
+                'order_id' => $order->id,
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+            ]);
+        } catch (\Throwable $e) {
+            Log::channel('thirdparty')->warning('Delhivery shipment auto-cancel after create deferred to job', [
+                'order_id' => $order->id,
+                'shipment_id' => $shipment->id,
+                'waybill' => $shipment->waybill,
+                'error' => $e->getMessage(),
+            ]);
+
+            CancelDelhiveryShipmentJob::dispatch($shipment->id);
+        }
+
+        return true;
     }
 
     private function markShipmentRetryPending(OrderShipment $shipment, \Throwable $e): void

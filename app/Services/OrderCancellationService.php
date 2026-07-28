@@ -104,6 +104,20 @@ class OrderCancellationService
             $shipment = $order->shipment;
 
             if (!$shipment?->waybill) {
+                // Mark local shipment cancelled so a queued create job cannot recreate it.
+                if ($shipment && !in_array($shipment->shipment_status, [
+                    OrderShipment::STATUS_CANCELLED,
+                    OrderShipment::STATUS_DELIVERED,
+                    OrderShipment::STATUS_RTO,
+                ], true)) {
+                    $shipment->withAuditSource($auditSource)->fill([
+                        'shipment_status' => OrderShipment::STATUS_CANCELLED,
+                        'raw_status' => 'Cancelled',
+                        'cancelled_at' => now(),
+                        'failed_reason' => null,
+                    ])->save();
+                }
+
                 Log::channel('thirdparty')->info('Order cancellation flow: completed without shipment cancel', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,

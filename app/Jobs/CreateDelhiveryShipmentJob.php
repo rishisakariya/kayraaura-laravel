@@ -46,6 +46,15 @@ class CreateDelhiveryShipmentJob implements ShouldQueue
         ]);
 
         $order = Order::findOrFail($this->orderId);
+
+        if ($order->status === 'cancelled') {
+            Log::channel('thirdparty')->info('Delhivery job: create shipment skipped, order already cancelled', [
+                'order_id' => $this->orderId,
+            ]);
+
+            return;
+        }
+
         $provider = $providerResolver->activeProvider();
 
         if ($provider === OrderShipment::PROVIDER_SHIPROCKET) {

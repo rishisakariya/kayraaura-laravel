@@ -39,6 +39,7 @@ class ScheduleDelhiveryPickup extends Command
             ->whereNotNull('waybill')
             ->whereNull('pickup_request_id')
             ->where('shipment_status', OrderShipment::STATUS_MANIFESTED)
+            ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
             ->count();
 
         if ($pendingCount === 0) {
