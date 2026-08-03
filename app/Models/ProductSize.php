@@ -13,11 +13,13 @@ class ProductSize extends Model
         'size_text',
         'quantity',
         'price',
+        'discount_price',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
         'price' => 'decimal:2',
+        'discount_price' => 'decimal:2',
     ];
 
 

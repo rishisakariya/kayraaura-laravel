@@ -20,6 +20,7 @@ class ProductSizeResource extends JsonResource
             'size' => new SizeResource($this->whenLoaded('size')),
             'quantity' => (int) $this->quantity,
             'price' => $this->price !== null ? (float) $this->price : null,
+            'discount_price' => $this->discount_price !== null ? (float) $this->discount_price : null,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

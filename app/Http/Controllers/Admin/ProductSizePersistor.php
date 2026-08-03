@@ -13,8 +13,7 @@ class ProductSizePersistor
      *
      * Expected payload format:
      * sizes: [
-     *   { size_id: int, quantity: int, price: numeric }, ...
-
+     *   { size_id: int, quantity: int, price: numeric, discount_price?: numeric }, ...
      * ]
      */
     public function replaceForProduct(int $productId, array $sizes): void
@@ -32,6 +31,7 @@ class ProductSizePersistor
                 'size_text' => $masterSize->name,
                 'quantity' => $size['quantity'],
                 'price' => $size['price'],
+                'discount_price' => $size['discount_price'] ?? null,
             ]);
 
         }

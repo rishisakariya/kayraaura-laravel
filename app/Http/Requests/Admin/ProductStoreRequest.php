@@ -122,6 +122,7 @@ class ProductStoreRequest extends FormRequest
             'sizes.*.size_id' => 'required_with:sizes|integer|distinct|exists:sizes,id',
             'sizes.*.quantity' => 'required_with:sizes|integer|min:0',
             'sizes.*.price' => 'required_with:sizes|numeric|min:0|max:99999999.99',
+            'sizes.*.discount_price' => 'nullable|numeric|min:0|max:99999999.99',
             'image' => 'nullable|array|max:5',
             'video' => ['nullable', 'string', 'max:2048', 'not_regex:/\.\./'],
             'image.*' => [
