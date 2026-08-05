@@ -25,7 +25,7 @@ class ProductController extends Controller
         $products = Product::where('is_active', true)
             ->tap(fn (Builder $query) => $this->applyProductFilters($query, $filters))
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy('name', 'asc')
             ->paginate($this->perPage($request));
 
         return response()->json([
@@ -150,7 +150,7 @@ class ProductController extends Controller
                 $query->where('quantity', '>', 0);
             })
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy('name', 'asc')
             ->limit(8)
             ->get();
 
@@ -174,7 +174,7 @@ class ProductController extends Controller
             ->where('is_collection', true)
             ->tap(fn (Builder $query) => $this->applyProductFilters($query, $filters))
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy('name', 'asc')
             ->paginate($this->perPage($request));
 
         return response()->json([
@@ -212,7 +212,7 @@ class ProductController extends Controller
         $products = Product::where('is_active', true)
             ->where('category_id', $categoryId)
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy('name', 'asc')
             ->paginate($this->perPage($request));
 
         return response()->json([
@@ -273,7 +273,7 @@ class ProductController extends Controller
                 });
             })
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy('name', 'asc')
             ->paginate($this->perPage($request));
 
         return response()->json([

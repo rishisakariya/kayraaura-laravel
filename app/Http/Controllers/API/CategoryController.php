@@ -82,7 +82,7 @@ class CategoryController extends Controller
         $products = Product::where('is_active', true)
             ->whereIn('category_id', $categoryIds)
             ->with(['category', 'images', 'primaryImage', 'sizes.size'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy('name', 'asc')
             ->get();
 
         return response()->json([
